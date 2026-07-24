@@ -52,6 +52,9 @@ render_window.AddRenderer(renderer)
 render_window.SetMultiSamples(0)
 interactor = vtk.vtkRenderWindowInteractor()
 interactor.SetRenderWindow(render_window)
+interactor_style = vtk.vtkInteractorStyleTrackballCamera()
+interactor.SetInteractorStyle(interactor_style)
+interactor.GetInteractorStyle().SetCurrentRenderer(renderer)
 
 plane = vtk.vtkPlane()
 cutter = vtk.vtkCutter()
@@ -74,9 +77,20 @@ outline = vtk.vtkOutlineFilter()
 outline_mapper = vtk.vtkPolyDataMapper()
 outline_mapper.SetInputConnection(outline.GetOutputPort())
 outline_actor = vtk.vtkActor()
-outline_actor.SetMapper(outline_actor.GetMapper() or outline_mapper)
+outline_actor.SetMapper(outline_mapper)
 outline_actor.GetProperty().SetColor(0.38, 0.45, 0.55)
 outline_actor.GetProperty().SetOpacity(0.65)
+
+dummy_source = vtk.vtkSphereSource()
+dummy_source.Update()
+dummy_data = dummy_source.GetOutput()
+
+surface_mapper.SetInputData(dummy_data)
+cutter.SetInputData(dummy_data)
+cutter.Update()
+result_mapper.SetInputConnection(cutter.GetOutputPort())
+clipper.SetInputData(dummy_data)
+outline.SetInputData(dummy_data)
 
 renderer.AddActor(surface_actor)
 renderer.AddActor(result_actor)
@@ -156,7 +170,8 @@ def _update_result() -> None:
         clipper.SetInsideOut(bool(state.invert_clip))
         clipper.Update()
         result_mapper.SetInputConnection(clipper.GetOutputPort())
-        surface_actor.SetVisibility(False)
+        surface_actor.SetVisibility(bool(state.show_context))
+        surface_actor.GetProperty().SetOpacity(state.context_opacity)
         result_actor.GetProperty().SetRepresentationToSurface()
     else:
         cutter.Update()
@@ -387,7 +402,6 @@ with SinglePageWithDrawerLayout(server) as layout:
             vuetify.VCheckbox(
                 label="Show source as context",
                 v_model=("show_context", True),
-                v_if="operation === 'Slice'",
                 dense=True,
                 hide_details=True,
             )
@@ -397,7 +411,7 @@ with SinglePageWithDrawerLayout(server) as layout:
                 min=0,
                 max=1,
                 step=0.01,
-                v_if="operation === 'Slice' && show_context",
+                v_if="show_context",
                 hide_details=True,
                 classes="mb-3",
             )
@@ -412,7 +426,7 @@ with SinglePageWithDrawerLayout(server) as layout:
 
     with layout.content:
         with vuetify.VContainer(fluid=True, classes="fill-height pa-0"):
-            view = vtk_widgets.VtkRemoteView(
+            view = vtk_widgets.VtkRemoteLocalView(
                 render_window,
                 interactive_ratio=1,
                 classes="fill-height w-100",
