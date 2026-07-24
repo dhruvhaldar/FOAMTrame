@@ -599,7 +599,7 @@ state.setdefault("stream_color_by_speed", True)
 # ---------------------------------------------------------------------------
 
 with SinglePageWithDrawerLayout(server) as layout:
-    layout.title.set_text("VTK Slicer")
+    layout.title.set_text("Visualizer")
     layout.icon.hide()
 
     with layout.toolbar:

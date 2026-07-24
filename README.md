@@ -1,4 +1,4 @@
-# Trame VTK Slicer
+# Trame Visualizer
 
 A browser-based Python application for inspecting and slicing VTK surface and
 volume datasets.
