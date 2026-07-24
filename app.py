@@ -397,7 +397,7 @@ state.setdefault("slice_axis", "X")
 state.setdefault("slice_fraction", 0.5)
 state.setdefault("invert_clip", False)
 state.setdefault("show_context", True)
-state.setdefault("context_opacity", 0.9)
+state.setdefault("context_opacity", 0.45)
 state.setdefault("scalar", "Solid colour")
 state.setdefault("scalar_items", ["Solid colour"])
 state.setdefault("transform_target", "Entire Model")
@@ -497,7 +497,7 @@ with SinglePageWithDrawerLayout(server) as layout:
                 )
                 vuetify.VSlider(
                     label="Context opacity",
-                    v_model=("context_opacity", 0.9),
+                    v_model=("context_opacity", 0.45),
                     min=0,
                     max=1,
                     step=0.01,
