@@ -53,6 +53,8 @@ transform_filter.SetTransform(transform)
 
 # --- Slice / Clip pipeline ---
 plane = vtk.vtkPlane()
+sphere = vtk.vtkSphere()
+box = vtk.vtkBox()
 cutter = vtk.vtkCutter()
 cutter.SetCutFunction(plane)
 clipper = vtk.vtkClipDataSet()
@@ -200,10 +202,10 @@ def _set_mapper_coloring(mapper, selection: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Visualizer Setup
+# Visualizer Tab Setup
 # ---------------------------------------------------------------------------
 
-def setup_visualizer(server):
+def setup_visualizer_tab(server):
     state, ctrl = server.state, server.controller
 
     def _update_result() -> None:
@@ -271,6 +273,58 @@ def setup_visualizer(server):
             surface_actor.GetProperty().SetOpacity(1.0)
 
         elif operation == "Clip":
+            clip_type = state.clip_type or "Plane"
+
+            if clip_type == "Plane":
+                plane.SetNormal(_normal_from_axis(axis))
+                plane.SetOrigin(center)
+                clipper.SetClipFunction(plane)
+
+            elif clip_type == "Sphere":
+                bx = bounds[1] - bounds[0]
+                by = bounds[3] - bounds[2]
+                bz = bounds[5] - bounds[4]
+                diag = (bx**2 + by**2 + bz**2) ** 0.5
+
+                cx = bounds[0] + float(state.clip_sphere_cx or 0.5) * bx
+                cy = bounds[2] + float(state.clip_sphere_cy or 0.5) * by
+                cz = bounds[4] + float(state.clip_sphere_cz or 0.5) * bz
+                radius = float(state.clip_sphere_radius or 0.3) * (diag * 0.5)
+
+                sphere.SetCenter(cx, cy, cz)
+                sphere.SetRadius(max(radius, 1e-6))
+                clipper.SetClipFunction(sphere)
+
+            elif clip_type == "Box":
+                bx = bounds[1] - bounds[0]
+                by = bounds[3] - bounds[2]
+                bz = bounds[5] - bounds[4]
+                eps = 1e-4
+
+                f_xmin = float(state.clip_box_xmin if state.clip_box_xmin is not None else 0.0)
+                f_xmax = float(state.clip_box_xmax if state.clip_box_xmax is not None else 1.0)
+                f_ymin = float(state.clip_box_ymin if state.clip_box_ymin is not None else 0.0)
+                f_ymax = float(state.clip_box_ymax if state.clip_box_ymax is not None else 1.0)
+                f_zmin = float(state.clip_box_zmin if state.clip_box_zmin is not None else 0.0)
+                f_zmax = float(state.clip_box_zmax if state.clip_box_zmax is not None else 1.0)
+
+                xmin = bounds[0] + f_xmin * bx - (eps * bx if f_xmin == 0.0 else 0.0)
+                xmax = bounds[0] + f_xmax * bx + (eps * bx if f_xmax == 1.0 else 0.0)
+                ymin = bounds[2] + f_ymin * by - (eps * by if f_ymin == 0.0 else 0.0)
+                ymax = bounds[2] + f_ymax * by + (eps * by if f_ymax == 1.0 else 0.0)
+                zmin = bounds[4] + f_zmin * bz - (eps * bz if f_zmin == 0.0 else 0.0)
+                zmax = bounds[4] + f_zmax * bz + (eps * bz if f_zmax == 1.0 else 0.0)
+
+                if xmin >= xmax:
+                    xmax = xmin + 1e-6
+                if ymin >= ymax:
+                    ymax = ymin + 1e-6
+                if zmin >= zmax:
+                    zmax = zmin + 1e-6
+
+                box.SetBounds(xmin, xmax, ymin, ymax, zmin, zmax)
+                clipper.SetClipFunction(box)
+
             surface_actor.SetVisibility(bool(state.show_context))
             surface_actor.GetProperty().SetOpacity(float(state.context_opacity or 0.45))
             surface_mapper.SetInputData(transformed_output)
@@ -490,6 +544,17 @@ def setup_visualizer(server):
         "stream_direction",
         "stream_tube_radius",
         "stream_color_by_speed",
+        "clip_type",
+        "clip_sphere_cx",
+        "clip_sphere_cy",
+        "clip_sphere_cz",
+        "clip_sphere_radius",
+        "clip_box_xmin",
+        "clip_box_xmax",
+        "clip_box_ymin",
+        "clip_box_ymax",
+        "clip_box_zmin",
+        "clip_box_zmax",
     )
     def on_controls_changed(**_):
         _update_result()
@@ -546,16 +611,28 @@ def setup_visualizer(server):
     state.setdefault("stream_direction", "Both")
     state.setdefault("stream_tube_radius", 0.5)
     state.setdefault("stream_color_by_speed", True)
+    state.setdefault("clip_type", "Plane")
+    state.setdefault("clip_type_items", ["Plane", "Sphere", "Box"])
+    state.setdefault("clip_sphere_cx", 0.5)
+    state.setdefault("clip_sphere_cy", 0.5)
+    state.setdefault("clip_sphere_cz", 0.5)
+    state.setdefault("clip_sphere_radius", 0.3)
+    state.setdefault("clip_box_xmin", 0.0)
+    state.setdefault("clip_box_xmax", 1.0)
+    state.setdefault("clip_box_ymin", 0.0)
+    state.setdefault("clip_box_ymax", 1.0)
+    state.setdefault("clip_box_zmin", 0.0)
+    state.setdefault("clip_box_zmax", 1.0)
 
     return load_dataset
 
 
 # ---------------------------------------------------------------------------
-# Visualizer UI
+# Visualizer Tab UI
 # ---------------------------------------------------------------------------
 
 def build_visualizer_drawer():
-    with vuetify.VContainer(classes="pa-4", v_show="active_tab === 0"):
+    with vuetify.VContainer(classes="pa-4", v_show="active_tab === 4 || active_tab === 5"):
         vuetify.VFileInput(
             label="Choose VTK dataset",
             v_model=("upload", None),
@@ -620,26 +697,172 @@ def build_visualizer_drawer():
         # --- Slice / Clip controls ---
         with html.Div(v_if="operation === 'Slice' || operation === 'Clip'"):
             vuetify.VSelect(
-                label="Plane axis",
-                v_model=("slice_axis", "X"),
-                items=("['X', 'Y', 'Z']",),
+                label="Clip shape",
+                v_model=("clip_type", "Plane"),
+                items=("clip_type_items",),
+                v_if="operation === 'Clip'",
                 dense=True,
                 hide_details=True,
                 classes="mb-3",
             )
-            html.Div(
-                "Position {{ Math.round(slice_fraction * 100) }}%",
-                classes="text-caption mb-n2",
-            )
-            vuetify.VSlider(
-                v_model=("slice_fraction", 0.5),
-                min=0,
-                max=1,
-                step=0.001,
-                color="cyan",
-                hide_details=True,
-                classes="mb-3",
-            )
+
+            # Plane controls (Slice operation or Plane Clip)
+            with html.Div(v_if="operation === 'Slice' || clip_type === 'Plane'"):
+                vuetify.VSelect(
+                    label="Plane axis",
+                    v_model=("slice_axis", "X"),
+                    items=("['X', 'Y', 'Z']",),
+                    dense=True,
+                    hide_details=True,
+                    classes="mb-3",
+                )
+                html.Div(
+                    "Position {{ Math.round(slice_fraction * 100) }}%",
+                    classes="text-caption mb-n2",
+                )
+                vuetify.VSlider(
+                    v_model=("slice_fraction", 0.5),
+                    min=0,
+                    max=1,
+                    step=0.001,
+                    color="cyan",
+                    hide_details=True,
+                    classes="mb-3",
+                )
+
+            # Sphere Clip controls
+            with html.Div(v_if="operation === 'Clip' && clip_type === 'Sphere'"):
+                html.Div(
+                    "Radius: {{ Math.round(clip_sphere_radius * 100) }}%",
+                    classes="text-caption font-weight-bold mt-1 mb-n2",
+                )
+                vuetify.VSlider(
+                    v_model=("clip_sphere_radius", 0.3),
+                    min=0.01,
+                    max=1.0,
+                    step=0.01,
+                    color="cyan",
+                    hide_details=True,
+                    classes="mb-2",
+                )
+                html.Div(
+                    "Center X: {{ Math.round(clip_sphere_cx * 100) }}%",
+                    classes="text-caption font-weight-bold mt-1 mb-n2",
+                )
+                vuetify.VSlider(
+                    v_model=("clip_sphere_cx", 0.5),
+                    min=0.0,
+                    max=1.0,
+                    step=0.01,
+                    color="cyan",
+                    hide_details=True,
+                    classes="mb-2",
+                )
+                html.Div(
+                    "Center Y: {{ Math.round(clip_sphere_cy * 100) }}%",
+                    classes="text-caption font-weight-bold mt-1 mb-n2",
+                )
+                vuetify.VSlider(
+                    v_model=("clip_sphere_cy", 0.5),
+                    min=0.0,
+                    max=1.0,
+                    step=0.01,
+                    color="cyan",
+                    hide_details=True,
+                    classes="mb-2",
+                )
+                html.Div(
+                    "Center Z: {{ Math.round(clip_sphere_cz * 100) }}%",
+                    classes="text-caption font-weight-bold mt-1 mb-n2",
+                )
+                vuetify.VSlider(
+                    v_model=("clip_sphere_cz", 0.5),
+                    min=0.0,
+                    max=1.0,
+                    step=0.01,
+                    color="cyan",
+                    hide_details=True,
+                    classes="mb-3",
+                )
+
+            # Box Clip controls
+            with html.Div(v_if="operation === 'Clip' && clip_type === 'Box'"):
+                html.Div(
+                    "X Min: {{ Math.round(clip_box_xmin * 100) }}%",
+                    classes="text-caption font-weight-bold mt-1 mb-n2",
+                )
+                vuetify.VSlider(
+                    v_model=("clip_box_xmin", 0.0),
+                    min=0.0,
+                    max=1.0,
+                    step=0.01,
+                    color="cyan",
+                    hide_details=True,
+                )
+                html.Div(
+                    "X Max: {{ Math.round(clip_box_xmax * 100) }}%",
+                    classes="text-caption font-weight-bold mt-1 mb-n2",
+                )
+                vuetify.VSlider(
+                    v_model=("clip_box_xmax", 1.0),
+                    min=0.0,
+                    max=1.0,
+                    step=0.01,
+                    color="cyan",
+                    hide_details=True,
+                    classes="mb-2",
+                )
+                html.Div(
+                    "Y Min: {{ Math.round(clip_box_ymin * 100) }}%",
+                    classes="text-caption font-weight-bold mt-1 mb-n2",
+                )
+                vuetify.VSlider(
+                    v_model=("clip_box_ymin", 0.0),
+                    min=0.0,
+                    max=1.0,
+                    step=0.01,
+                    color="cyan",
+                    hide_details=True,
+                )
+                html.Div(
+                    "Y Max: {{ Math.round(clip_box_ymax * 100) }}%",
+                    classes="text-caption font-weight-bold mt-1 mb-n2",
+                )
+                vuetify.VSlider(
+                    v_model=("clip_box_ymax", 1.0),
+                    min=0.0,
+                    max=1.0,
+                    step=0.01,
+                    color="cyan",
+                    hide_details=True,
+                    classes="mb-2",
+                )
+                html.Div(
+                    "Z Min: {{ Math.round(clip_box_zmin * 100) }}%",
+                    classes="text-caption font-weight-bold mt-1 mb-n2",
+                )
+                vuetify.VSlider(
+                    v_model=("clip_box_zmin", 0.0),
+                    min=0.0,
+                    max=1.0,
+                    step=0.01,
+                    color="cyan",
+                    hide_details=True,
+                )
+                html.Div(
+                    "Z Max: {{ Math.round(clip_box_zmax * 100) }}%",
+                    classes="text-caption font-weight-bold mt-1 mb-n2",
+                )
+                vuetify.VSlider(
+                    v_model=("clip_box_zmax", 1.0),
+                    min=0.0,
+                    max=1.0,
+                    step=0.01,
+                    color="cyan",
+                    hide_details=True,
+                    classes="mb-3",
+                )
+
             vuetify.VCheckbox(
                 label="Invert clipped side",
                 v_model=("invert_clip", False),
@@ -828,7 +1051,7 @@ def build_visualizer_content(ctrl):
     with vuetify.VContainer(
         fluid=True,
         classes="fill-height pa-0",
-        v_show="active_tab === 0",
+        v_show="active_tab === 4 || active_tab === 5",
     ):
         view = vtk_widgets.VtkRemoteLocalView(
             render_window,
