@@ -1,4 +1,4 @@
-# Trame Visualizer
+# FOAMFlask_v2
 
 A browser-based Python application for inspecting and slicing VTK surface and
 volume datasets.
