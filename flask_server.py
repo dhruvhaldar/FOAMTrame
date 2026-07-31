@@ -76,7 +76,7 @@ def run_startup_checks():
             
         client = get_docker_client()
         if not client:
-            STARTUP_STATUS = {"status": "failed", "message": "Cannot connect to Docker daemon. Make sure Docker is running."}
+            STARTUP_STATUS = {"status": "failed", "message": "Cannot connect to Docker daemon. Make sure Docker Desktop is running."}
             logger.error("Cannot connect to Docker daemon")
             return
 

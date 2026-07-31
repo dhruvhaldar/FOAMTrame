@@ -2,12 +2,11 @@ import base64
 import os
 import tempfile
 from pathlib import Path
-import requests
 import threading
 import vtk
 from trame.widgets import html, vtk as vtk_widgets, vuetify
 
-from tabs.setup_tab import FLASK_URL
+from tabs.setup_tab import load_config
 
 SUPPORTED_EXTENSIONS = {
     ".vtk",
@@ -145,14 +144,20 @@ def setup_geometry_tab(server):
 
         def resolve_and_load():
             try:
-                res = requests.get(f"{FLASK_URL}/api/case/resolve_vtk", params={"caseName": active_case}, timeout=5).json()
-                file_path = res.get("file_path")
-                if file_path:
-                    load_geometry_dataset(file_path, res.get("file_name"))
+                config = load_config()
+                case_root = config.get("CASE_ROOT", "")
+                path = Path(case_root) / active_case
+                vtk_files = []
+                for ext in ("*.vtk", "*.vtu", "*.vtp", "*.vti", "*.vtr", "*.vts", "*.ply", "*.stl", "*.obj"):
+                    vtk_files.extend(path.rglob(ext))
+
+                if vtk_files:
+                    target = max(vtk_files, key=os.path.getmtime)
+                    load_geometry_dataset(str(target), target.name)
                 else:
                     state.geometry_file_name = "No dataset loaded"
                     state.geometry_dataset_type = "—"
-                    state.geometry_dataset_info = res.get("message", "No VTK mesh file found in case directory.")
+                    state.geometry_dataset_info = "No VTK mesh file found in case directory."
                     state.geometry_error_message = ""
                     if active_actor[0]:
                         renderer.RemoveActor(active_actor[0])
