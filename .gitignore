@@ -5,6 +5,7 @@ env/
 ENV/
 tutorial_cases/
 case_config.json
+run.log
 
 # Python cache & build files
 __pycache__/
