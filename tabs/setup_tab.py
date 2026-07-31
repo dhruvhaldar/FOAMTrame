@@ -340,15 +340,7 @@ def setup_setup_tab(server):
 
 
 def build_setup_drawer():
-    from trame.app import get_server
-    server = get_server()
-    ctrl = server.controller  # noqa: F841
-    with html.Div(v_show="active_tab === 0"):
-        vuetify.VNavigationDrawer(
-            permanent=True,
-            width="100%",
-            classes="glass-drawer",
-        )
+    pass
 
 
 def build_setup_content():
@@ -360,7 +352,7 @@ def build_setup_content():
         classes="fill-height pa-6",
         v_if="active_tab === 0",
     ):
-        with vuetify.VRow(classes="justify-center"):
+        with vuetify.VRow(justify="center"):
             with vuetify.VCol(cols="12", md="8", lg="6"):
                 # Header card
                 with vuetify.VCard(classes="pa-4 mb-4 glass-card"):

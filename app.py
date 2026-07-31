@@ -123,7 +123,15 @@ with SinglePageWithDrawerLayout(server) as layout:
             v_if="active_tab === 5",
         )
 
+    state.setdefault("drawer_open", False)
+
+    @state.change("active_tab")
+    def _on_tab_change(active_tab, **_):
+        state.drawer_open = (int(active_tab) != 0)
+        state.flush()
+
     layout.drawer.classes = "glass-drawer"
+    layout.drawer.v_model = ("drawer_open",)
     with layout.drawer:
         build_setup_drawer()
         build_geometry_drawer()
