@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from trame.app import get_server
 from trame.ui.vuetify import SinglePageWithDrawerLayout
-from trame.widgets import vuetify, html
+from trame.widgets import vuetify, html, client
 
 from tabs.geometry_tab import (
     build_geometry_content,
@@ -54,52 +54,110 @@ with SinglePageWithDrawerLayout(server) as layout:
     layout.title.style = "min-width: 160px; overflow: visible;"
     layout.icon.hide()
     
-    with layout:
-        html.Style("""
-            body.v-application {
-                background: linear-gradient(180deg, hsla(192, 100%, 86%, 1) 0%, hsla(292, 37%, 88%, 1) 100%) !important;
-            }
-            .v-application--wrap {
-                background: transparent !important;
-            }
-            .theme--light.v-card.glass-card {
-                background: rgba(255, 255, 255, 0.45) !important;
-                backdrop-filter: blur(12px) !important;
-                -webkit-backdrop-filter: blur(12px) !important;
-                border: 1px solid rgba(255, 255, 255, 0.6) !important;
-                border-radius: 16px !important;
-                box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05), inset 0 0 10px rgba(255, 255, 255, 0.25) !important;
-            }
-            .theme--light.v-sheet.glass-drawer {
-                background: rgba(255, 255, 255, 0.3) !important;
-                backdrop-filter: blur(12px) !important;
-                -webkit-backdrop-filter: blur(12px) !important;
-                border-right: 1px solid rgba(255, 255, 255, 0.4) !important;
-            }
-            .theme--light.v-app-bar.glass-navbar {
-                background: rgba(255, 255, 255, 0.25) !important;
-                backdrop-filter: blur(12px) !important;
-                -webkit-backdrop-filter: blur(12px) !important;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.4) !important;
-                box-shadow: none !important;
-            }
-            .v-btn.theme-btn-primary {
-                background-color: #06b6d4 !important;
-                color: white !important;
-            }
-            .v-btn.theme-btn-success {
-                background-color: #22c55e !important;
-                color: white !important;
-            }
-            .v-btn.theme-btn-warning {
-                background-color: #f59e0b !important;
-                color: white !important;
-            }
-            .v-btn.theme-btn-info {
-                background-color: #06b6d4 !important;
-                color: white !important;
-            }
-        """)
+    # Inject CSS style sheet into the HTML head using client.Style
+    client.Style("""
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        
+        .v-application {
+            font-family: 'Inter', sans-serif !important;
+        }
+        .theme--light.v-application {
+            background: linear-gradient(135deg, #f0f9ff 0%, #fae8ff 100%) !important;
+        }
+        .v-application--wrap {
+            background: transparent !important;
+        }
+        /* High-end Glassmorphism Cards */
+        .v-application .glass-card {
+            background: rgba(255, 255, 255, 0.55) !important;
+            backdrop-filter: blur(24px) !important;
+            -webkit-backdrop-filter: blur(24px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.7) !important;
+            border-radius: 20px !important;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05), inset 0 0 16px rgba(255, 255, 255, 0.3) !important;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+        .v-application .glass-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 16px 48px 0 rgba(31, 38, 135, 0.08), inset 0 0 24px rgba(255, 255, 255, 0.4) !important;
+            border-color: rgba(255, 255, 255, 0.9) !important;
+        }
+        /* Glass Sidebar and Navbar */
+        .v-application .glass-drawer {
+            background: rgba(255, 255, 255, 0.4) !important;
+            backdrop-filter: blur(24px) !important;
+            -webkit-backdrop-filter: blur(24px) !important;
+            border-right: 1px solid rgba(255, 255, 255, 0.5) !important;
+        }
+        .v-application .glass-navbar {
+            background: rgba(255, 255, 255, 0.35) !important;
+            backdrop-filter: blur(20px) !important;
+            -webkit-backdrop-filter: blur(20px) !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.5) !important;
+            box-shadow: none !important;
+        }
+        /* Navigation Tab Style */
+        .v-application .v-tab {
+            text-transform: none !important;
+            font-weight: 600 !important;
+            letter-spacing: normal !important;
+            font-size: 0.9rem !important;
+            transition: color 0.2s ease !important;
+        }
+        .v-application .v-tab--active {
+            color: #0369a1 !important; /* sky-700 */
+            background: rgba(3, 105, 161, 0.05) !important;
+            border-radius: 8px 8px 0 0;
+        }
+        /* Premium Button Accents */
+        .v-application .v-btn.theme-btn-primary {
+            background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%) !important;
+            color: white !important;
+            text-transform: none !important;
+            font-weight: 600 !important;
+            border-radius: 10px !important;
+            box-shadow: 0 4px 14px 0 rgba(14, 165, 233, 0.3) !important;
+        }
+        .v-application .v-btn.theme-btn-success {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+            color: white !important;
+            text-transform: none !important;
+            font-weight: 600 !important;
+            border-radius: 10px !important;
+            box-shadow: 0 4px 14px 0 rgba(16, 185, 129, 0.3) !important;
+        }
+        .v-application .v-btn.theme-btn-warning {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+            color: white !important;
+            text-transform: none !important;
+            font-weight: 600 !important;
+            border-radius: 10px !important;
+            box-shadow: 0 4px 14px 0 rgba(245, 158, 11, 0.3) !important;
+        }
+        .v-application .v-btn.theme-btn-info {
+            background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%) !important;
+            color: white !important;
+            text-transform: none !important;
+            font-weight: 600 !important;
+            border-radius: 10px !important;
+            box-shadow: 0 4px 14px 0 rgba(6, 182, 212, 0.3) !important;
+        }
+        /* Premium Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(3, 105, 161, 0.2);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(3, 105, 161, 0.4);
+        }
+    """)
 
     layout.toolbar.classes = "glass-navbar"
     with layout.toolbar:

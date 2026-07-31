@@ -27,10 +27,19 @@ _POLL_INTERVAL = 1  # seconds between data refreshes (default)
 # Fields always attempted for residuals
 _RESIDUAL_FIELDS = ["Ux", "Uy", "Uz", "p", "k", "epsilon", "omega", "T", "rho"]
 
-# Colour cycle for consistent field colours
+# Colour cycle for consistent field colours (from FOAMFlask's plotlyColors)
 _COLORS = [
-    "#06b6d4", "#22c55e", "#f59e0b", "#ec4899", "#8b5cf6",
-    "#ef4444", "#0ea5e9", "#f97316", "#84cc16", "#a78bfa",
+    "#1dbde6",  # blue
+    "#d62728",  # red
+    "#2ca02c",  # green
+    "#e377c2",  # magenta
+    "#17becf",  # cyan
+    "#ff7f0e",  # orange
+    "#9467bd",  # purple
+    "#8c564b",  # brown
+    "#e377c2",  # pink
+    "#7f7f7f",  # gray
+    "#bcbd22",  # yellow
 ]
 
 MODE_CACHED = "cached"
