@@ -632,7 +632,7 @@ def setup_visualizer_tab(server):
 # ---------------------------------------------------------------------------
 
 def build_visualizer_drawer(ctrl):
-    with vuetify.VContainer(classes="pa-4", v_show="active_tab === 4 || active_tab === 5"):
+    with vuetify.VContainer(classes="pa-4", v_show="active_tab === 5"):
         vuetify.VFileInput(
             label="Choose VTK dataset",
             v_model=("upload", None),
@@ -1051,7 +1051,7 @@ def build_visualizer_content(ctrl):
     with vuetify.VContainer(
         fluid=True,
         classes="fill-height pa-0",
-        v_show="active_tab === 4 || active_tab === 5",
+        v_show="active_tab === 5",
     ):
         view = vtk_widgets.VtkRemoteLocalView(
             render_window,

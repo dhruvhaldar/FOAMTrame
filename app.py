@@ -120,7 +120,7 @@ with SinglePageWithDrawerLayout(server) as layout:
             click=ctrl.reset_camera,
             icon="mdi-camera-retake-outline",
             text=True,
-            v_if="active_tab === 4 || active_tab === 5",
+            v_if="active_tab === 5",
         )
 
     layout.drawer.classes = "glass-drawer"
