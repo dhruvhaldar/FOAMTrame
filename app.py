@@ -62,7 +62,7 @@ with SinglePageWithDrawerLayout(server) as layout:
             font-family: 'Inter', sans-serif !important;
         }
         .theme--light.v-application {
-            background: linear-gradient(135deg, #f0f9ff 0%, #fae8ff 100%) !important;
+            background: linear-gradient(180deg, hsla(192, 100%, 86%, 1) 0%, hsla(292, 37%, 88%, 1) 100%) !important;
         }
         .v-application--wrap {
             background: transparent !important;
@@ -82,6 +82,18 @@ with SinglePageWithDrawerLayout(server) as layout:
             box-shadow: 0 16px 48px 0 rgba(31, 38, 135, 0.08), inset 0 0 24px rgba(255, 255, 255, 0.4) !important;
             border-color: rgba(255, 255, 255, 0.9) !important;
         }
+        /* Advanced Expansion Panel Glass fix */
+        .v-application .v-expansion-panels.glass-card,
+        .v-application .v-expansion-panel {
+            background: rgba(255, 255, 255, 0.55) !important;
+            border-radius: 20px !important;
+        }
+        .v-application .v-expansion-panel-header {
+            background: transparent !important;
+        }
+        .v-application .v-expansion-panel-content__wrap {
+            background: transparent !important;
+        }
         /* Glass Sidebar and Navbar */
         .v-application .glass-drawer {
             background: rgba(255, 255, 255, 0.4) !important;
@@ -96,18 +108,34 @@ with SinglePageWithDrawerLayout(server) as layout:
             border-bottom: 1px solid rgba(255, 255, 255, 0.5) !important;
             box-shadow: none !important;
         }
-        /* Navigation Tab Style */
+        /* Pill Navigation Tab Style */
         .v-application .v-tab {
             text-transform: none !important;
-            font-weight: 600 !important;
+            font-weight: 700 !important;
             letter-spacing: normal !important;
-            font-size: 0.9rem !important;
-            transition: color 0.2s ease !important;
+            font-size: 0.92rem !important;
+            border-radius: 12px !important;
+            margin: 6px 6px !important;
+            min-width: 90px !important;
+            height: 38px !important;
+            color: #334155 !important; /* slate-700 */
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+        .v-application .v-tab:hover:not(.v-tab--active) {
+            background: rgba(255, 255, 255, 0.3) !important;
+            color: #0284c7 !important;
         }
         .v-application .v-tab--active {
-            color: #0369a1 !important; /* sky-700 */
-            background: rgba(3, 105, 161, 0.05) !important;
-            border-radius: 8px 8px 0 0;
+            color: white !important;
+            background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%) !important;
+            box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3) !important;
+        }
+        .v-application .v-tabs-slider-wrapper {
+            display: none !important;
+        }
+        /* Hide Default Footer */
+        .v-footer {
+            display: none !important;
         }
         /* Premium Button Accents */
         .v-application .v-btn.theme-btn-primary {
@@ -161,11 +189,22 @@ with SinglePageWithDrawerLayout(server) as layout:
 
     layout.toolbar.classes = "glass-navbar"
     with layout.toolbar:
+        # Active case display chip next to FOAMTrame title
+        vuetify.VChip(
+            "{{ active_case }}",
+            color="cyan lighten-5",
+            text_color="cyan darken-3",
+            classes="ml-3 font-weight-bold",
+            label=True,
+            small=True,
+            v_if="active_case",
+        )
         with vuetify.VTabs(
             v_model=("active_tab", 0),
             dense=True,
             background_color="transparent",
             classes="ml-4",
+            hide_slider=True,
         ):
             vuetify.VTab("Setup")
             vuetify.VTab("Geometry")
