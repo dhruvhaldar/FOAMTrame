@@ -3,6 +3,7 @@ venv/
 .venv/
 env/
 ENV/
+tutorial_cases/
 
 # Python cache & build files
 __pycache__/

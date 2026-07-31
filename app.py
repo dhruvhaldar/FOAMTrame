@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from trame.app import get_server
 from trame.ui.vuetify import SinglePageWithDrawerLayout
-from trame.widgets import vuetify
+from trame.widgets import vuetify, html
 
 from tabs.geometry_tab import (
     build_geometry_content,
@@ -52,7 +52,55 @@ state.setdefault("active_tab", 0)
 with SinglePageWithDrawerLayout(server) as layout:
     layout.title.set_text("FOAMFlask_v2")
     layout.icon.hide()
+    
+    with layout:
+        html.Style("""
+            body.v-application {
+                background: linear-gradient(180deg, hsla(192, 100%, 86%, 1) 0%, hsla(292, 37%, 88%, 1) 100%) !important;
+            }
+            .v-application--wrap {
+                background: transparent !important;
+            }
+            .theme--light.v-card.glass-card {
+                background: rgba(255, 255, 255, 0.45) !important;
+                backdrop-filter: blur(12px) !important;
+                -webkit-backdrop-filter: blur(12px) !important;
+                border: 1px solid rgba(255, 255, 255, 0.6) !important;
+                border-radius: 16px !important;
+                box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05), inset 0 0 10px rgba(255, 255, 255, 0.25) !important;
+            }
+            .theme--light.v-sheet.glass-drawer {
+                background: rgba(255, 255, 255, 0.3) !important;
+                backdrop-filter: blur(12px) !important;
+                -webkit-backdrop-filter: blur(12px) !important;
+                border-right: 1px solid rgba(255, 255, 255, 0.4) !important;
+            }
+            .theme--light.v-app-bar.glass-navbar {
+                background: rgba(255, 255, 255, 0.25) !important;
+                backdrop-filter: blur(12px) !important;
+                -webkit-backdrop-filter: blur(12px) !important;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.4) !important;
+                box-shadow: none !important;
+            }
+            .v-btn.theme-btn-primary {
+                background-color: #06b6d4 !important;
+                color: white !important;
+            }
+            .v-btn.theme-btn-success {
+                background-color: #22c55e !important;
+                color: white !important;
+            }
+            .v-btn.theme-btn-warning {
+                background-color: #f59e0b !important;
+                color: white !important;
+            }
+            .v-btn.theme-btn-info {
+                background-color: #06b6d4 !important;
+                color: white !important;
+            }
+        """)
 
+    layout.toolbar.classes = "glass-navbar"
     with layout.toolbar:
         with vuetify.VTabs(
             v_model=("active_tab", 0),
@@ -75,6 +123,7 @@ with SinglePageWithDrawerLayout(server) as layout:
             v_if="active_tab === 4 || active_tab === 5",
         )
 
+    layout.drawer.classes = "glass-drawer"
     with layout.drawer:
         build_setup_drawer()
         build_geometry_drawer()

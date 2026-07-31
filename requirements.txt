@@ -3,3 +3,7 @@ trame-vtk>=2.8,<3
 trame-vuetify>=3.0,<4
 vtk>=9.3,<10
 docker>=7.1.0
+requests>=2.31.0
+flask>=3.0.0
+flask-compress>=1.14
+psutil>=5.9.0
