@@ -162,7 +162,7 @@ def setup_setup_tab(server):
                 f"source {bashrc} && "
                 "tutorials_dir=${FOAM_TUTORIALS:-/opt/openfoam12/tutorials} && "
                 "echo $tutorials_dir && "
-                "find $tutorials_dir -mindepth 3 -maxdepth 3 \\( -type d -o -type l \\) \\( -name system -o -name constant \\) "
+                "find $tutorials_dir -mindepth 3 -maxdepth 5 \\( -type d -o -type l \\) \\( -name system -o -name constant \\) "
                 "| sed 's|/[^/]*$||' | sort | uniq -d"
             )
             result = client.containers.run(
@@ -170,15 +170,14 @@ def setup_setup_tab(server):
                 ["bash", "-c", cmd],
                 remove=True,
                 stdout=True,
-                stderr=True,
-                tty=True,
+                stderr=False,
             )
             output = result.decode().strip()
             if output:
                 lines = output.splitlines()
                 tutorial_root = lines[0].strip()
                 cases = lines[1:]
-                tutorials = [posixpath.relpath(c, tutorial_root) for c in cases]
+                tutorials = [posixpath.relpath(c, tutorial_root) for c in cases if c.strip()]
                 state.tutorials_list = sorted(tutorials)
                 state.filtered_tutorials = sorted(tutorials)
                 state.tutorials_loaded = True
@@ -227,6 +226,11 @@ def setup_setup_tab(server):
                 t for t in state.tutorials_list if query in t.lower()
             ]
         state.flush()
+
+    @state.change("case_creation_tab")
+    def on_case_creation_tab_change(case_creation_tab, **_):
+        if int(case_creation_tab) == 1:
+            trigger_fetch_tutorials()
 
     def trigger_checks():
         threading.Thread(target=run_docker_checks, daemon=True).start()
