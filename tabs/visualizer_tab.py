@@ -631,7 +631,7 @@ def setup_visualizer_tab(server):
 # Visualizer Tab UI
 # ---------------------------------------------------------------------------
 
-def build_visualizer_drawer():
+def build_visualizer_drawer(ctrl):
     with vuetify.VContainer(classes="pa-4", v_show="active_tab === 4 || active_tab === 5"):
         vuetify.VFileInput(
             label="Choose VTK dataset",
@@ -929,7 +929,7 @@ def build_visualizer_drawer():
 
             vuetify.VBtn(
                 "Reset Transform",
-                click="reset_transform",
+                click=ctrl.reset_transform,
                 color="warning",
                 outlined=True,
                 small=True,

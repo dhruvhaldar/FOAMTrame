@@ -81,7 +81,7 @@ with SinglePageWithDrawerLayout(server) as layout:
         build_meshing_drawer()
         build_run_log_drawer()
         build_plots_drawer()
-        build_visualizer_drawer()
+        build_visualizer_drawer(ctrl)
 
     with layout.content:
         build_setup_content()
