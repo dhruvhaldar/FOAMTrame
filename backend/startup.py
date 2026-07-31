@@ -10,7 +10,7 @@ import docker.errors
 from pathlib import Path
 from typing import Dict, Any, Callable, Tuple, Optional
 
-logger = logging.getLogger("FOAMFlask")
+logger = logging.getLogger("FOAMTrame")
 
 def run_initial_setup_checks(
     get_docker_client_func: Callable[[], Any],
@@ -43,15 +43,15 @@ def run_initial_setup_checks(
     if config.get("initial_setup_done"):
         return {"status": "completed", "message": "Initial setup already completed"}
 
-    logger.info("[FOAMFlask] Performing first-time setup checks...")
+    logger.info("[FOAMTrame] Performing first-time setup checks...")
 
     # 2. Check if docker executable exists
     if not shutil.which("docker"):
         msg = "Docker is not installed or not in PATH. Please install Docker first."
-        if os.environ.get("FOAMFLASK_SANDBOX_MODE"):
-            logger.warning(f"[FOAMFlask] Sandbox Mode: {msg} Still proceeding...")
+        if os.environ.get("FOAMTrame_SANDBOX_MODE"):
+            logger.warning(f"[FOAMTrame] Sandbox Mode: {msg} Still proceeding...")
         else:
-            logger.error(f"[FOAMFlask] {msg}")
+            logger.error(f"[FOAMTrame] {msg}")
             return {"status": "failed", "message": msg}
 
     # 3. Check if we can connect to Docker daemon (permission check)
@@ -71,23 +71,23 @@ def run_initial_setup_checks(
                 err_str = str(e).lower()
                 if "permission denied" in err_str or "eacces" in err_str:
                     msg = "Docker exists but permission denied. Please add your user to the 'docker' group and re-login."
-                    logger.error(f"[FOAMFlask] {msg}")
+                    logger.error(f"[FOAMTrame] {msg}")
                     return {"status": "failed", "message": msg}
                 else:
                     if "createfile" in err_str and "system cannot find the file specified" in err_str:
                         msg = "Docker Desktop is NOT running. Please launch Docker Desktop from your Start Menu and wait for the 'running' status."
                     else:
                         msg = f"Docker is installed but not running or not accessible: {e}"
-                    if os.environ.get("FOAMFLASK_SANDBOX_MODE"):
-                        logger.warning(f"[FOAMFlask] Sandbox Mode: {msg} Still proceeding...")
+                    if os.environ.get("FOAMTrame_SANDBOX_MODE"):
+                        logger.warning(f"[FOAMTrame] Sandbox Mode: {msg} Still proceeding...")
                         save_config_func({"initial_setup_done": True, "sandbox_mode": True})
                         return {"status": "completed", "message": "Sandbox Mode: Docker unavailable, but proceeding anyway."}
                     else:
-                        logger.error(f"[FOAMFlask] {msg}")
+                        logger.error(f"[FOAMTrame] {msg}")
                         return {"status": "failed", "message": msg}
     except Exception as e:
         msg = f"Unexpected error checking Docker: {e}"
-        logger.error(f"[FOAMFlask] {msg}")
+        logger.error(f"[FOAMTrame] {msg}")
         return {"status": "failed", "message": msg}
 
     # 4. Check if image exists, pull if not
@@ -95,15 +95,15 @@ def run_initial_setup_checks(
         client = get_docker_client_func() # Should be valid now
         try:
             client.images.get(docker_image)
-            logger.info(f"[FOAMFlask] Image {docker_image} found.")
+            logger.info(f"[FOAMTrame] Image {docker_image} found.")
         except docker.errors.ImageNotFound:
             # Check for Dockerfile in root
             dockerfile_path = Path(__file__).resolve().parent.parent / "Dockerfile"
 
             if dockerfile_path.exists():
                 msg = f"Docker image '{docker_image}' not found.\nBuilding from Dockerfile... (Warning: This may take a while)"
-                logger.info(f"[FOAMFlask] {msg}")
-                print(f"INFO::[FOAMFlask] {msg}")
+                logger.info(f"[FOAMTrame] {msg}")
+                print(f"INFO::[FOAMTrame] {msg}")
 
                 if status_callback:
                     status_callback(msg)
@@ -113,7 +113,7 @@ def run_initial_setup_checks(
                 try:
                     with open(dockerfile_path, 'rb') as f:
                         client.images.build(fileobj=f, tag=docker_image, rm=True)
-                    logger.info(f"[FOAMFlask] Image {docker_image} built successfully.")
+                    logger.info(f"[FOAMTrame] Image {docker_image} built successfully.")
                 except Exception as build_err:
                     # Fallback to pull if build fails (e.g. base image not accessible and build fails?)
                     # Actually, if build fails, we should report it. But maybe fallback to pull if the Dockerfile is bad?
@@ -124,15 +124,15 @@ def run_initial_setup_checks(
 
             else:
                 msg = f"Docker image '{docker_image}' not found.\nPulling now... (Warning: Large download, check for metered connection)"
-                logger.info(f"[FOAMFlask] {msg}")
-                print(f"INFO::[FOAMFlask] {msg}") # Console output
+                logger.info(f"[FOAMTrame] {msg}")
+                print(f"INFO::[FOAMTrame] {msg}") # Console output
 
                 if status_callback:
                     status_callback(msg)
 
                 import json
                 # Use the lower-level API to get progress updates
-                logger.info(f"[FOAMFlask] Starting pull for {docker_image}")
+                logger.info(f"[FOAMTrame] Starting pull for {docker_image}")
                 last_progress_update = 0
                 for line in client.api.pull(docker_image, stream=True, decode=True):
                     status = line.get('status')
@@ -151,11 +151,11 @@ def run_initial_setup_checks(
                          msg = f"Docker Image: {status}"
                          if status_callback: status_callback(msg)
 
-                logger.info(f"[FOAMFlask] Image {docker_image} pulled successfully.")
+                logger.info(f"[FOAMTrame] Image {docker_image} pulled successfully.")
 
     except Exception as e:
          msg = f"Failed to check/pull Docker image: {e}"
-         logger.error(f"[FOAMFlask] {msg}")
+         logger.error(f"[FOAMTrame] {msg}")
          return {"status": "failed", "message": msg}
 
     # 5. Run file permission checks
@@ -189,7 +189,7 @@ def check_docker_permissions(
     if not client:
         return {"status": "failed", "message": "Docker not available"}
 
-    logger.info("[FOAMFlask] Starting Docker permission check (Dry Run)...")
+    logger.info("[FOAMTrame] Starting Docker permission check (Dry Run)...")
 
     # Ensure case root exists
     case_dir_path = Path(case_root).resolve()
@@ -213,7 +213,7 @@ def check_docker_permissions(
 
     # Attempt 1: Default run (usually root)
     try:
-        logger.info("[FOAMFlask] Permission Check: Attempting default write...")
+        logger.info("[FOAMTrame] Permission Check: Attempting default write...")
         # Command to touch a file
         cmd = f"touch {container_run_path}/{test_filename}"
 
@@ -233,12 +233,12 @@ def check_docker_permissions(
         try:
             host_test_file.unlink()
             # Success! No permission issues.
-            logger.info("[FOAMFlask] Permission Check: Default write success. No permission issues.")
+            logger.info("[FOAMTrame] Permission Check: Default write success. No permission issues.")
             save_config_func({"initial_setup_done": True, "docker_run_as_user": False})
             return {"status": "completed", "message": "Permission check passed (default)"}
 
         except PermissionError:
-            logger.warning("[FOAMFlask] Permission Check: Default write caused PermissionError. Trying fix...")
+            logger.warning("[FOAMTrame] Permission Check: Default write caused PermissionError. Trying fix...")
             # We cannot delete the file. It's likely owned by root.
             # We need to clean it up later or try to use sudo (not possible here).
             # But let's try the fix now.
@@ -254,11 +254,11 @@ def check_docker_permissions(
                     remove=True
                 )
             except Exception as e:
-                logger.error(f"[FOAMFlask] Failed to cleanup root file: {e}")
+                logger.error(f"[FOAMTrame] Failed to cleanup root file: {e}")
 
     except Exception as e:
-        logger.warning(f"[FOAMFlask] Permission Check: Default write caused error: {e}")
-        logger.warning("[FOAMFlask] Default permission check failed. Attempting automatic fix by switching to user mapping...")
+        logger.warning(f"[FOAMTrame] Permission Check: Default write caused error: {e}")
+        logger.warning("[FOAMTrame] Default permission check failed. Attempting automatic fix by switching to user mapping...")
         # Proceed to Attempt 2
 
     # Attempt 2: Run as user
@@ -267,7 +267,7 @@ def check_docker_permissions(
         gid = os.getgid()
         user_str = f"{uid}:{gid}"
 
-        logger.info(f"[FOAMFlask] Permission Check: Attempting write as user {user_str}...")
+        logger.info(f"[FOAMTrame] Permission Check: Attempting write as user {user_str}...")
 
         cmd = f"touch {container_run_path}/{test_filename}"
 
@@ -287,7 +287,7 @@ def check_docker_permissions(
         host_test_file.unlink()
 
         # Success!
-        logger.info("[FOAMFlask] Permission Check: User write success.")
+        logger.info("[FOAMTrame] Permission Check: User write success.")
         save_config_func({
             "initial_setup_done": True,
             "docker_run_as_user": True,
@@ -297,5 +297,5 @@ def check_docker_permissions(
         return {"status": "completed", "message": "Permission check passed (using host user)"}
 
     except Exception as e:
-        logger.error(f"[FOAMFlask] Permission Check: Error during Attempt 2: {e}")
+        logger.error(f"[FOAMTrame] Permission Check: Error during Attempt 2: {e}")
         return {"status": "failed", "message": f"Permission check failed even with user mapping: {e}"}

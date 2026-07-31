@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Union
 from werkzeug.utils import secure_filename
 from backend.utils import sanitize_error
 
-logger = logging.getLogger("FOAMFlask")
+logger = logging.getLogger("FOAMTrame")
 
 class GeometryManager:
     """Manages geometry files (STL) in the OpenFOAM case."""

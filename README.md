@@ -1,4 +1,4 @@
-# FOAMFlask_v2
+# FOAMTrame_v2
 
 A browser-based Python application for inspecting and slicing VTK surface and
 volume datasets.

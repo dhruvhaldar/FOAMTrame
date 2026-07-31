@@ -2,7 +2,7 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Any, Tuple
 
-logger = logging.getLogger("FOAMFlask")
+logger = logging.getLogger("FOAMTrame")
 
 class BlockMeshGenerator:
     """Generates system/blockMeshDict based on configuration."""

@@ -14,7 +14,7 @@ from typing import Optional, Union, Dict, Any, List
 import pyvista as pv
 from backend.utils import safe_decompress
 
-logger = logging.getLogger("FOAMFlask")
+logger = logging.getLogger("FOAMTrame")
 
 class BaseVisualizer:
     """Base class for PyVista-based visualizers.

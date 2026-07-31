@@ -9,7 +9,7 @@ from .blockmesh import BlockMeshGenerator
 from .snappyhexmesh import SnappyHexMeshGenerator
 from backend.utils import is_safe_command
 
-logger = logging.getLogger("FOAMFlask")
+logger = logging.getLogger("FOAMTrame")
 
 class MeshingRunner:
     """

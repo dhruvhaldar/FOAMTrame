@@ -1,7 +1,7 @@
-"""Post-processor module for FOAMFlask using Trame and VTK.
+"""Post-processor module for FOAMTrame using Trame and VTK.
 
 Provides full interactive post-processing capabilities (Slice, Clip, Transform, Streamlines)
-from the trame_vtk_slicer project embedded seamlessly into FOAMFlask.
+from the trame_vtk_slicer project embedded seamlessly into FOAMTrame.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from typing import Dict, Any, Optional
 
 import vtk
 
-logger = logging.getLogger("FOAMFlask")
+logger = logging.getLogger("FOAMTrame")
 
 SUPPORTED_EXTENSIONS = {
     ".vtk",
@@ -128,14 +128,14 @@ class TrameVisualizer:
             }
 
         except Exception as e:
-            logger.error(f"[FOAMFlask] TrameVisualizer error: {e}", exc_info=True)
+            logger.error(f"[FOAMTrame] TrameVisualizer error: {e}", exc_info=True)
             return {"status": "error", "message": str(e)}
 
     def stop_visualization(self) -> None:
         """Stop running visualization process."""
         if TrameVisualizer._process:
             if TrameVisualizer._process.is_alive():
-                logger.info(f"[FOAMFlask] Terminating Trame visualizer process {TrameVisualizer._process.pid}")
+                logger.info(f"[FOAMTrame] Terminating Trame visualizer process {TrameVisualizer._process.pid}")
                 TrameVisualizer._process.terminate()
                 TrameVisualizer._process.join(timeout=2)
                 if TrameVisualizer._process.is_alive():
@@ -169,7 +169,7 @@ class TrameVisualizer:
             return str(max(vtk_files, key=os.path.getmtime))
 
         # Fallback: if no VTK file was generated yet, create a default 3D sample mesh so visualizer never opens empty
-        sample_path = Path(tempfile.gettempdir()) / "foamflask_default_sample.vtk"
+        sample_path = Path(tempfile.gettempdir()) / "FOAMTrame_default_sample.vtk"
         try:
             sphere = vtk.vtkSphereSource()
             sphere.SetRadius(1.0)
@@ -214,7 +214,7 @@ def _run_trame_visualizer_process(
         server = get_server(client_type="vue2")
         state, ctrl = server.state, server.controller
 
-        logger.info(f"[FOAMFlask Post] Starting Trame subprocess with initial_file='{initial_file}' on port {port}")
+        logger.info(f"[FOAMTrame Post] Starting Trame subprocess with initial_file='{initial_file}' on port {port}")
 
         # VTK setup
         renderer = vtk.vtkRenderer()
@@ -695,7 +695,7 @@ def _run_trame_visualizer_process(
 
         # Build UI layout
         with SinglePageWithDrawerLayout(server) as layout:
-            layout.title.set_text("FOAMFlask PostProcessor")
+            layout.title.set_text("FOAMTrame PostProcessor")
             layout.icon.hide()
 
             with layout.toolbar:
@@ -990,16 +990,16 @@ def _run_trame_visualizer_process(
         # Initial dataset load
         if initial_file and os.path.exists(initial_file):
             try:
-                logger.info(f"[FOAMFlask Post] Loading initial dataset: {initial_file}")
+                logger.info(f"[FOAMTrame Post] Loading initial dataset: {initial_file}")
                 load_dataset(initial_file)
                 render_window.Render()
                 ctrl.view_update()
-                logger.info(f"[FOAMFlask Post] Initial dataset loaded successfully: {state.file_name}, {state.dataset_info}")
+                logger.info(f"[FOAMTrame Post] Initial dataset loaded successfully: {state.file_name}, {state.dataset_info}")
             except Exception as exc:
-                logger.error(f"[FOAMFlask Post] Initial dataset loading error: {exc}", exc_info=True)
+                logger.error(f"[FOAMTrame Post] Initial dataset loading error: {exc}", exc_info=True)
                 state.error_message = str(exc)
         else:
-            logger.warning(f"[FOAMFlask Post] Initial file does not exist or not provided: {initial_file}")
+            logger.warning(f"[FOAMTrame Post] Initial file does not exist or not provided: {initial_file}")
 
         @ctrl.add("on_server_ready")
         def _on_ready(**_):

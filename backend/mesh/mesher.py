@@ -1,4 +1,4 @@
-"""PyVista handler module for mesh visualization in FOAMFlask.
+"""PyVista handler module for mesh visualization in FOAMTrame.
 
 This module provides functionality to load and visualize VTK/VTP mesh files using PyVista.
 It includes features for generating screenshots, interactive HTML viewers, and managing
@@ -19,7 +19,7 @@ import PIL.Image
 
 from backend.visualization.base import BaseVisualizer
 
-logger = logging.getLogger("FOAMFlask")
+logger = logging.getLogger("FOAMTrame")
 
 class MeshVisualizer(BaseVisualizer):
     """Handles mesh visualization using PyVista with in-memory caching.
@@ -80,9 +80,9 @@ class MeshVisualizer(BaseVisualizer):
                 and self.current_mesh_path == path_str
                 and self.current_mesh_mtime == mtime
             ):
-                logger.info(f"[FOAMFlask] [mesher] Using cached mesh for {path_str}")
+                logger.info(f"[FOAMTrame] [mesher] Using cached mesh for {path_str}")
             else:
-                logger.info(f"[FOAMFlask] [mesher] Loading mesh from {path_str}")
+                logger.info(f"[FOAMTrame] [mesher] Loading mesh from {path_str}")
 
                 # Use BaseVisualizer's safe loader
                 self.mesh = self.load_mesh_safe(path)
@@ -97,7 +97,7 @@ class MeshVisualizer(BaseVisualizer):
                 # self._html_cache.clear()
 
                 logger.info(
-                    f"[FOAMFlask] [mesher] Loaded mesh: {self.mesh.n_points} points, {self.mesh.n_cells} cells"
+                    f"[FOAMTrame] [mesher] Loaded mesh: {self.mesh.n_points} points, {self.mesh.n_cells} cells"
                 )
 
             # Get mesh information
@@ -153,7 +153,7 @@ class MeshVisualizer(BaseVisualizer):
             cache_key = (str(path), mtime, width, height, show_edges, h_color, h_cam)
 
             if cache_key in self._screenshot_cache:
-                logger.debug(f"[FOAMFlask] Serving cached screenshot for {path}")
+                logger.debug(f"[FOAMTrame] Serving cached screenshot for {path}")
                 self._screenshot_cache.move_to_end(cache_key)
                 return self._screenshot_cache[cache_key]
 
@@ -215,7 +215,7 @@ class MeshVisualizer(BaseVisualizer):
             cache_key = (path_str, mtime, show_edges, color)
 
             if cache_key in self._html_cache:
-                logger.debug(f"[FOAMFlask] Serving cached HTML for {path_str}")
+                logger.debug(f"[FOAMTrame] Serving cached HTML for {path_str}")
                 self._html_cache.move_to_end(cache_key)
                 return self._html_cache[cache_key]
 

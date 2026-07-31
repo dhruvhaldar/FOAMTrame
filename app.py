@@ -50,7 +50,8 @@ load_dataset = setup_visualizer_tab(server)
 state.setdefault("active_tab", 0)
 
 with SinglePageWithDrawerLayout(server) as layout:
-    layout.title.set_text("FOAMFlask_v2")
+    layout.title.set_text("FOAMTrame")
+    layout.title.style = "min-width: 160px; overflow: visible;"
     layout.icon.hide()
     
     with layout:

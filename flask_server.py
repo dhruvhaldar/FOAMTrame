@@ -13,7 +13,7 @@ from flask_compress import Compress
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("FOAMFlaskBackend")
+logger = logging.getLogger("FOAMTrameBackend")
 
 app = Flask(__name__)
 Compress(app)
@@ -272,7 +272,7 @@ def load_tutorial():
             working_dir=container_run_path
         )
         
-        output = f"INFO::[FOAMFlask] Tutorial loaded::{tutorial}\nCopied to: {CASE_ROOT}/{tut_name}\n"
+        output = f"INFO::[FOAMTrame] Tutorial loaded::{tutorial}\nCopied to: {CASE_ROOT}/{tut_name}\n"
         return jsonify({"output": output, "caseDir": CASE_ROOT})
     except Exception as e:
         return jsonify({"output": f"[Error] {str(e)}"}), 500

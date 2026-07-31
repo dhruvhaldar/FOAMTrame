@@ -12,7 +12,7 @@ import random
 from collections import OrderedDict
 from backend.visualization.base import BaseVisualizer
 
-logger = logging.getLogger("FOAMFlask")
+logger = logging.getLogger("FOAMTrame")
 
 # ⚡ Bolt Optimization: Cache for mesh info
 # Stores (path, mtime) -> mesh_info_dict
@@ -21,7 +21,7 @@ _MESH_INFO_CACHE_SIZE = 100
 
 def _get_cache_dir() -> Path:
     """Get the cache directory, creating it if it doesn't exist."""
-    cache_dir = Path(tempfile.gettempdir()) / "foamflask_geometry_cache"
+    cache_dir = Path(tempfile.gettempdir()) / "FOAMTrame_geometry_cache"
 
     # Security: Ensure directory exists with secure permissions (0700)
     # ⚡ Bolt Optimization: Use EAFP to avoid redundant Path.exists() check
@@ -50,7 +50,7 @@ def _get_cache_dir() -> Path:
                     f"Security: Cache directory {cache_dir} is not owned by current user. "
                     "Using a temporary directory instead."
                 )
-                return Path(tempfile.mkdtemp(prefix="foamflask_geo_"))
+                return Path(tempfile.mkdtemp(prefix="FOAMTrame_geo_"))
 
         # Check permissions (rwx------) (POSIX only)
         if os.name == "posix":
@@ -63,10 +63,10 @@ def _get_cache_dir() -> Path:
                     os.chmod(cache_dir, 0o700)
                 except OSError as e:
                     logger.warning(f"Security: Failed to fix permissions: {e}")
-                    return Path(tempfile.mkdtemp(prefix="foamflask_geo_"))
+                    return Path(tempfile.mkdtemp(prefix="FOAMTrame_geo_"))
     except OSError as e:
         logger.warning(f"Security: Error checking cache dir permissions: {e}")
-        return Path(tempfile.mkdtemp(prefix="foamflask_geo_"))
+        return Path(tempfile.mkdtemp(prefix="FOAMTrame_geo_"))
 
     return cache_dir
 

@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Dict, Optional, Union
 from backend.utils import sanitize_error
 
-logger = logging.getLogger("FOAMFlask")
+logger = logging.getLogger("FOAMTrame")
 
 class CaseManager:
     """Manages OpenFOAM case creation and directory structures."""
@@ -312,7 +312,7 @@ nu              [0 2 -1 0 0 0 0] 1e-05;
             with dict_path.open("w", encoding="utf-8") as f:
                 f.write(content)
 
-            logger.info(f"[FOAMFlask] Updated decomposition to {num_processes} processes (scotch) in {dict_path}")
+            logger.info(f"[FOAMTrame] Updated decomposition to {num_processes} processes (scotch) in {dict_path}")
             return {"success": True, "message": f"Decomposition updated to {num_processes} processes."}
 
         except Exception as e:

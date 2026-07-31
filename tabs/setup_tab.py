@@ -10,7 +10,7 @@ import threading
 from pathlib import Path
 from trame.widgets import html, vuetify
 
-logger = logging.getLogger("FOAMFlask")
+logger = logging.getLogger("FOAMTrame")
 
 CONFIG_FILE = Path("case_config.json")
 
@@ -357,7 +357,7 @@ def build_setup_content():
                 # Header card
                 with vuetify.VCard(classes="pa-4 mb-4 glass-card"):
                     with vuetify.VCardTitle(classes="headline font-weight-bold"):
-                        html.Span("FOAMFlask Setup")
+                        html.Span("FOAMTrame Setup")
                     with vuetify.VCardText():
                         vuetify.VAlert(
                             "{{ setup_status }}",

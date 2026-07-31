@@ -1,4 +1,4 @@
-"""trame_vtk_slicer module for FOAMFlask.
+"""trame_vtk_slicer module for FOAMTrame.
 
 Provides high-performance interactive post-processing visualizers
 using Trame and VTK, powered by TrameVisualizer in postprocessor.py.
@@ -11,7 +11,7 @@ from typing import Dict, Any, Optional
 
 from backend.post.postprocessor import TrameVisualizer
 
-logger = logging.getLogger("FOAMFlask")
+logger = logging.getLogger("FOAMTrame")
 
 
 class SliceVisualizer:

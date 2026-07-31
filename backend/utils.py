@@ -3,7 +3,7 @@ import re
 from typing import Any
 from docker.errors import DockerException
 
-logger = logging.getLogger("FOAMFlask")
+logger = logging.getLogger("FOAMTrame")
 
 
 def safe_decompress(

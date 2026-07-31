@@ -11,7 +11,7 @@ from typing import Dict, List, Optional
 
 from trame.widgets import html, vuetify
 
-logger = logging.getLogger("FOAMFlask")
+logger = logging.getLogger("FOAMTrame")
 
 # Matplotlib backend must be set before importing pyplot
 import matplotlib

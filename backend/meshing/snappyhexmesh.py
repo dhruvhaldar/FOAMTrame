@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Dict, Any, Tuple, List, Union
 from werkzeug.utils import secure_filename
 
-logger = logging.getLogger("FOAMFlask")
+logger = logging.getLogger("FOAMTrame")
 
 class SnappyHexMeshGenerator:
     """Generates system/snappyHexMeshDict based on configuration."""

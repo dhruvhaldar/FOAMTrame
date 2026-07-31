@@ -24,7 +24,7 @@ except ImportError:
     RUST_ACCELERATOR = False
 
 # Configure logger
-logger = logging.getLogger("FOAMFlask")
+logger = logging.getLogger("FOAMTrame")
 
 # --- Global Cache ---
 # Structure: { "file_path_str": (mtime, parsed_value) }
@@ -48,7 +48,7 @@ _TIME_SERIES_CACHE: Dict[str, Tuple[List[str], Dict[str, List[float]]]] = {}
 
 # ⚡ Bolt Optimization: Limit cache size to prevent unbounded memory growth
 # Configurable via environment variable, default to 5
-MAX_CACHE_CASES = int(os.environ.get("FOAMFLASK_MAX_CACHE_CASES", 5))
+MAX_CACHE_CASES = int(os.environ.get("FOAMTrame_MAX_CACHE_CASES", 5))
 
 # Structure: { "dir_path_str": (mtime, scalar_fields, has_U, all_files, file_mtimes) }
 # ⚡ Bolt Optimization: Cache directory contents to avoid redundant scandir/field_type checks
