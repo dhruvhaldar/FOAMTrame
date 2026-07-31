@@ -1,1 +1,7 @@
 Starting Trame visualization server...
+[Trame] 
+[Trame] App running at:
+[Trame] - Local:   http://localhost:8087/
+[Trame] - Network: http://127.0.0.1:8087/
+[Trame] 
+[Trame] Note that for multi-users you need to use and configure a launcher.
