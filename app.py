@@ -67,6 +67,22 @@ with SinglePageWithDrawerLayout(server) as layout:
         .v-application--wrap {
             background: transparent !important;
         }
+        /* Rounded corners for cards, sheets, alerts, and panels */
+        .v-application .v-sheet,
+        .v-application .v-card,
+        .v-application .v-alert,
+        .v-application .v-expansion-panels,
+        .v-application .v-expansion-panel {
+            border-radius: 16px !important;
+        }
+        /* Rounded corners for input fields (text-fields, selects, textareas) */
+        .v-application .v-input input,
+        .v-application .v-input .v-input__control,
+        .v-application .v-input .v-input__slot,
+        .v-application .v-select__slot,
+        .v-application .v-text-field--outlined fieldset {
+            border-radius: 12px !important;
+        }
         /* High-end Glassmorphism Cards */
         .v-application .glass-card {
             background: rgba(255, 255, 255, 0.55) !important;
@@ -108,29 +124,96 @@ with SinglePageWithDrawerLayout(server) as layout:
             border-bottom: 1px solid rgba(255, 255, 255, 0.5) !important;
             box-shadow: none !important;
         }
-        /* Pill Navigation Tab Style */
-        .v-application .v-tab {
+        /* Navbar Project Title Visibility */
+        .v-application .v-toolbar__title {
+            overflow: visible !important;
+            white-space: nowrap !important;
+            text-overflow: clip !important;
+            flex: none !important;
+            margin-right: 24px !important;
+        }
+        /* Active Case Name Pill Truncation and Squishing Prevention */
+        .v-application .v-chip {
+            overflow: visible !important;
+            white-space: nowrap !important;
+            flex: none !important;
+            flex-shrink: 0 !important;
+            margin-right: 24px !important;
+        }
+        .v-application .v-chip .v-chip__content {
+            overflow: visible !important;
+            white-space: nowrap !important;
+        }
+        /* Centered pill navigation tabs layout spacing fix */
+        .glass-navbar .v-tabs-bar {
+            height: 48px !important;
+            background-color: transparent !important;
+        }
+        .glass-navbar .v-tabs-bar__content {
+            height: 48px !important;
+            align-items: center !important;
+        }
+        .glass-navbar .v-tab {
             text-transform: none !important;
             font-weight: 700 !important;
             letter-spacing: normal !important;
             font-size: 0.92rem !important;
             border-radius: 12px !important;
-            margin: 6px 6px !important;
-            min-width: 90px !important;
-            height: 38px !important;
+            margin: 0 4px !important;
+            min-width: 110px !important;  /* Uniform width for equal spacing */
+            max-width: 110px !important;  /* Prevent stretching */
+            width: 110px !important;      /* Force identical widths */
+            flex: none !important;        /* Prevent flexbox resizing */
+            padding: 0 8px !important;
+            justify-content: center !important;
+            text-align: center !important;
+            height: 36px !important;
             color: #334155 !important; /* slate-700 */
             transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            align-self: center !important;
         }
-        .v-application .v-tab:hover:not(.v-tab--active) {
+        .glass-navbar .v-tab:hover:not(.v-tab--active) {
             background: rgba(255, 255, 255, 0.3) !important;
             color: #0284c7 !important;
         }
-        .v-application .v-tab--active {
+        .glass-navbar .v-tab--active {
             color: white !important;
             background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%) !important;
             box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3) !important;
         }
-        .v-application .v-tabs-slider-wrapper {
+        .glass-navbar .v-tabs-slider-wrapper {
+            display: none !important;
+        }
+        /* Glassify inner tabs and card components (e.g. Case Creation tabs) */
+        .v-application .glass-card .v-tabs,
+        .v-application .glass-card .v-tabs-bar,
+        .v-application .glass-card .v-tabs-items,
+        .v-application .glass-card .v-tab-item {
+            background-color: transparent !important;
+        }
+        /* Pill Styling for sub-tabs inside cards */
+        .v-application .glass-card .v-tab {
+            text-transform: none !important;
+            font-weight: 700 !important;
+            letter-spacing: normal !important;
+            font-size: 0.9rem !important;
+            border-radius: 12px !important;
+            height: 36px !important;
+            color: #475569 !important; /* slate-600 */
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            margin: 4px 6px !important;
+            background: rgba(0, 0, 0, 0.03) !important;
+        }
+        .v-application .glass-card .v-tab:hover:not(.v-tab--active) {
+            background: rgba(0, 0, 0, 0.06) !important;
+            color: #0284c7 !important;
+        }
+        .v-application .glass-card .v-tab--active {
+            color: white !important;
+            background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%) !important;
+            box-shadow: 0 4px 12px rgba(14, 165, 233, 0.2) !important;
+        }
+        .v-application .glass-card .v-tabs-slider-wrapper {
             display: none !important;
         }
         /* Hide Default Footer */
