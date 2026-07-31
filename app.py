@@ -145,12 +145,16 @@ with SinglePageWithDrawerLayout(server) as layout:
             white-space: nowrap !important;
         }
         /* Centered pill navigation tabs layout spacing fix */
+        .glass-navbar .v-tabs {
+            height: 36px !important;
+            align-self: center !important;
+        }
         .glass-navbar .v-tabs-bar {
-            height: 48px !important;
+            height: 36px !important;
             background-color: transparent !important;
         }
         .glass-navbar .v-tabs-bar__content {
-            height: 48px !important;
+            height: 36px !important;
             align-items: center !important;
         }
         .glass-navbar .v-tab {
