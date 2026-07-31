@@ -7,21 +7,25 @@ Starting Trame visualization server...
 [Flask] * Running on http://127.0.0.1:5000
 [Flask] INFO:werkzeug:[33mPress CTRL+C to quit[0m
 [Flask] INFO:FOAMFlaskBackend:Startup check completed successfully.
-[Flask] INFO:werkzeug:127.0.0.1 - - [31/Jul/2026 14:51:00] "GET /get_case_root HTTP/1.1" 200 -
-[Flask] INFO:werkzeug:127.0.0.1 - - [31/Jul/2026 14:51:00] "GET /get_docker_config HTTP/1.1" 200 -
-[Flask] INFO:werkzeug:127.0.0.1 - - [31/Jul/2026 14:51:00] "GET /api/cases/list HTTP/1.1" 200 -
-[Flask] INFO:werkzeug:127.0.0.1 - - [31/Jul/2026 14:51:00] "GET /api/startup_status HTTP/1.1" 200 -
+[Flask] INFO:werkzeug:127.0.0.1 - - [31/Jul/2026 15:04:37] "GET /get_case_root HTTP/1.1" 200 -
+[Flask] INFO:werkzeug:127.0.0.1 - - [31/Jul/2026 15:04:37] "GET /get_docker_config HTTP/1.1" 200 -
+[Flask] INFO:werkzeug:127.0.0.1 - - [31/Jul/2026 15:04:37] "GET /get_active_case HTTP/1.1" 200 -
+[Flask] INFO:werkzeug:127.0.0.1 - - [31/Jul/2026 15:04:37] "GET /api/cases/list HTTP/1.1" 200 -
+[Flask] INFO:werkzeug:127.0.0.1 - - [31/Jul/2026 15:04:37] "GET /api/startup_status HTTP/1.1" 200 -
+[Flask] INFO:werkzeug:127.0.0.1 - - [31/Jul/2026 15:04:38] "POST /set_case HTTP/1.1" 200 -
+[Flask] INFO:FOAMFlaskBackend:Starting background startup checks...
+[Flask] INFO:werkzeug:127.0.0.1 - - [31/Jul/2026 15:04:38] "POST /set_docker_config HTTP/1.1" 200 -
 [Trame] 
 [Trame] App running at:
 [Trame] - Local:   http://localhost:8087/
 [Trame] - Network: http://127.0.0.1:8087/
 [Trame] 
 [Trame] Note that for multi-users you need to use and configure a launcher.
-[Flask] INFO:werkzeug:127.0.0.1 - - [31/Jul/2026 14:51:01] "POST /set_case HTTP/1.1" 200 -
-[Flask] INFO:FOAMFlaskBackend:Starting background startup checks...
-[Flask] INFO:werkzeug:127.0.0.1 - - [31/Jul/2026 14:51:01] "POST /set_docker_config HTTP/1.1" 200 -
-[Flask] INFO:werkzeug:127.0.0.1 - - [31/Jul/2026 14:51:01] "GET /api/cases/list HTTP/1.1" 200 -
-[Flask] INFO:werkzeug:127.0.0.1 - - [31/Jul/2026 14:51:01] "GET /api/startup_status HTTP/1.1" 200 -
+[Flask] INFO:werkzeug:127.0.0.1 - - [31/Jul/2026 15:04:38] "POST /set_active_case HTTP/1.1" 200 -
+[Flask] INFO:werkzeug:127.0.0.1 - - [31/Jul/2026 15:04:38] "GET /api/cases/list HTTP/1.1" 200 -
+[Flask] INFO:werkzeug:127.0.0.1 - - [31/Jul/2026 15:04:38] "GET /api/startup_status HTTP/1.1" 200 -
+[Flask] INFO:werkzeug:127.0.0.1 - - [31/Jul/2026 15:04:38] "GET /api/case/resolve_vtk?caseName=aerofoilNACA0012 HTTP/1.1" 200 -
 [Flask] INFO:FOAMFlaskBackend:Startup check completed successfully.
-[Flask] INFO:werkzeug:127.0.0.1 - - [31/Jul/2026 14:51:02] "GET /api/tutorials HTTP/1.1" 200 -
-[Flask] INFO:werkzeug:127.0.0.1 - - [31/Jul/2026 14:51:02] "GET /api/startup_status HTTP/1.1" 200 -
+[Flask] INFO:werkzeug:127.0.0.1 - - [31/Jul/2026 15:04:38] "GET /api/tutorials HTTP/1.1" 200 -
+[Flask] INFO:werkzeug:127.0.0.1 - - [31/Jul/2026 15:04:39] "GET /api/startup_status HTTP/1.1" 200 -
+Both servers successfully stopped.

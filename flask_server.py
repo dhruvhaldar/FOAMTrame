@@ -278,6 +278,25 @@ def load_tutorial():
         return jsonify({"output": f"[Error] {str(e)}"}), 500
 
 
+@app.route("/api/case/resolve_vtk", methods=["GET"])
+def resolve_case_vtk():
+    case_name = request.args.get("caseName")
+    if not case_name:
+        return jsonify({"file_path": None, "error": "No case name specified"})
+        
+    path = Path(CASE_ROOT) / case_name
+    vtk_files = []
+    if path.exists():
+        for ext in ("*.vtk", "*.vtu", "*.vtp", "*.vti", "*.vtr", "*.vts", "*.ply", "*.stl", "*.obj"):
+            vtk_files.extend(path.rglob(ext))
+            
+    if vtk_files:
+        target = max(vtk_files, key=os.path.getmtime)
+        return jsonify({"file_path": str(target), "file_name": target.name})
+        
+    return jsonify({"file_path": None, "message": "No VTK or mesh file found"})
+
+
 @app.route("/api/startup_status", methods=["GET"])
 def get_startup_status():
     return jsonify(STARTUP_STATUS)

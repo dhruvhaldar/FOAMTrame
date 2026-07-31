@@ -1,5 +1,6 @@
 {
   "CASE_ROOT": "C:\\Users\\e-5118\\Downloads\\trame_vtk_slicer\\tutorial_cases",
   "DOCKER_IMAGE": "haldardhruv/ubuntu_noble_openfoam:v12",
-  "OPENFOAM_VERSION": "12"
+  "OPENFOAM_VERSION": "12",
+  "ACTIVE_CASE": "aerofoilNACA0012"
 }
