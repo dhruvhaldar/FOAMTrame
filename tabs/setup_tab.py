@@ -218,12 +218,14 @@ def setup_setup_tab(server):
 
     @state.change("tutorial_search", "tutorials_list")
     def on_tutorial_search_change(**_):
-        query = state.tutorial_search.lower()
+        search_val = state.tutorial_search
+        query = str(search_val).lower() if search_val else ""
+        t_list = state.tutorials_list or []
         if not query:
-            state.filtered_tutorials = state.tutorials_list
+            state.filtered_tutorials = t_list
         else:
             state.filtered_tutorials = [
-                t for t in state.tutorials_list if query in t.lower()
+                t for t in t_list if query in t.lower()
             ]
         state.flush()
 
