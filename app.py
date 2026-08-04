@@ -339,6 +339,30 @@ with SinglePageWithDrawerLayout(server) as layout:
         build_visualizer_drawer(ctrl)
 
     with layout.content:
+        with vuetify.VOverlay(
+            v_model=("docker_checking", True),
+            absolute=True,
+            opacity=0.7,
+            color="#0f172a",
+            classes="d-flex flex-column align-center justify-center text-center",
+            style="z-index: 9999;",
+        ):
+            vuetify.VProgressCircular(
+                indeterminate=True,
+                size=64,
+                width=6,
+                color="cyan lighten-2",
+                classes="mb-4",
+            )
+            html.H3(
+                "{{ setup_status }}",
+                classes="white--text font-weight-medium mb-1",
+            )
+            html.P(
+                "Please wait while Docker integration is initialized...",
+                classes="cyan--text text--lighten-4 text-caption mb-0",
+            )
+
         build_setup_content()
         build_geometry_content()
         build_meshing_content()

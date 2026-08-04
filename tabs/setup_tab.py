@@ -64,6 +64,7 @@ def setup_setup_tab(server):
     state.setdefault("docker_image", config["DOCKER_IMAGE"])
     state.setdefault("openfoam_version", config["OPENFOAM_VERSION"])
 
+    state.setdefault("docker_checking", True)
     state.setdefault("setup_status", "Initializing...")
     state.setdefault("setup_status_color", "info")
     state.setdefault("active_case", config.get("ACTIVE_CASE", ""))
@@ -102,6 +103,7 @@ def setup_setup_tab(server):
     ctrl.scan_cases = scan_cases
 
     def run_docker_checks():
+        state.docker_checking = True
         state.setup_status = "Checking Docker executable..."
         state.setup_status_color = "info"
         state.flush()
@@ -109,6 +111,7 @@ def setup_setup_tab(server):
         if not shutil.which("docker"):
             state.setup_status = "Docker executable not found in PATH."
             state.setup_status_color = "error"
+            state.docker_checking = False
             state.flush()
             return
 
@@ -119,6 +122,7 @@ def setup_setup_tab(server):
         if not client:
             state.setup_status = "Cannot connect to Docker daemon. Make sure Docker Desktop is running."
             state.setup_status_color = "error"
+            state.docker_checking = False
             state.flush()
             return
 
@@ -130,6 +134,7 @@ def setup_setup_tab(server):
             client.images.get(state.docker_image)
             state.setup_status = "Docker integration ready."
             state.setup_status_color = "success"
+            state.docker_checking = False
             state.flush()
             fetch_tutorials()
         except Exception as e:
@@ -140,6 +145,7 @@ def setup_setup_tab(server):
             else:
                 state.setup_status = f"Error checking image: {e}"
                 state.setup_status_color = "error"
+            state.docker_checking = False
             state.flush()
 
     def fetch_tutorials():
