@@ -154,7 +154,7 @@ with SinglePageWithDrawerLayout(server) as layout:
             flex: 1 1 auto;
             flex-direction: column;
             gap: clamp(14px, 1.8vh, 22px);
-            min-height: 0;
+            min-height: auto;
             padding: clamp(18px, 2.2vh, 28px);
             overflow: hidden;
             background: linear-gradient(
@@ -236,6 +236,11 @@ with SinglePageWithDrawerLayout(server) as layout:
         .v-application .setup-main-card .v-card__text > p {
             margin-bottom: clamp(18px, 2.2vh, 28px);
         }
+        .v-application .setup-section-copy {
+            color: #0c6e87 !important;
+            line-height: 1.5;
+            margin: 0;
+        }
         .v-application .setup-main-card .v-label,
         .v-application .setup-main-card input,
         .v-application .setup-main-card .v-select__selection,
@@ -308,8 +313,8 @@ with SinglePageWithDrawerLayout(server) as layout:
             font-weight: 600;
         }
         .v-application .setup-case-card {
-            flex: 1 1 0;
-            min-height: 210px;
+            flex: 1 0 295px;
+            min-height: 295px;
         }
         .v-application .setup-case-card:has(.setup-empty-state) {
             background: rgba(226, 232, 240, 0.58) !important;
@@ -360,8 +365,9 @@ with SinglePageWithDrawerLayout(server) as layout:
             opacity: 0.82 !important;
         }
         .v-application .setup-creation-card {
-            flex: 1.35 1 0;
+            flex: 0 0 auto;
             min-height: 280px;
+            justify-content: flex-start;
         }
         .v-application .setup-advanced-card,
         .v-application .setup-footer-card {
@@ -377,7 +383,7 @@ with SinglePageWithDrawerLayout(server) as layout:
             }
             .v-application .setup-main-card {
                 flex: none;
-                min-height: auto;
+                min-height: auto !important;
             }
         }
 
@@ -528,8 +534,14 @@ with SinglePageWithDrawerLayout(server) as layout:
             z-index: 1;
         }
         .glass-navbar .v-tab:hover:not(.v-tab--active) {
-            background: rgba(255, 255, 255, 0.3) !important;
+            background: transparent !important;
             color: #0c6e87 !important;
+        }
+        .glass-navbar .v-tab::before,
+        .glass-navbar .v-tab:hover::before,
+        .glass-navbar .v-tab:focus::before {
+            background: transparent !important;
+            opacity: 0 !important;
         }
         .glass-navbar .v-tab--active {
             color: white !important;
@@ -608,6 +620,65 @@ with SinglePageWithDrawerLayout(server) as layout:
                 padding: 0 10px !important;
                 white-space: normal !important;
                 line-height: 1.15 !important;
+            }
+        }
+        .v-application .tutorial-source-label {
+            color: #334155;
+            font-size: clamp(1rem, 0.9rem + 0.2vw, 1.15rem);
+            font-weight: 600;
+            line-height: 1.4;
+        }
+        .v-application .tutorial-picker-row {
+            margin: -6px;
+        }
+        .v-application .tutorial-list-column,
+        .v-application .tutorial-action-column {
+            display: flex;
+            padding: 6px;
+        }
+        .v-application .tutorial-list {
+            position: relative;
+            width: 100%;
+            height: 174px;
+            overflow-y: auto;
+            background: rgba(255, 255, 255, 0.72) !important;
+            border: 1px solid rgba(100, 116, 139, 0.34);
+            border-radius: 12px !important;
+            box-shadow: inset 0 1px 3px rgba(15, 23, 42, 0.04);
+        }
+        .v-application .tutorial-list-item {
+            min-height: 34px !important;
+            padding: 0 16px !important;
+            border-left: 3px solid transparent;
+        }
+        .v-application .tutorial-list-item:hover {
+            background: rgba(6, 154, 181, 0.08) !important;
+        }
+        .v-application .tutorial-list-item.v-item--active {
+            color: #0c6e87 !important;
+            background: rgba(6, 154, 181, 0.14) !important;
+            border-left-color: #069ab5;
+            font-weight: 700;
+        }
+        .v-application .tutorial-list-message {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            color: #64748b;
+            background: rgba(248, 250, 252, 0.82);
+            text-align: center;
+        }
+        .v-application .setup-glass-shell .tutorial-import-button {
+            height: 100% !important;
+            min-height: 174px !important;
+            white-space: normal;
+        }
+        @media (max-width: 959px) {
+            .v-application .setup-glass-shell .tutorial-import-button {
+                min-height: 64px !important;
             }
         }
         /* Hide Default Footer */

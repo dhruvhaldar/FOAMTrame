@@ -448,11 +448,11 @@ def build_setup_content():
                     # Active Case Card
                     with vuetify.VCard(classes="pa-4 glass-card setup-main-card setup-case-card"):
                         with vuetify.VCardTitle():
-                            html.H2("Active Case Selection", classes="setup-card-heading")
+                            html.H2("Active Case", classes="setup-card-heading")
                         with vuetify.VCardText():
                             html.P(
-                                "Select the active OpenFOAM case to run or configure. This will be used in subsequent tabs.",
-                                classes="text-caption text-secondary",
+                                "Select the case you want to work on. This selection applies to Geometry, Meshing, and Run tabs.",
+                                classes="text-caption setup-section-copy",
                                 v_if="cases_list && cases_list.length > 0",
                             )
                             with html.Div(
@@ -485,10 +485,22 @@ def build_setup_content():
                                     )
 
                     # Case Management Tabs Card
-                    with vuetify.VCard(classes="pa-4 glass-card setup-main-card setup-creation-card"):
+                    with vuetify.VCard(
+                        classes="pa-4 glass-card setup-main-card setup-creation-card",
+                        style=(
+                            "case_creation_tab === 1 ? 'min-height: 560px;' : 'min-height: 390px;'",
+                        ),
+                    ):
                         with vuetify.VCardTitle():
-                            html.H2("Case Creation & Imports", classes="setup-card-heading")
+                            html.H2(
+                                "{{ case_creation_tab === 0 ? 'Create New Case' : 'Import Tutorial' }}",
+                                classes="setup-card-heading",
+                            )
                         with vuetify.VCardText():
+                            html.P(
+                                "{{ case_creation_tab === 0 ? 'Initialize a blank case with standard structure (0, constant, system).' : 'Clone an official OpenFOAM tutorial into your workspace.' }}",
+                                classes="text-caption setup-section-copy",
+                            )
                             with vuetify.VTabs(
                                 v_model=("case_creation_tab", 0),
                                 grow=True,
@@ -518,32 +530,58 @@ def build_setup_content():
                                 # Import Tutorial Panel
                                 with vuetify.VTabItem():
                                     with vuetify.VContainer(classes="pa-0 setup-tab-form"):
+                                        html.Div(
+                                            "Select Tutorial Source",
+                                            classes="tutorial-source-label",
+                                        )
                                         vuetify.VTextField(
                                             v_model=("tutorial_search",),
-                                            label="Search Tutorials",
+                                            placeholder="Search tutorials...",
+                                            prepend_inner_icon="mdi-magnify",
                                             outlined=True,
                                             hide_details=True,
                                             classes="setup-tutorial-field",
                                         )
-                                        vuetify.VSelect(
-                                            v_model=("selected_tutorial",),
-                                            items=("filtered_tutorials",),
-                                            label="Select OpenFOAM Tutorial",
-                                            outlined=True,
-                                            hide_details=True,
-                                            classes="setup-tutorial-field",
-                                            loading=("tutorials_loading",),
-                                            disabled=("tutorials_loading",),
-                                            no_data_text=(
-                                                "tutorials_loading ? 'Loading tutorials…' : 'No tutorials found'",
-                                            ),
-                                        )
-                                        vuetify.VBtn(
-                                            "Import Tutorial Case",
-                                            click=ctrl.import_tutorial_case,
-                                            block=True,
-                                            classes="theme-btn-info",
-                                        )
+                                        with vuetify.VRow(classes="tutorial-picker-row"):
+                                            with vuetify.VCol(cols="12", md="8", classes="tutorial-list-column"):
+                                                with vuetify.VList(classes="tutorial-list pa-0"):
+                                                    with vuetify.VListItemGroup(
+                                                        v_model=("selected_tutorial",),
+                                                        color="cyan darken-3",
+                                                    ):
+                                                        with vuetify.VListItem(
+                                                            v_for="tutorial in filtered_tutorials",
+                                                            key=("tutorial",),
+                                                            value=("tutorial",),
+                                                            classes="tutorial-list-item",
+                                                        ):
+                                                            vuetify.VListItemTitle("{{ tutorial }}")
+                                                    with html.Div(
+                                                        classes="tutorial-list-message",
+                                                        v_if="tutorials_loading",
+                                                    ):
+                                                        vuetify.VProgressCircular(
+                                                            indeterminate=True,
+                                                            size=24,
+                                                            width=3,
+                                                            color="cyan darken-2",
+                                                            classes="mr-2",
+                                                        )
+                                                        html.Span("Loading tutorials…")
+                                                    html.Div(
+                                                        "No tutorials found",
+                                                        classes="tutorial-list-message",
+                                                        v_if="!tutorials_loading && filtered_tutorials.length === 0",
+                                                    )
+                                            with vuetify.VCol(cols="12", md="4", classes="tutorial-action-column"):
+                                                with vuetify.VBtn(
+                                                    click=ctrl.import_tutorial_case,
+                                                    block=True,
+                                                    classes="theme-btn-info tutorial-import-button",
+                                                    disabled=("!selected_tutorial || tutorials_loading",),
+                                                ):
+                                                    vuetify.VIcon("mdi-download", classes="mr-2")
+                                                    html.Span("Import Tutorial")
 
                 # Advanced Settings Expansion Panel
                 with vuetify.VExpansionPanels(classes="glass-card setup-advanced-card"):

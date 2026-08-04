@@ -1,0 +1,11 @@
+[
+  {
+    "id": 1785844116,
+    "case_name": "aerofoilNACA0012",
+    "command": "./Allclean",
+    "status": "Completed",
+    "start_time": "2026-08-04 11:48:36",
+    "end_time": "2026-08-04 11:48:38",
+    "duration": "1.48s"
+  }
+]
