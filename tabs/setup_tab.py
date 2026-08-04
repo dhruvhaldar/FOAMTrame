@@ -106,16 +106,19 @@ def setup_setup_tab(server):
         state.docker_checking = True
         state.setup_status = "Checking Docker executable..."
         state.setup_status_color = "info"
+        state.dirty("setup_status", "setup_status_color", "docker_checking")
         state.flush()
 
         if not shutil.which("docker"):
             state.setup_status = "Docker executable not found in PATH."
             state.setup_status_color = "error"
             state.docker_checking = False
+            state.dirty("setup_status", "setup_status_color", "docker_checking")
             state.flush()
             return
 
         state.setup_status = "Connecting to Docker daemon..."
+        state.dirty("setup_status")
         state.flush()
 
         client = get_docker_client()
@@ -123,10 +126,12 @@ def setup_setup_tab(server):
             state.setup_status = "Cannot connect to Docker daemon. Make sure Docker Desktop is running."
             state.setup_status_color = "error"
             state.docker_checking = False
+            state.dirty("setup_status", "setup_status_color", "docker_checking")
             state.flush()
             return
 
         state.setup_status = f"Checking Docker image {state.docker_image}..."
+        state.dirty("setup_status")
         state.flush()
 
         try:
@@ -135,6 +140,7 @@ def setup_setup_tab(server):
             state.setup_status = "Docker integration ready."
             state.setup_status_color = "success"
             state.docker_checking = False
+            state.dirty("setup_status", "setup_status_color", "docker_checking")
             state.flush()
             fetch_tutorials()
         except Exception as e:
@@ -146,20 +152,15 @@ def setup_setup_tab(server):
                 state.setup_status = f"Error checking image: {e}"
                 state.setup_status_color = "error"
             state.docker_checking = False
+            state.dirty("setup_status", "setup_status_color", "docker_checking")
             state.flush()
 
     def fetch_tutorials():
         if state.tutorials_loaded:
             return
 
-        state.setup_status = "Fetching OpenFOAM tutorials from Docker..."
-        state.flush()
-
         client = get_docker_client()
         if not client:
-            state.setup_status = "Docker not available for tutorial fetch."
-            state.setup_status_color = "error"
-            state.flush()
             return
 
         try:
@@ -187,17 +188,10 @@ def setup_setup_tab(server):
                 state.tutorials_list = sorted(tutorials)
                 state.filtered_tutorials = sorted(tutorials)
                 state.tutorials_loaded = True
-                state.setup_status = "Docker integration ready."
-                state.setup_status_color = "success"
-            else:
-                state.setup_status = "No tutorials found in container."
-                state.setup_status_color = "warning"
+            state.dirty("tutorials_list", "filtered_tutorials", "tutorials_loaded")
             state.flush()
         except Exception as e:
             logger.error(f"Failed to fetch tutorials: {e}")
-            state.setup_status = f"Failed to fetch tutorials: {e}"
-            state.setup_status_color = "error"
-            state.flush()
 
     # Listeners for state changes
     @state.change("case_root")
