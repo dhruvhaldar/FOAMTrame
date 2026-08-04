@@ -353,9 +353,7 @@ def build_run_log_drawer():
             click=lambda: ctrl.run_command("./Allclean"),
             block=True,
             small=True,
-            color="error",
-            outlined=True,
-            classes="mb-2",
+            classes="theme-btn-error mb-2",
             disabled=("is_running",),
         )
         vuetify.VBtn(
@@ -389,7 +387,7 @@ def build_run_log_drawer():
             small=True,
             outlined=True,
             color="primary",
-            classes="mb-2",
+            classes="theme-btn-outlined mb-2",
             disabled=("is_running",),
         )
         vuetify.VBtn(
@@ -399,7 +397,7 @@ def build_run_log_drawer():
             small=True,
             outlined=True,
             color="primary",
-            classes="mb-2",
+            classes="theme-btn-outlined mb-2",
             disabled=("is_running",),
         )
         vuetify.VBtn(
@@ -409,7 +407,7 @@ def build_run_log_drawer():
             small=True,
             outlined=True,
             color="secondary",
-            classes="mb-2",
+            classes="theme-btn-outlined mb-2",
             disabled=("is_running",),
         )
 

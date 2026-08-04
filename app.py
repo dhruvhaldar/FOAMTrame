@@ -257,6 +257,19 @@ with SinglePageWithDrawerLayout(server) as layout:
             border-radius: 10px !important;
             box-shadow: 0 4px 14px 0 rgba(6, 182, 212, 0.3) !important;
         }
+        .v-application .v-btn.theme-btn-error {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+            color: white !important;
+            text-transform: none !important;
+            font-weight: 600 !important;
+            border-radius: 10px !important;
+            box-shadow: 0 4px 14px 0 rgba(239, 68, 68, 0.4) !important;
+        }
+        .v-application .v-btn.theme-btn-outlined {
+            border-radius: 10px !important;
+            text-transform: none !important;
+            font-weight: 600 !important;
+        }
         /* Premium Scrollbar */
         ::-webkit-scrollbar {
             width: 8px;
