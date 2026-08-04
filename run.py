@@ -9,8 +9,15 @@ def main():
     log_file = open("run.log", "w", encoding="utf-8", buffering=1)
 
     def log_msg(msg):
-        print(msg)
-        log_file.write(msg + "\n")
+        try:
+            print(msg, flush=True)
+        except Exception:
+            pass
+        try:
+            log_file.write(msg + "\n")
+            log_file.flush()
+        except Exception:
+            pass
 
     log_msg("Starting Trame visualization server...")
     trame_process = subprocess.Popen(
@@ -24,8 +31,14 @@ def main():
     import threading
 
     def forward_logs(process, prefix):
-        for line in iter(process.stdout.readline, ""):
-            log_msg(f"[{prefix}] {line.strip()}")
+        try:
+            while process.poll() is None or process.stdout:
+                line = process.stdout.readline()
+                if not line:
+                    break
+                log_msg(f"[{prefix}] {line.strip()}")
+        except (ValueError, OSError):
+            pass
 
     t = threading.Thread(target=forward_logs, args=(trame_process, "Trame"), daemon=True)
     t.start()
@@ -33,17 +46,26 @@ def main():
     try:
         while True:
             if trame_process.poll() is not None:
-                print("Trame server stopped.")
+                log_msg("Trame server stopped.")
                 break
             import time
             time.sleep(0.5)
     except KeyboardInterrupt:
-        print("\nStopping server...")
+        log_msg("Stopping server...")
     finally:
-        trame_process.terminate()
-        trame_process.wait()
+        try:
+            trame_process.terminate()
+            trame_process.wait(timeout=3)
+        except Exception:
+            try:
+                trame_process.kill()
+            except Exception:
+                pass
         log_msg("Server stopped.")
-        log_file.close()
+        try:
+            log_file.close()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":
