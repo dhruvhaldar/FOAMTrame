@@ -314,10 +314,11 @@ def build_run_log_drawer():
     ctrl = server.controller
 
     with html.Div(v_show="active_tab === 3", classes="pa-4"):
-        html.Div("Parallel Configuration", classes="text-overline text--secondary mb-1")
+        # Parallel & Core Configuration Section
+        html.Div("Parallel & Core Configuration", classes="text-overline text--secondary mb-1")
         vuetify.VTextField(
             v_model=("num_processes", 1),
-            label="Cores / Processes",
+            label="Number of Processes (Cores)",
             type="number",
             min=1,
             max=128,
@@ -328,14 +329,19 @@ def build_run_log_drawer():
         )
         html.P(
             "Physical Cores: {{ physical_cores }} (Logical: {{ cpu_count }})",
-            classes="text-caption text-secondary mb-4",
+            classes="text-caption text-secondary mb-1",
+        )
+        html.Div(
+            "Decomposition: {{ has_parallel_config ? ('Configured (' + detected_num_processes + ' cores, ' + detected_method + ')') : 'Not decomposed' }}",
+            classes="text-caption font-weight-bold text-primary mb-3",
         )
 
         vuetify.VDivider(classes="my-3")
 
-        html.Div("Common Solvers", classes="text-overline text--secondary mb-1")
+        # Simulation Execution Commands Section
+        html.Div("Simulation Execution Commands", classes="text-overline text--secondary mb-1")
         vuetify.VBtn(
-            "Run Allrun",
+            "Allrun",
             click=lambda: ctrl.run_command("./Allrun"),
             block=True,
             small=True,
@@ -343,7 +349,17 @@ def build_run_log_drawer():
             disabled=("is_running",),
         )
         vuetify.VBtn(
-            "Run blockMesh",
+            "Allclean",
+            click=lambda: ctrl.run_command("./Allclean"),
+            block=True,
+            small=True,
+            color="error",
+            outlined=True,
+            classes="mb-2",
+            disabled=("is_running",),
+        )
+        vuetify.VBtn(
+            "blockMesh",
             click=lambda: ctrl.run_command("blockMesh"),
             block=True,
             small=True,
@@ -351,7 +367,7 @@ def build_run_log_drawer():
             disabled=("is_running",),
         )
         vuetify.VBtn(
-            "Run simpleFoam",
+            "simpleFoam",
             click=lambda: ctrl.run_command("simpleFoam"),
             block=True,
             small=True,
@@ -359,7 +375,7 @@ def build_run_log_drawer():
             disabled=("is_running",),
         )
         vuetify.VBtn(
-            "Run pimpleFoam",
+            "pimpleFoam",
             click=lambda: ctrl.run_command("pimpleFoam"),
             block=True,
             small=True,
@@ -367,12 +383,32 @@ def build_run_log_drawer():
             disabled=("is_running",),
         )
         vuetify.VBtn(
-            "Run Allclean",
-            click=lambda: ctrl.run_command("./Allclean"),
+            "decomposePar",
+            click=lambda: ctrl.run_command("decomposePar"),
             block=True,
             small=True,
-            color="error",
             outlined=True,
+            color="primary",
+            classes="mb-2",
+            disabled=("is_running",),
+        )
+        vuetify.VBtn(
+            "reconstructPar",
+            click=lambda: ctrl.run_command("reconstructPar"),
+            block=True,
+            small=True,
+            outlined=True,
+            color="primary",
+            classes="mb-2",
+            disabled=("is_running",),
+        )
+        vuetify.VBtn(
+            "foamToVTK",
+            click=lambda: ctrl.run_command("foamToVTK"),
+            block=True,
+            small=True,
+            outlined=True,
+            color="secondary",
             classes="mb-2",
             disabled=("is_running",),
         )
@@ -422,98 +458,6 @@ def build_run_log_content():
                                 classes="font-weight-bold my-0",
                             )
 
-                # Parallel Config Section Card
-                with vuetify.VCard(classes="pa-4 mb-4 glass-card"):
-                    with vuetify.VCardTitle(classes="subtitle-1 font-weight-bold"):
-                        vuetify.VIcon("mdi-cpu-64-bit", classes="mr-2", color="primary")
-                        html.Span("Parallel & Core Configuration")
-                    with vuetify.VCardText():
-                        with vuetify.VRow(align="center"):
-                            with vuetify.VCol(cols="12", sm="4"):
-                                vuetify.VTextField(
-                                    v_model=("num_processes", 1),
-                                    label="Number of Processes (Cores)",
-                                    type="number",
-                                    min=1,
-                                    max=128,
-                                    outlined=True,
-                                    dense=True,
-                                    hide_details=True,
-                                )
-                            with vuetify.VCol(cols="12", sm="8"):
-                                html.Div(
-                                    "Physical Cores: {{ physical_cores }} | Logical Processors: {{ cpu_count }}",
-                                    classes="text-body-2 font-weight-medium text-secondary mb-1",
-                                )
-                                html.Div(
-                                    "Decomposition Status: {{ has_parallel_config ? ('Configured (' + detected_num_processes + ' cores, ' + detected_method + ')') : 'Not decomposed' }}",
-                                    classes="text-caption font-weight-bold text-primary",
-                                )
-
-                # Run Actions Bar
-                with vuetify.VCard(classes="pa-4 mb-4 glass-card"):
-                    with vuetify.VCardTitle(classes="subtitle-1 font-weight-bold"):
-                        vuetify.VIcon("mdi-play-circle-outline", classes="mr-2", color="success")
-                        html.Span("Simulation Execution Commands")
-                    with vuetify.VCardText():
-                        with html.Div(classes="d-flex flex-wrap align-center"):
-                            vuetify.VBtn(
-                                "Allrun",
-                                click=lambda: ctrl.run_command("./Allrun"),
-                                classes="theme-btn-success ma-1",
-                                disabled=("is_running",),
-                            )
-                            vuetify.VBtn(
-                                "Allclean",
-                                click=lambda: ctrl.run_command("./Allclean"),
-                                color="error",
-                                outlined=True,
-                                classes="ma-1",
-                                disabled=("is_running",),
-                            )
-                            vuetify.VBtn(
-                                "blockMesh",
-                                click=lambda: ctrl.run_command("blockMesh"),
-                                classes="theme-btn-primary ma-1",
-                                disabled=("is_running",),
-                            )
-                            vuetify.VBtn(
-                                "simpleFoam",
-                                click=lambda: ctrl.run_command("simpleFoam"),
-                                classes="theme-btn-info ma-1",
-                                disabled=("is_running",),
-                            )
-                            vuetify.VBtn(
-                                "pimpleFoam",
-                                click=lambda: ctrl.run_command("pimpleFoam"),
-                                classes="theme-btn-warning ma-1",
-                                disabled=("is_running",),
-                            )
-                            vuetify.VBtn(
-                                "decomposePar",
-                                click=lambda: ctrl.run_command("decomposePar"),
-                                outlined=True,
-                                color="primary",
-                                classes="ma-1",
-                                disabled=("is_running",),
-                            )
-                            vuetify.VBtn(
-                                "reconstructPar",
-                                click=lambda: ctrl.run_command("reconstructPar"),
-                                outlined=True,
-                                color="primary",
-                                classes="ma-1",
-                                disabled=("is_running",),
-                            )
-                            vuetify.VBtn(
-                                "foamToVTK",
-                                click=lambda: ctrl.run_command("foamToVTK"),
-                                outlined=True,
-                                color="secondary",
-                                classes="ma-1",
-                                disabled=("is_running",),
-                            )
-
                 # Console Output Log Box Card
                 with vuetify.VCard(classes="pa-4 mb-4 glass-card"):
                     with vuetify.VCardTitle(classes="subtitle-1 font-weight-bold d-flex align-center justify-space-between py-1"):
@@ -534,7 +478,7 @@ def build_run_log_content():
                             "{{ run_log_text }}",
                             style=(
                                 "background: #0f172a; color: #38bdf8; font-family: monospace; "
-                                "padding: 16px; border-radius: 12px; height: 320px; overflow-y: auto; "
+                                "padding: 16px; border-radius: 12px; height: 360px; overflow-y: auto; "
                                 "white-space: pre-wrap; word-break: break-all; font-size: 0.85rem;"
                             ),
                         )
