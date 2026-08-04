@@ -363,7 +363,7 @@ def build_setup_drawer():
 
     with html.Div(v_show="active_tab === 0", classes="pa-4"):
         # Header / Status Cards in Sidebar
-        html.Div("FOAMTrame Setup", classes="text-subtitle-1 font-weight-bold text-slate-800 mb-2", style="color: #0f172a;")
+        html.Div("Health Checkup 💊", classes="text-subtitle-1 font-weight-bold text-slate-800 mb-2", style="color: #0f172a;")
         vuetify.VAlert(
             "{{ trame_status }}",
             type=("trame_status_color", "success"),
@@ -414,14 +414,13 @@ def build_setup_content():
                                         "Create or import a case below, then refresh the list.",
                                         classes="setup-empty-state-copy",
                                     )
-                            with vuetify.VRow(align="center"):
+                            with vuetify.VRow(align="center", classes="setup-control-row"):
                                 with vuetify.VCol(cols="8"):
                                     vuetify.VSelect(
                                         v_model=("active_case",),
                                         items=("cases_list",),
                                         label="Choose Case",
                                         outlined=True,
-                                        dense=True,
                                         hide_details=True,
                                         disabled=("!cases_list || cases_list.length === 0",),
                                     )
@@ -438,19 +437,24 @@ def build_setup_content():
                         with vuetify.VCardTitle():
                             html.H2("Case Creation & Imports", classes="setup-card-heading")
                         with vuetify.VCardText():
-                            with vuetify.VTabs(v_model=("case_creation_tab", 0), grow=True):
+                            with vuetify.VTabs(
+                                v_model=("case_creation_tab", 0),
+                                grow=True,
+                                classes="setup-case-tabs",
+                            ):
                                 vuetify.VTab("Create Blank Case")
                                 vuetify.VTab("Import Tutorial", click=ctrl.trigger_fetch_tutorials)
 
                             with vuetify.VTabsItems(v_model=("case_creation_tab",)):
                                 # Create Case Panel
                                 with vuetify.VTabItem():
-                                    with vuetify.VContainer(classes="pa-3"):
+                                    with vuetify.VContainer(classes="pa-0 setup-tab-form"):
                                         vuetify.VTextField(
                                             v_model=("new_case_name",),
                                             label="New Case Name",
                                             placeholder="e.g., cavity_flow",
                                             outlined=True,
+                                            hide_details=True,
                                             classes="setup-name-field",
                                         )
                                         vuetify.VBtn(
@@ -461,20 +465,21 @@ def build_setup_content():
                                         )
                                 # Import Tutorial Panel
                                 with vuetify.VTabItem():
-                                    with vuetify.VContainer(classes="pa-3"):
+                                    with vuetify.VContainer(classes="pa-0 setup-tab-form"):
                                         vuetify.VTextField(
                                             v_model=("tutorial_search",),
                                             label="Search Tutorials",
                                             outlined=True,
                                             hide_details=True,
-                                            classes="mb-3 setup-tutorial-field",
+                                            classes="setup-tutorial-field",
                                         )
                                         vuetify.VSelect(
                                             v_model=("selected_tutorial",),
                                             items=("filtered_tutorials",),
                                             label="Select OpenFOAM Tutorial",
                                             outlined=True,
-                                            classes="mb-3 setup-tutorial-field",
+                                            hide_details=True,
+                                            classes="setup-tutorial-field",
                                         )
                                         vuetify.VBtn(
                                             "Import Tutorial Case",

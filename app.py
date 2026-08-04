@@ -244,7 +244,7 @@ with SinglePageWithDrawerLayout(server) as layout:
             font-size: clamp(1.05rem, 0.9rem + 0.28vw, 1.2rem) !important;
         }
         .v-application .setup-main-card .v-input__slot {
-            min-height: 54px !important;
+            min-height: 56px !important;
         }
         .v-application .setup-name-field input,
         .v-application .setup-tutorial-field input,
@@ -255,19 +255,32 @@ with SinglePageWithDrawerLayout(server) as layout:
             padding-bottom: 0 !important;
         }
         .v-application .setup-main-card .v-btn {
-            min-height: 48px !important;
+            min-height: 56px !important;
+            height: 56px !important;
         }
         .v-application .setup-creation-card .v-tabs,
         .v-application .setup-creation-card .v-tabs-bar,
         .v-application .setup-creation-card .v-tabs-bar__content,
         .v-application .setup-creation-card .v-tab {
-            height: 48px !important;
+            height: 56px !important;
         }
         .v-application .setup-creation-card .v-tabs-items {
             margin-top: clamp(14px, 1.8vh, 22px);
         }
-        .v-application .setup-creation-card .v-tab-item .container {
-            padding: 8px 12px 12px !important;
+        .v-application .setup-tab-form {
+            display: flex;
+            flex-direction: column;
+            gap: clamp(14px, 1.8vh, 20px);
+            width: 100%;
+        }
+        .v-application .setup-tab-form .v-input {
+            width: 100%;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        .v-application .setup-control-row {
+            margin-top: 0;
+            margin-bottom: 0;
         }
         .v-application .setup-advanced-card .v-expansion-panel-header {
             min-height: 64px;
@@ -490,6 +503,8 @@ with SinglePageWithDrawerLayout(server) as layout:
         .glass-navbar .v-tabs-bar__content {
             height: 36px !important;
             align-items: center !important;
+            position: relative !important;
+            isolation: isolate;
         }
         .glass-navbar .v-tab {
             text-transform: none !important;
@@ -509,18 +524,40 @@ with SinglePageWithDrawerLayout(server) as layout:
             color: #334155 !important; /* slate-700 */
             transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
             align-self: center !important;
+            position: relative;
+            z-index: 1;
         }
         .glass-navbar .v-tab:hover:not(.v-tab--active) {
             background: rgba(255, 255, 255, 0.3) !important;
-            color: #0284c7 !important;
+            color: #0c6e87 !important;
         }
         .glass-navbar .v-tab--active {
             color: white !important;
-            background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%) !important;
-            box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3) !important;
+            background: transparent !important;
+            box-shadow: none !important;
         }
         .glass-navbar .v-tabs-slider-wrapper {
-            display: none !important;
+            display: block !important;
+            z-index: 0 !important;
+            height: 36px !important;
+            bottom: 0 !important;
+            border-radius: 12px !important;
+            overflow: visible !important;
+            transition:
+                left 320ms cubic-bezier(0.4, 0, 0.2, 1),
+                right 320ms cubic-bezier(0.4, 0, 0.2, 1),
+                transform 320ms cubic-bezier(0.4, 0, 0.2, 1),
+                width 320ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+            will-change: left, right, transform, width;
+        }
+        .glass-navbar .v-tabs-slider {
+            width: 100% !important;
+            height: 100% !important;
+            border-radius: 12px !important;
+            background: linear-gradient(135deg, #069ab5 0%, #0c6e87 100%) !important;
+            box-shadow:
+                0 4px 12px rgba(6, 154, 181, 0.30),
+                inset 0 1px 0 rgba(255, 255, 255, 0.24) !important;
         }
         /* Glassify inner tabs and card components (e.g. Case Creation tabs) */
         .v-application .glass-card .v-tabs,
@@ -544,15 +581,34 @@ with SinglePageWithDrawerLayout(server) as layout:
         }
         .v-application .glass-card .v-tab:hover:not(.v-tab--active) {
             background: rgba(0, 0, 0, 0.06) !important;
-            color: #0284c7 !important;
+            color: #0c6e87 !important;
         }
         .v-application .glass-card .v-tab--active {
             color: white !important;
-            background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%) !important;
-            box-shadow: 0 4px 12px rgba(14, 165, 233, 0.2) !important;
+            background: linear-gradient(135deg, #069ab5 0%, #0c6e87 100%) !important;
+            box-shadow: 0 4px 12px rgba(6, 154, 181, 0.24) !important;
         }
         .v-application .glass-card .v-tabs-slider-wrapper {
             display: none !important;
+        }
+        /* Setup tabs share the same control height as adjacent fields/buttons. */
+        .v-application .setup-glass-shell .setup-creation-card .v-tabs,
+        .v-application .setup-glass-shell .setup-creation-card .v-tabs-bar,
+        .v-application .setup-glass-shell .setup-creation-card .v-tabs-bar__content,
+        .v-application .setup-glass-shell .setup-creation-card .v-tab {
+            height: 56px !important;
+        }
+        @media (max-width: 1100px) {
+            .v-application .setup-glass-shell .setup-creation-card .v-tabs-bar__content {
+                gap: 8px;
+            }
+            .v-application .setup-glass-shell .setup-creation-card .v-tab {
+                min-width: 0 !important;
+                margin: 0 !important;
+                padding: 0 10px !important;
+                white-space: normal !important;
+                line-height: 1.15 !important;
+            }
         }
         /* Hide Default Footer */
         .v-footer {
@@ -560,12 +616,12 @@ with SinglePageWithDrawerLayout(server) as layout:
         }
         /* Premium Button Accents with Consistent Border Radius & Elevation */
         .v-application .v-btn.theme-btn-primary {
-            background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%) !important;
+            background: linear-gradient(135deg, #069ab5 0%, #0c6e87 100%) !important;
             color: white !important;
             text-transform: none !important;
             font-weight: 600 !important;
             border-radius: 12px !important;
-            box-shadow: 0 4px 14px 0 rgba(14, 165, 233, 0.3) !important;
+            box-shadow: 0 4px 14px 0 rgba(6, 154, 181, 0.30) !important;
         }
         .v-application .v-btn.theme-btn-success {
             background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
@@ -638,7 +694,6 @@ with SinglePageWithDrawerLayout(server) as layout:
             dense=True,
             background_color="transparent",
             classes="ml-4",
-            hide_slider=True,
             show_arrows=True,
         ):
             vuetify.VTab("Setup")
