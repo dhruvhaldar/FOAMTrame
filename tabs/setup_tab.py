@@ -67,6 +67,8 @@ def setup_setup_tab(server):
     state.setdefault("docker_checking", True)
     state.setdefault("setup_status", "Initializing...")
     state.setdefault("setup_status_color", "info")
+    state.setdefault("trame_status", "Trame server ready.")
+    state.setdefault("trame_status_color", "success")
     state.setdefault("active_case", config.get("ACTIVE_CASE", ""))
     state.setdefault("cases_list", [])
 
@@ -346,7 +348,27 @@ def setup_setup_tab(server):
 
 
 def build_setup_drawer():
-    pass
+    from trame.app import get_server
+    server = get_server()
+    ctrl = server.controller
+
+    with html.Div(v_show="active_tab === 0", classes="pa-4"):
+        # Header / Status Cards in Sidebar
+        html.Div("FOAMTrame Setup", classes="text-subtitle-1 font-weight-bold text-slate-800 mb-2", style="color: #0f172a;")
+        vuetify.VAlert(
+            "{{ trame_status }}",
+            type=("trame_status_color", "success"),
+            dense=True,
+            outlined=True,
+            classes="mb-2",
+        )
+        vuetify.VAlert(
+            "{{ setup_status }}",
+            type=("setup_status_color", "info"),
+            dense=True,
+            outlined=True,
+            classes="mb-3",
+        )
 
 
 def build_setup_content():
@@ -360,19 +382,6 @@ def build_setup_content():
     ):
         with vuetify.VRow(justify="center"):
             with vuetify.VCol(cols="12", md="8", lg="6"):
-                # Header card
-                with vuetify.VCard(classes="pa-4 mb-4 glass-card"):
-                    with vuetify.VCardTitle(classes="headline font-weight-bold"):
-                        html.Span("FOAMTrame Setup")
-                    with vuetify.VCardText():
-                        vuetify.VAlert(
-                            "{{ setup_status }}",
-                            type=("setup_status_color", "info"),
-                            dense=True,
-                            outlined=True,
-                            classes="mb-4",
-                        )
-
                 # Active Case Card
                 with vuetify.VCard(classes="pa-4 mb-4 glass-card"):
                     with vuetify.VCardTitle(classes="subtitle-1 font-weight-bold"):
@@ -515,4 +524,6 @@ def build_setup_content():
                                 height="22",
                                 style="object-fit: contain;",
                             )
+
+
 

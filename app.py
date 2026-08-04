@@ -91,20 +91,26 @@ with SinglePageWithDrawerLayout(server) as layout:
         .v-application--wrap {
             background: transparent !important;
         }
-        /* Rounded corners for cards, sheets, alerts, and panels */
+        /* Core Design System Tokens & Global Consistency */
         .v-application .v-sheet,
         .v-application .v-card,
         .v-application .v-alert,
         .v-application .v-expansion-panels,
-        .v-application .v-expansion-panel {
+        .v-application .v-expansion-panel,
+        .v-application .v-menu__content,
+        .v-application .v-dialog {
             border-radius: 16px !important;
         }
-        /* Rounded corners for input fields (text-fields, selects, textareas) */
+        /* Consistent Rounded Corners for Form Inputs, Buttons, Chips, and Tabs */
         .v-application .v-input input,
         .v-application .v-input .v-input__control,
         .v-application .v-input .v-input__slot,
         .v-application .v-select__slot,
-        .v-application .v-text-field--outlined fieldset {
+        .v-application .v-text-field--outlined fieldset,
+        .v-application .v-file-input .v-input__slot,
+        .v-application .v-btn,
+        .v-application .v-chip,
+        .v-application .v-btn-toggle {
             border-radius: 12px !important;
         }
         /* High-end Glassmorphism Cards */
@@ -113,7 +119,7 @@ with SinglePageWithDrawerLayout(server) as layout:
             backdrop-filter: blur(24px) !important;
             -webkit-backdrop-filter: blur(24px) !important;
             border: 1px solid rgba(255, 255, 255, 0.7) !important;
-            border-radius: 20px !important;
+            border-radius: 16px !important;
             box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05), inset 0 0 16px rgba(255, 255, 255, 0.3) !important;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
         }
@@ -126,7 +132,7 @@ with SinglePageWithDrawerLayout(server) as layout:
         .v-application .v-expansion-panels.glass-card,
         .v-application .v-expansion-panel {
             background: rgba(255, 255, 255, 0.55) !important;
-            border-radius: 20px !important;
+            border-radius: 16px !important;
         }
         .v-application .v-expansion-panel-header {
             background: transparent !important;
@@ -248,13 +254,13 @@ with SinglePageWithDrawerLayout(server) as layout:
         .v-footer {
             display: none !important;
         }
-        /* Premium Button Accents */
+        /* Premium Button Accents with Consistent Border Radius & Elevation */
         .v-application .v-btn.theme-btn-primary {
             background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%) !important;
             color: white !important;
             text-transform: none !important;
             font-weight: 600 !important;
-            border-radius: 10px !important;
+            border-radius: 12px !important;
             box-shadow: 0 4px 14px 0 rgba(14, 165, 233, 0.3) !important;
         }
         .v-application .v-btn.theme-btn-success {
@@ -262,7 +268,7 @@ with SinglePageWithDrawerLayout(server) as layout:
             color: white !important;
             text-transform: none !important;
             font-weight: 600 !important;
-            border-radius: 10px !important;
+            border-radius: 12px !important;
             box-shadow: 0 4px 14px 0 rgba(16, 185, 129, 0.3) !important;
         }
         .v-application .v-btn.theme-btn-warning {
@@ -270,7 +276,7 @@ with SinglePageWithDrawerLayout(server) as layout:
             color: white !important;
             text-transform: none !important;
             font-weight: 600 !important;
-            border-radius: 10px !important;
+            border-radius: 12px !important;
             box-shadow: 0 4px 14px 0 rgba(245, 158, 11, 0.3) !important;
         }
         .v-application .v-btn.theme-btn-info {
@@ -278,7 +284,7 @@ with SinglePageWithDrawerLayout(server) as layout:
             color: white !important;
             text-transform: none !important;
             font-weight: 600 !important;
-            border-radius: 10px !important;
+            border-radius: 12px !important;
             box-shadow: 0 4px 14px 0 rgba(6, 182, 212, 0.3) !important;
         }
         .v-application .v-btn.theme-btn-error {
@@ -286,11 +292,11 @@ with SinglePageWithDrawerLayout(server) as layout:
             color: white !important;
             text-transform: none !important;
             font-weight: 600 !important;
-            border-radius: 10px !important;
+            border-radius: 12px !important;
             box-shadow: 0 4px 14px 0 rgba(239, 68, 68, 0.4) !important;
         }
         .v-application .v-btn.theme-btn-outlined {
-            border-radius: 10px !important;
+            border-radius: 12px !important;
             text-transform: none !important;
             font-weight: 600 !important;
         }
@@ -345,11 +351,11 @@ with SinglePageWithDrawerLayout(server) as layout:
             v_if="active_tab === 5",
         )
 
-    state.setdefault("drawer_open", False)
+    state.setdefault("drawer_open", True)
 
     @state.change("active_tab")
     def _on_tab_change(active_tab, **_):
-        state.drawer_open = (int(active_tab) != 0)
+        state.drawer_open = True
         state.flush()
 
     layout.drawer.classes = "glass-drawer"
