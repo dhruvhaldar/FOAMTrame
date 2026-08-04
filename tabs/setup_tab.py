@@ -482,3 +482,37 @@ def build_setup_content():
                                 block=True,
                                 classes="theme-btn-warning",
                             )
+
+                # Footer Glass Overlay Card
+                with vuetify.VCard(classes="pa-3 mt-4 glass-card"):
+                    with html.Div(classes="d-flex flex-wrap align-center justify-space-between text-center gap-2"):
+                        html.Div(
+                            "FOAMTrame © 2026",
+                            classes="text-subtitle-2 font-weight-bold mx-2",
+                            style="color: #0f172a;",
+                        )
+                        html.Div(
+                            "Licensed under GNU GPLv3",
+                            classes="text-caption font-weight-medium mx-2",
+                            style="color: #475569;",
+                        )
+                        with html.Div(classes="d-flex align-center justify-center mx-2"):
+                            html.Span(
+                                "Powered by:",
+                                classes="text-caption font-weight-medium mr-2",
+                                style="color: #475569;",
+                            )
+                            html.Img(
+                                src="/static/icons/docker-logo.avif",
+                                alt="Docker Logo",
+                                height="26",
+                                classes="mr-3",
+                                style="object-fit: contain;",
+                            )
+                            html.Img(
+                                src="/static/icons/trame-text.svg",
+                                alt="Trame Logo",
+                                height="22",
+                                style="object-fit: contain;",
+                            )
+

@@ -37,7 +37,12 @@ from tabs.visualizer_tab import (
 
 server = get_server(client_type="vue2")
 server.cli.add_argument("--data", help="Optional dataset to load at startup")
+server.serve["static"] = "static"
 state, ctrl = server.state, server.controller
+
+# Set browser page title and favicon
+state.trame__title = "FOAMTrame"
+state.trame__favicon = "/static/icons/logo.svg"
 
 # Setup tab modules
 setup_setup_tab(server)
@@ -50,14 +55,33 @@ load_dataset = setup_visualizer_tab(server)
 state.setdefault("active_tab", 0)
 
 with SinglePageWithDrawerLayout(server) as layout:
-    layout.title.set_text("FOAMTrame")
-    layout.title.style = "min-width: 160px; overflow: visible;"
+    layout.title.set_text("")
+    with layout.title:
+        with html.Div(classes="d-flex align-center"):
+            html.Img(
+                src="/static/icons/logo.svg",
+                alt="App Logo",
+                height="32",
+                classes="mr-2",
+                style="object-fit: contain;",
+            )
+            html.H1("FOAMTrame", classes="foamtrame-brand")
+    layout.title.style = "min-width: 200px; overflow: visible;"
     layout.icon.hide()
     
     # Inject CSS style sheet into the HTML head using client.Style
     client.Style("""
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
         
+        .foamtrame-brand {
+            font-size: 1.5rem !important; /* 24px equivalent to text-2xl */
+            font-weight: 700 !important; /* font-bold */
+            color: #000000 !important; /* text-black */
+            margin: 0 !important;
+            padding: 0 !important;
+            line-height: 1.2 !important;
+        }
+
         .v-application {
             font-family: 'Inter', sans-serif !important;
         }
