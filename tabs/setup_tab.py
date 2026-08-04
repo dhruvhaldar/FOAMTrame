@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -79,6 +80,29 @@ def setup_setup_tab(server):
     state.setdefault("selected_tutorial", "")
     state.setdefault("case_creation_tab", 0)
     state.setdefault("tutorials_loaded", False)
+    state.setdefault("tutorials_loading", False)
+
+    tutorial_fetch_lock = threading.Lock()
+    server_event_loop = [None]
+
+    @ctrl.add("on_server_ready")
+    def capture_server_event_loop(**_):
+        """Capture the wslink loop used for thread-safe client state pushes."""
+        server_event_loop[0] = asyncio.get_running_loop()
+        server.force_state_push(
+            "tutorials_list",
+            "filtered_tutorials",
+            "tutorials_loaded",
+            "tutorials_loading",
+        )
+
+    def publish_tutorial_state(*keys):
+        """Flush Python state, then publish it on wslink's running event loop."""
+        state.dirty(*keys)
+        state.flush()
+        loop = server_event_loop[0]
+        if loop is not None and loop.is_running():
+            loop.call_soon_threadsafe(server.force_state_push, *keys)
 
     def scan_cases():
         root_path = Path(state.case_root)
@@ -167,11 +191,27 @@ def setup_setup_tab(server):
             state.flush()
 
     def fetch_tutorials():
-        if state.tutorials_loaded:
+        # Re-publish cached values. The import tab may have been inactive when
+        # the background Docker check first populated them, so a plain early
+        # return can leave the Vue client with an empty items array until F5.
+        if state.tutorials_loaded and state.tutorials_list:
+            on_tutorial_search_change()
+            publish_tutorial_state(
+                "tutorials_list", "filtered_tutorials", "tutorials_loaded"
+            )
             return
+
+        if not tutorial_fetch_lock.acquire(blocking=False):
+            return
+
+        state.tutorials_loading = True
+        publish_tutorial_state("tutorials_loading")
 
         client = get_docker_client()
         if not client:
+            state.tutorials_loading = False
+            publish_tutorial_state("tutorials_loading")
+            tutorial_fetch_lock.release()
             return
 
         try:
@@ -191,18 +231,30 @@ def setup_setup_tab(server):
                 stderr=False,
             )
             output = result.decode().strip()
+            tutorials = []
             if output:
                 lines = output.splitlines()
                 tutorial_root = lines[0].strip()
                 cases = lines[1:]
                 tutorials = [posixpath.relpath(c, tutorial_root) for c in cases if c.strip()]
-                state.tutorials_list = sorted(tutorials)
-                state.filtered_tutorials = sorted(tutorials)
-                state.tutorials_loaded = True
-            state.dirty("tutorials_list", "filtered_tutorials", "tutorials_loaded")
-            state.flush()
+            state.tutorials_list = sorted(tutorials)
+            state.filtered_tutorials = sorted(tutorials)
+            state.tutorials_loaded = True
+            publish_tutorial_state(
+                "tutorials_list", "filtered_tutorials", "tutorials_loaded"
+            )
         except Exception as e:
             logger.error(f"Failed to fetch tutorials: {e}")
+            state.tutorials_loaded = False
+        finally:
+            state.tutorials_loading = False
+            publish_tutorial_state(
+                "tutorials_list",
+                "filtered_tutorials",
+                "tutorials_loaded",
+                "tutorials_loading",
+            )
+            tutorial_fetch_lock.release()
 
     # Listeners for state changes
     @state.change("case_root")
@@ -480,6 +532,11 @@ def build_setup_content():
                                             outlined=True,
                                             hide_details=True,
                                             classes="setup-tutorial-field",
+                                            loading=("tutorials_loading",),
+                                            disabled=("tutorials_loading",),
+                                            no_data_text=(
+                                                "tutorials_loading ? 'Loading tutorials…' : 'No tutorials found'",
+                                            ),
                                         )
                                         vuetify.VBtn(
                                             "Import Tutorial Case",
