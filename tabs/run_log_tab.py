@@ -456,11 +456,11 @@ def build_run_log_content():
                         vuetify.VIcon("mdi-play-circle-outline", classes="mr-2", color="success")
                         html.Span("Simulation Execution Commands")
                     with vuetify.VCardText():
-                        with html.Div(classes="d-flex flex-wrap align-center ga-2 gap-2"):
+                        with html.Div(classes="d-flex flex-wrap align-center"):
                             vuetify.VBtn(
                                 "Allrun",
                                 click=lambda: ctrl.run_command("./Allrun"),
-                                classes="theme-btn-success flex-grow-1 flex-sm-grow-0",
+                                classes="theme-btn-success ma-1",
                                 disabled=("is_running",),
                             )
                             vuetify.VBtn(
@@ -468,25 +468,25 @@ def build_run_log_content():
                                 click=lambda: ctrl.run_command("./Allclean"),
                                 color="error",
                                 outlined=True,
-                                classes="flex-grow-1 flex-sm-grow-0",
+                                classes="ma-1",
                                 disabled=("is_running",),
                             )
                             vuetify.VBtn(
                                 "blockMesh",
                                 click=lambda: ctrl.run_command("blockMesh"),
-                                classes="theme-btn-primary flex-grow-1 flex-sm-grow-0",
+                                classes="theme-btn-primary ma-1",
                                 disabled=("is_running",),
                             )
                             vuetify.VBtn(
                                 "simpleFoam",
                                 click=lambda: ctrl.run_command("simpleFoam"),
-                                classes="theme-btn-info flex-grow-1 flex-sm-grow-0",
+                                classes="theme-btn-info ma-1",
                                 disabled=("is_running",),
                             )
                             vuetify.VBtn(
                                 "pimpleFoam",
                                 click=lambda: ctrl.run_command("pimpleFoam"),
-                                classes="theme-btn-warning flex-grow-1 flex-sm-grow-0",
+                                classes="theme-btn-warning ma-1",
                                 disabled=("is_running",),
                             )
                             vuetify.VBtn(
@@ -494,7 +494,7 @@ def build_run_log_content():
                                 click=lambda: ctrl.run_command("decomposePar"),
                                 outlined=True,
                                 color="primary",
-                                classes="flex-grow-1 flex-sm-grow-0",
+                                classes="ma-1",
                                 disabled=("is_running",),
                             )
                             vuetify.VBtn(
@@ -502,7 +502,7 @@ def build_run_log_content():
                                 click=lambda: ctrl.run_command("reconstructPar"),
                                 outlined=True,
                                 color="primary",
-                                classes="flex-grow-1 flex-sm-grow-0",
+                                classes="ma-1",
                                 disabled=("is_running",),
                             )
                             vuetify.VBtn(
@@ -510,7 +510,7 @@ def build_run_log_content():
                                 click=lambda: ctrl.run_command("foamToVTK"),
                                 outlined=True,
                                 color="secondary",
-                                classes="flex-grow-1 flex-sm-grow-0",
+                                classes="ma-1",
                                 disabled=("is_running",),
                             )
 
