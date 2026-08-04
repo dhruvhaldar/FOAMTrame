@@ -128,6 +128,308 @@ with SinglePageWithDrawerLayout(server) as layout:
             box-shadow: 0 16px 48px 0 rgba(31, 38, 135, 0.08), inset 0 0 24px rgba(255, 255, 255, 0.4) !important;
             border-color: rgba(255, 255, 255, 0.9) !important;
         }
+        /* Setup screen: let the cards comfortably fill the available viewport. */
+        .v-application .setup-page {
+            min-height: calc(100vh - 64px);
+        }
+        .v-application .setup-page-row {
+            width: 100%;
+            min-height: 100%;
+            margin: 0;
+        }
+        .v-application .setup-card-stack {
+            display: flex;
+            flex-direction: column;
+            gap: clamp(12px, 1.8vh, 22px);
+            width: 100%;
+            max-width: 1040px;
+            min-height: calc(100vh - 112px);
+            padding-top: 0;
+            padding-bottom: 0;
+        }
+        .v-application .setup-glass-shell {
+            position: relative;
+            isolation: isolate;
+            display: flex;
+            flex: 1 1 auto;
+            flex-direction: column;
+            gap: clamp(14px, 1.8vh, 22px);
+            min-height: 0;
+            padding: clamp(18px, 2.2vh, 28px);
+            overflow: hidden;
+            background: linear-gradient(
+                145deg,
+                rgba(255, 255, 255, 0.28) 0%,
+                rgba(255, 255, 255, 0.11) 52%,
+                rgba(224, 242, 254, 0.16) 100%
+            );
+            border: 1px solid rgba(255, 255, 255, 0.78);
+            border-radius: 22px;
+            box-shadow:
+                0 18px 55px rgba(14, 116, 144, 0.10),
+                0 4px 18px rgba(71, 85, 105, 0.06),
+                inset 0 1px 0 rgba(255, 255, 255, 0.92),
+                inset 0 0 32px rgba(255, 255, 255, 0.22);
+            backdrop-filter: blur(18px) saturate(135%);
+            -webkit-backdrop-filter: blur(18px) saturate(135%);
+        }
+        .v-application .setup-glass-shell::before {
+            content: "";
+            position: absolute;
+            z-index: -1;
+            inset: 0;
+            pointer-events: none;
+            background:
+                radial-gradient(circle at 12% 0%, rgba(255, 255, 255, 0.62), transparent 34%),
+                linear-gradient(125deg, rgba(255, 255, 255, 0.32), transparent 38%);
+        }
+        .v-application .setup-glass-shell::after {
+            content: "";
+            position: absolute;
+            z-index: -1;
+            right: -15%;
+            bottom: -45%;
+            width: 65%;
+            aspect-ratio: 1;
+            border-radius: 50%;
+            pointer-events: none;
+            background: rgba(125, 211, 252, 0.12);
+            filter: blur(35px);
+        }
+        .v-application .setup-glass-shell > .setup-main-card {
+            z-index: 1;
+            background: rgba(255, 255, 255, 0.50) !important;
+            border: 1px solid rgba(255, 255, 255, 0.76) !important;
+            box-shadow:
+                0 10px 28px rgba(30, 64, 175, 0.07),
+                0 2px 8px rgba(15, 23, 42, 0.04),
+                inset 0 1px 0 rgba(255, 255, 255, 0.90) !important;
+            backdrop-filter: blur(28px) saturate(125%) !important;
+            -webkit-backdrop-filter: blur(28px) saturate(125%) !important;
+        }
+        .v-application .setup-main-card {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: clamp(24px, 3vh, 40px) !important;
+        }
+        .v-application .setup-main-card .v-card__title,
+        .v-application .setup-main-card .v-card__text {
+            width: 100%;
+        }
+        .v-application .setup-main-card .v-card__title {
+            padding-bottom: clamp(12px, 1.8vh, 22px);
+        }
+        .v-application .setup-card-heading {
+            color: #0f172a;
+            font-size: clamp(1.45rem, 1.1rem + 0.65vw, 1.85rem) !important;
+            font-weight: 800 !important;
+            line-height: 1.2 !important;
+            letter-spacing: -0.025em;
+            margin: 0;
+        }
+        .v-application .setup-main-card .v-card__text,
+        .v-application .setup-main-card .text-caption {
+            font-size: clamp(1.05rem, 0.86rem + 0.34vw, 1.22rem) !important;
+            line-height: 1.55 !important;
+        }
+        .v-application .setup-main-card .v-card__text > p {
+            margin-bottom: clamp(18px, 2.2vh, 28px);
+        }
+        .v-application .setup-main-card .v-label,
+        .v-application .setup-main-card input,
+        .v-application .setup-main-card .v-select__selection,
+        .v-application .setup-main-card .v-btn,
+        .v-application .setup-main-card .v-tab {
+            font-size: clamp(1.05rem, 0.9rem + 0.28vw, 1.2rem) !important;
+        }
+        .v-application .setup-main-card .v-input__slot {
+            min-height: 54px !important;
+        }
+        .v-application .setup-name-field input,
+        .v-application .setup-tutorial-field input,
+        .v-application .setup-tutorial-field .v-select__selection {
+            align-self: center !important;
+            max-height: none !important;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+        }
+        .v-application .setup-main-card .v-btn {
+            min-height: 48px !important;
+        }
+        .v-application .setup-creation-card .v-tabs,
+        .v-application .setup-creation-card .v-tabs-bar,
+        .v-application .setup-creation-card .v-tabs-bar__content,
+        .v-application .setup-creation-card .v-tab {
+            height: 48px !important;
+        }
+        .v-application .setup-creation-card .v-tabs-items {
+            margin-top: clamp(14px, 1.8vh, 22px);
+        }
+        .v-application .setup-creation-card .v-tab-item .container {
+            padding: 8px 12px 12px !important;
+        }
+        .v-application .setup-advanced-card .v-expansion-panel-header {
+            min-height: 64px;
+            font-size: clamp(1rem, 0.86rem + 0.25vw, 1.15rem) !important;
+            line-height: 1.35;
+        }
+        .v-application .setup-footer-card,
+        .v-application .setup-footer-card .text-caption,
+        .v-application .setup-footer-card .text-subtitle-2 {
+            font-size: clamp(0.95rem, 0.82rem + 0.22vw, 1.08rem) !important;
+            line-height: 1.4;
+        }
+        /* High-contrast success notices that still fit the cyan/teal palette. */
+        .v-application .setup-status-alert.v-alert--outlined.success--text {
+            background: rgba(209, 250, 229, 0.88) !important;
+            border-color: #10b981 !important;
+            color: #065f46 !important;
+            box-shadow: 0 4px 14px rgba(5, 150, 105, 0.10) !important;
+        }
+        .v-application .setup-status-alert.v-alert--outlined.success--text .v-alert__icon,
+        .v-application .setup-status-alert.v-alert--outlined.success--text .v-alert__content {
+            color: #065f46 !important;
+        }
+        .v-application .setup-status-alert .v-alert__content {
+            font-weight: 600;
+        }
+        .v-application .setup-case-card {
+            flex: 1 1 0;
+            min-height: 210px;
+        }
+        .v-application .setup-case-card:has(.setup-empty-state) {
+            background: rgba(226, 232, 240, 0.58) !important;
+            border-color: rgba(100, 116, 139, 0.38) !important;
+            box-shadow:
+                0 8px 30px rgba(71, 85, 105, 0.08),
+                inset 0 0 28px rgba(255, 255, 255, 0.38) !important;
+        }
+        .v-application .setup-case-card:has(.setup-empty-state) .setup-card-heading {
+            color: #475569;
+        }
+        .v-application .setup-empty-state {
+            padding: clamp(14px, 1.8vh, 20px);
+            margin-bottom: clamp(14px, 1.8vh, 22px);
+            color: #334155;
+            background: rgba(248, 250, 252, 0.72);
+            border: 1px solid rgba(148, 163, 184, 0.45);
+            border-radius: 14px;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        .v-application .setup-empty-state-icon {
+            color: #64748b !important;
+            font-size: 2rem !important;
+        }
+        .v-application .setup-empty-state-title {
+            color: #334155;
+            font-size: clamp(1rem, 0.9rem + 0.2vw, 1.12rem);
+            font-weight: 700;
+            line-height: 1.3;
+        }
+        .v-application .setup-empty-state-copy {
+            color: #64748b;
+            font-size: clamp(0.9rem, 0.82rem + 0.14vw, 1rem);
+            line-height: 1.45;
+            margin-top: 3px;
+        }
+        .v-application .setup-case-card .v-input--is-disabled .v-input__slot {
+            background: rgba(226, 232, 240, 0.72) !important;
+            border-color: rgba(100, 116, 139, 0.3) !important;
+            cursor: not-allowed !important;
+        }
+        .v-application .setup-case-card .v-input--is-disabled .v-label,
+        .v-application .setup-case-card .v-input--is-disabled input,
+        .v-application .setup-case-card .v-input--is-disabled .v-select__selection,
+        .v-application .setup-case-card .v-input--is-disabled .v-icon {
+            color: #64748b !important;
+            opacity: 0.82 !important;
+        }
+        .v-application .setup-creation-card {
+            flex: 1.35 1 0;
+            min-height: 280px;
+        }
+        .v-application .setup-advanced-card,
+        .v-application .setup-footer-card {
+            flex: 0 0 auto;
+        }
+
+        @media (max-height: 820px), (max-width: 959px) {
+            .v-application .setup-page {
+                min-height: auto;
+            }
+            .v-application .setup-card-stack {
+                min-height: auto;
+            }
+            .v-application .setup-main-card {
+                flex: none;
+                min-height: auto;
+            }
+        }
+
+        /* The permanent drawer reduces the real content width on tablets and
+           small laptops, so switch controls to their compact layout early. */
+        @media (max-width: 1100px) {
+            .v-application .setup-main-card {
+                padding: 24px !important;
+            }
+            .v-application .setup-case-card .row > .col-8,
+            .v-application .setup-case-card .row > .col-4 {
+                flex: 0 0 100%;
+                max-width: 100%;
+            }
+            .v-application .setup-case-card .row > .col-4 {
+                padding-top: 4px;
+            }
+            .v-application .setup-creation-card .v-tabs-bar__content {
+                gap: 8px;
+            }
+            .v-application .setup-creation-card .v-tab {
+                min-width: 0 !important;
+                margin: 4px 0 !important;
+                padding: 0 10px !important;
+                white-space: normal !important;
+                line-height: 1.15 !important;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .v-application .setup-page {
+                padding: 12px !important;
+            }
+            .v-application .setup-card-stack {
+                gap: 12px;
+                padding-left: 0;
+                padding-right: 0;
+            }
+            .v-application .setup-glass-shell {
+                gap: 12px;
+                padding: 10px;
+                border-radius: 18px;
+            }
+            .v-application .setup-main-card {
+                padding: 16px !important;
+            }
+            .v-application .setup-card-heading {
+                font-size: 1.35rem !important;
+                padding-left: 0;
+                padding-right: 0;
+            }
+            .v-application .setup-main-card .v-card__text {
+                padding-left: 0;
+                padding-right: 0;
+            }
+            .v-application .setup-main-card .v-card__text,
+            .v-application .setup-main-card .text-caption,
+            .v-application .setup-main-card .v-label,
+            .v-application .setup-main-card input,
+            .v-application .setup-main-card .v-select__selection,
+            .v-application .setup-main-card .v-btn,
+            .v-application .setup-main-card .v-tab {
+                font-size: 1rem !important;
+            }
+        }
         /* Advanced Expansion Panel Glass fix */
         .v-application .v-expansion-panels.glass-card,
         .v-application .v-expansion-panel {
@@ -178,6 +480,8 @@ with SinglePageWithDrawerLayout(server) as layout:
         .glass-navbar .v-tabs {
             height: 36px !important;
             align-self: center !important;
+            min-width: 0 !important;
+            overflow: hidden !important;
         }
         .glass-navbar .v-tabs-bar {
             height: 36px !important;
@@ -335,6 +639,7 @@ with SinglePageWithDrawerLayout(server) as layout:
             background_color="transparent",
             classes="ml-4",
             hide_slider=True,
+            show_arrows=True,
         ):
             vuetify.VTab("Setup")
             vuetify.VTab("Geometry")

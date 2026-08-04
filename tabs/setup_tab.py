@@ -88,6 +88,9 @@ def setup_setup_tab(server):
             except Exception as e:
                 logger.error(f"Failed to create Case Root directory: {e}")
                 state.cases_list = []
+                state.active_case = ""
+                save_config({"ACTIVE_CASE": ""})
+                state.flush()
                 return
 
         try:
@@ -97,10 +100,16 @@ def setup_setup_tab(server):
                 if entry.is_dir()
             ]
             state.cases_list = sorted(cases)
+            if state.active_case not in state.cases_list:
+                state.active_case = state.cases_list[0] if state.cases_list else ""
+                save_config({"ACTIVE_CASE": state.active_case})
             state.flush()
         except Exception as e:
             logger.error(f"Error scanning cases: {e}")
             state.cases_list = []
+            state.active_case = ""
+            save_config({"ACTIVE_CASE": ""})
+            state.flush()
 
     ctrl.scan_cases = scan_cases
 
@@ -360,14 +369,14 @@ def build_setup_drawer():
             type=("trame_status_color", "success"),
             dense=True,
             outlined=True,
-            classes="mb-2",
+            classes="mb-2 setup-status-alert",
         )
         vuetify.VAlert(
             "{{ setup_status }}",
             type=("setup_status_color", "info"),
             dense=True,
             outlined=True,
-            classes="mb-3",
+            classes="mb-3 setup-status-alert",
         )
 
 
@@ -377,92 +386,105 @@ def build_setup_content():
     ctrl = server.controller
     with vuetify.VContainer(
         fluid=True,
-        classes="fill-height pa-6",
+        classes="fill-height pa-6 setup-page",
         v_if="active_tab === 0",
     ):
-        with vuetify.VRow(justify="center"):
-            with vuetify.VCol(cols="12", md="8", lg="6"):
-                # Active Case Card
-                with vuetify.VCard(classes="pa-4 mb-4 glass-card"):
-                    with vuetify.VCardTitle(classes="subtitle-1 font-weight-bold"):
-                        html.Span("Active Case Selection")
-                    with vuetify.VCardText():
-                        html.P(
-                            "Select the active OpenFOAM case to run or configure. This will be used in subsequent tabs.",
-                            classes="text-caption text-secondary",
-                        )
-                        with vuetify.VRow(align="center"):
-                            with vuetify.VCol(cols="8"):
-                                vuetify.VSelect(
-                                    v_model=("active_case",),
-                                    items=("cases_list",),
-                                    label="Choose Case",
-                                    outlined=True,
-                                    dense=True,
-                                    hide_details=True,
-                                )
-                            with vuetify.VCol(cols="4"):
-                                vuetify.VBtn(
-                                    "Refresh List",
-                                    click=ctrl.scan_cases,
-                                    block=True,
-                                    classes="theme-btn-primary",
-                                )
-
-                # Case Management Tabs Card
-                with vuetify.VCard(classes="pa-4 mb-4 glass-card"):
-                    with vuetify.VCardTitle(classes="subtitle-1 font-weight-bold"):
-                        html.Span("Case Creation & Imports")
-                    with vuetify.VCardText():
-                        with vuetify.VTabs(v_model=("case_creation_tab", 0), grow=True):
-                            vuetify.VTab("Create Blank Case")
-                            vuetify.VTab("Import Tutorial", click=ctrl.trigger_fetch_tutorials)
-
-                        with vuetify.VTabsItems(v_model=("case_creation_tab",)):
-                            # Create Case Panel
-                            with vuetify.VTabItem():
-                                with vuetify.VContainer(classes="pa-3"):
-                                    vuetify.VTextField(
-                                        v_model=("new_case_name",),
-                                        label="New Case Name",
-                                        placeholder="e.g., cavity_flow",
-                                        outlined=True,
-                                        dense=True,
+        with vuetify.VRow(justify="center", classes="setup-page-row"):
+            with vuetify.VCol(cols="12", md="10", lg="8", xl="7", classes="setup-card-stack"):
+                # Clear glass shell with matte glass panels, inspired by FOAMFlask.
+                with html.Div(classes="setup-glass-shell"):
+                    # Active Case Card
+                    with vuetify.VCard(classes="pa-4 glass-card setup-main-card setup-case-card"):
+                        with vuetify.VCardTitle():
+                            html.H2("Active Case Selection", classes="setup-card-heading")
+                        with vuetify.VCardText():
+                            html.P(
+                                "Select the active OpenFOAM case to run or configure. This will be used in subsequent tabs.",
+                                classes="text-caption text-secondary",
+                                v_if="cases_list && cases_list.length > 0",
+                            )
+                            with html.Div(
+                                classes="setup-empty-state d-flex align-center",
+                                v_if="!cases_list || cases_list.length === 0",
+                            ):
+                                vuetify.VIcon("mdi-folder-open-outline", classes="mr-3 setup-empty-state-icon")
+                                with html.Div():
+                                    html.Div("No active cases found", classes="setup-empty-state-title")
+                                    html.Div(
+                                        "Create or import a case below, then refresh the list.",
+                                        classes="setup-empty-state-copy",
                                     )
-                                    vuetify.VBtn(
-                                        "Create Case",
-                                        click=ctrl.create_blank_case,
-                                        block=True,
-                                        classes="theme-btn-success",
-                                    )
-                            # Import Tutorial Panel
-                            with vuetify.VTabItem():
-                                with vuetify.VContainer(classes="pa-3"):
-                                    vuetify.VTextField(
-                                        v_model=("tutorial_search",),
-                                        label="Search Tutorials",
+                            with vuetify.VRow(align="center"):
+                                with vuetify.VCol(cols="8"):
+                                    vuetify.VSelect(
+                                        v_model=("active_case",),
+                                        items=("cases_list",),
+                                        label="Choose Case",
                                         outlined=True,
                                         dense=True,
                                         hide_details=True,
-                                        classes="mb-3",
+                                        disabled=("!cases_list || cases_list.length === 0",),
                                     )
-                                    vuetify.VSelect(
-                                        v_model=("selected_tutorial",),
-                                        items=("filtered_tutorials",),
-                                        label="Select OpenFOAM Tutorial",
-                                        outlined=True,
-                                        dense=True,
-                                        classes="mb-3",
-                                    )
+                                with vuetify.VCol(cols="4"):
                                     vuetify.VBtn(
-                                        "Import Tutorial Case",
-                                        click=ctrl.import_tutorial_case,
+                                        "Refresh List",
+                                        click=ctrl.scan_cases,
                                         block=True,
-                                        classes="theme-btn-info",
+                                        classes="theme-btn-primary",
                                     )
 
+                    # Case Management Tabs Card
+                    with vuetify.VCard(classes="pa-4 glass-card setup-main-card setup-creation-card"):
+                        with vuetify.VCardTitle():
+                            html.H2("Case Creation & Imports", classes="setup-card-heading")
+                        with vuetify.VCardText():
+                            with vuetify.VTabs(v_model=("case_creation_tab", 0), grow=True):
+                                vuetify.VTab("Create Blank Case")
+                                vuetify.VTab("Import Tutorial", click=ctrl.trigger_fetch_tutorials)
+
+                            with vuetify.VTabsItems(v_model=("case_creation_tab",)):
+                                # Create Case Panel
+                                with vuetify.VTabItem():
+                                    with vuetify.VContainer(classes="pa-3"):
+                                        vuetify.VTextField(
+                                            v_model=("new_case_name",),
+                                            label="New Case Name",
+                                            placeholder="e.g., cavity_flow",
+                                            outlined=True,
+                                            classes="setup-name-field",
+                                        )
+                                        vuetify.VBtn(
+                                            "Create Case",
+                                            click=ctrl.create_blank_case,
+                                            block=True,
+                                            classes="theme-btn-success",
+                                        )
+                                # Import Tutorial Panel
+                                with vuetify.VTabItem():
+                                    with vuetify.VContainer(classes="pa-3"):
+                                        vuetify.VTextField(
+                                            v_model=("tutorial_search",),
+                                            label="Search Tutorials",
+                                            outlined=True,
+                                            hide_details=True,
+                                            classes="mb-3 setup-tutorial-field",
+                                        )
+                                        vuetify.VSelect(
+                                            v_model=("selected_tutorial",),
+                                            items=("filtered_tutorials",),
+                                            label="Select OpenFOAM Tutorial",
+                                            outlined=True,
+                                            classes="mb-3 setup-tutorial-field",
+                                        )
+                                        vuetify.VBtn(
+                                            "Import Tutorial Case",
+                                            click=ctrl.import_tutorial_case,
+                                            block=True,
+                                            classes="theme-btn-info",
+                                        )
+
                 # Advanced Settings Expansion Panel
-                with vuetify.VExpansionPanels(classes="glass-card"):
+                with vuetify.VExpansionPanels(classes="glass-card setup-advanced-card"):
                     with vuetify.VExpansionPanel():
                         with vuetify.VExpansionPanelHeader(classes="subtitle-2 font-weight-bold"):
                             html.Span("Advanced Settings (Docker, Case Path)")
@@ -493,7 +515,7 @@ def build_setup_content():
                             )
 
                 # Footer Glass Overlay Card
-                with vuetify.VCard(classes="pa-3 mt-4 glass-card"):
+                with vuetify.VCard(classes="pa-3 glass-card setup-footer-card"):
                     with html.Div(classes="d-flex flex-wrap align-center justify-space-between text-center gap-2"):
                         html.Div(
                             "FOAMTrame © 2026",
@@ -524,6 +546,3 @@ def build_setup_content():
                                 height="22",
                                 style="object-fit: contain;",
                             )
-
-
-
