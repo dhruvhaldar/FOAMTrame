@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "case_config": {
+    "CASE_ROOT": "C:\\path\\to\\tutorial_cases",
+    "DOCKER_IMAGE": "haldardhruv/ubuntu_noble_openfoam:v12",
+    "OPENFOAM_VERSION": "12",
+    "ACTIVE_CASE": ""
+  },
+  "run_history": []
+}

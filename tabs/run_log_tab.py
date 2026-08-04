@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 import os
 import platform
@@ -12,10 +11,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from trame.widgets import html, vuetify
 
+from app_state import load_run_history, update_run_history
+
 logger = logging.getLogger("FOAMTrame")
-
-RUN_HISTORY_FILE = Path("run_history.json")
-
 
 def _get_cpu_info() -> dict[str, int]:
     logical = os.cpu_count() or 1
@@ -35,22 +33,12 @@ def _get_cpu_info() -> dict[str, int]:
     return {"logical": logical, "physical": physical}
 
 
-def _load_run_history() -> list[dict]:
-    if not RUN_HISTORY_FILE.exists():
-        return []
-    try:
-        with RUN_HISTORY_FILE.open("r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return []
+_load_run_history = load_run_history
 
 
 def _save_run_history(history: list[dict]) -> None:
-    try:
-        with RUN_HISTORY_FILE.open("w", encoding="utf-8") as f:
-            json.dump(history[:100], f, indent=2)
-    except Exception as e:
-        logger.error(f"Failed to save run history: {e}")
+    if not update_run_history(history):
+        logger.error("Failed to save run history to app_state.json")
 
 
 def setup_run_log_tab(server):
@@ -511,4 +499,3 @@ def build_run_log_content():
                                         )
                                     html.Td("{{ item.start_time }}")
                                     html.Td("{{ item.duration || '-' }}")
-

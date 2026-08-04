@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 import platform
@@ -11,6 +10,8 @@ from pathlib import Path
 from flask import Flask, jsonify, request
 from flask_compress import Compress
 
+from app_state import load_case_config, update_case_config
+
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("FOAMTrameBackend")
@@ -18,33 +19,8 @@ logger = logging.getLogger("FOAMTrameBackend")
 app = Flask(__name__)
 Compress(app)
 
-CONFIG_FILE = Path("case_config.json")
-
-def load_config() -> dict:
-    defaults = {
-        "CASE_ROOT": str(Path("tutorial_cases").resolve()),
-        "DOCKER_IMAGE": "haldardhruv/ubuntu_noble_openfoam:v12",
-        "OPENFOAM_VERSION": "12",
-        "ACTIVE_CASE": "",
-    }
-    if not CONFIG_FILE.exists():
-        return defaults
-    try:
-        with CONFIG_FILE.open("r", encoding="utf-8") as f:
-            data = json.load(f)
-            return {**defaults, **data}
-    except Exception:
-        return defaults
-
-def save_config(updates: dict) -> bool:
-    config = load_config()
-    config.update(updates)
-    try:
-        with CONFIG_FILE.open("w", encoding="utf-8") as f:
-            json.dump(config, f, indent=2)
-        return True
-    except Exception:
-        return False
+load_config = load_case_config
+save_config = update_case_config
 
 # Initialize config globals
 config_data = load_config()

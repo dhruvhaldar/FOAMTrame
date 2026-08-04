@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import os
 import platform
@@ -11,38 +10,13 @@ import threading
 from pathlib import Path
 from trame.widgets import html, vuetify
 
+from app_state import load_case_config, update_case_config
+
 logger = logging.getLogger("FOAMTrame")
 
-CONFIG_FILE = Path("case_config.json")
-
-
-# --- Configuration helpers ---
-def load_config() -> dict:
-    defaults = {
-        "CASE_ROOT": str(Path("tutorial_cases").resolve()),
-        "DOCKER_IMAGE": "haldardhruv/ubuntu_noble_openfoam:v12",
-        "OPENFOAM_VERSION": "12",
-        "ACTIVE_CASE": "",
-    }
-    if not CONFIG_FILE.exists():
-        return defaults
-    try:
-        with CONFIG_FILE.open("r", encoding="utf-8") as f:
-            data = json.load(f)
-            return {**defaults, **data}
-    except Exception:
-        return defaults
-
-
-def save_config(updates: dict) -> bool:
-    config = load_config()
-    config.update(updates)
-    try:
-        with CONFIG_FILE.open("w", encoding="utf-8") as f:
-            json.dump(config, f, indent=2)
-        return True
-    except Exception:
-        return False
+# Backwards-compatible names used by the existing tab modules.
+load_config = load_case_config
+save_config = update_case_config
 
 
 def get_docker_client():

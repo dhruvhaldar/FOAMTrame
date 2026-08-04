@@ -29,6 +29,11 @@ from tabs.setup_tab import (
     build_setup_drawer,
     setup_setup_tab,
 )
+from tabs.settings_tab import (
+    build_settings_content,
+    build_settings_drawer,
+    setup_settings_tab,
+)
 from tabs.visualizer_tab import (
     build_visualizer_content,
     build_visualizer_drawer,
@@ -51,6 +56,7 @@ setup_meshing_tab(server)
 setup_run_log_tab(server)
 setup_plots_tab(server)
 load_dataset = setup_visualizer_tab(server)
+setup_settings_tab(server)
 
 state.setdefault("active_tab", 0)
 
@@ -731,6 +737,94 @@ with SinglePageWithDrawerLayout(server) as layout:
             text-transform: none !important;
             font-weight: 600 !important;
         }
+        /* Settings / portable app-state management */
+        .glass-navbar .v-tab.settings-nav-tab {
+            min-width: 52px !important;
+            max-width: 52px !important;
+            width: 52px !important;
+        }
+        .glass-navbar .settings-nav-tab .v-icon {
+            font-size: 1.35rem;
+        }
+        .v-application .settings-page {
+            min-height: calc(100vh - 64px);
+        }
+        .v-application .settings-page-row {
+            width: 100%;
+            margin: 0;
+        }
+        .v-application .settings-glass-card {
+            max-width: 1040px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.34) !important;
+            border-color: rgba(255, 255, 255, 0.82) !important;
+            backdrop-filter: blur(28px) saturate(130%) !important;
+            -webkit-backdrop-filter: blur(28px) saturate(130%) !important;
+        }
+        .v-application .settings-title {
+            color: #0f172a;
+            font-size: clamp(1.6rem, 1.2rem + 0.7vw, 2rem);
+            font-weight: 800;
+            line-height: 1.2;
+            margin: 0;
+        }
+        .v-application .settings-title-icon {
+            color: #0c6e87 !important;
+            font-size: 2rem !important;
+        }
+        .v-application .settings-description,
+        .v-application .settings-action-description {
+            color: #0c6e87;
+            font-size: 1rem;
+            line-height: 1.55;
+            margin-bottom: 0;
+        }
+        .v-application .settings-action-card {
+            background: rgba(255, 255, 255, 0.52) !important;
+            border: 1px solid rgba(255, 255, 255, 0.76) !important;
+            box-shadow: 0 8px 26px rgba(15, 118, 145, 0.07) !important;
+            backdrop-filter: blur(20px) !important;
+            -webkit-backdrop-filter: blur(20px) !important;
+        }
+        .v-application .settings-action-layout {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 24px;
+        }
+        .v-application .settings-action-copy {
+            min-width: 0;
+        }
+        .v-application .settings-action-title {
+            color: #0f172a;
+            font-size: 1.3rem;
+            font-weight: 700;
+            line-height: 1.3;
+            margin: 0 0 6px;
+        }
+        .v-application .settings-action-button,
+        .v-application .settings-restore-button {
+            min-height: 52px !important;
+            text-transform: none !important;
+            white-space: nowrap;
+        }
+        @media (max-width: 700px) {
+            .v-application .settings-page {
+                min-height: auto;
+                padding: 12px !important;
+            }
+            .v-application .settings-glass-card {
+                padding: 18px !important;
+            }
+            .v-application .settings-action-layout {
+                align-items: stretch;
+                flex-direction: column;
+                gap: 16px;
+            }
+            .v-application .settings-action-button {
+                width: 100%;
+            }
+        }
         /* Premium Scrollbar */
         ::-webkit-scrollbar {
             width: 8px;
@@ -773,6 +867,12 @@ with SinglePageWithDrawerLayout(server) as layout:
             vuetify.VTab("Run/Log")
             vuetify.VTab("Plots")
             vuetify.VTab("Post")
+            with vuetify.VTab(
+                classes="settings-nav-tab",
+                title="Settings",
+                aria_label="Settings",
+            ):
+                vuetify.VIcon("mdi-cog-outline")
         vuetify.VSpacer()
         vuetify.VBtn(
             "Reset camera",
@@ -798,6 +898,7 @@ with SinglePageWithDrawerLayout(server) as layout:
         build_run_log_drawer()
         build_plots_drawer()
         build_visualizer_drawer(ctrl)
+        build_settings_drawer()
 
     with layout.content:
         with vuetify.VOverlay(
@@ -830,6 +931,7 @@ with SinglePageWithDrawerLayout(server) as layout:
         build_run_log_content()
         build_plots_content()
         build_visualizer_content(ctrl)
+        build_settings_content()
 
 
 def main():
