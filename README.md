@@ -15,7 +15,7 @@
   <a href="https://www.python.org/downloads/"><img alt="Python 3.10+" src="https://img.shields.io/badge/Python-3.10%2B-0c6e87?logo=python&logoColor=white"></a>
   <a href="https://kitware.github.io/trame/"><img alt="Trame 3" src="https://img.shields.io/badge/Trame-3-069ab5"></a>
   <a href="https://www.docker.com/"><img alt="Docker required" src="https://img.shields.io/badge/Docker-required-2496ED?logo=docker&logoColor=white"></a>
-  <a href="https://www.gnu.org/licenses/gpl-3.0.html"><img alt="GNU GPLv3" src="https://img.shields.io/badge/License-GPLv3-0c6e87"></a>
+  <a href="./LICENSE"><img alt="GNU GPLv3" src="https://img.shields.io/badge/License-GPLv3-0c6e87"></a>
 </p>
 
 FOAMTrame brings case selection, tutorial import, OpenFOAM command execution,
@@ -466,7 +466,6 @@ path still controls where the application reads and writes case data.
 
 ## License
 
-The application UI identifies FOAMTrame as licensed under the
-[GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.html).
-Add the repository's `LICENSE` file alongside this README when distributing the
-project so recipients receive the complete license text.
+FOAMTrame is licensed under the
+[GNU General Public License v3.0](./LICENSE). See the repository's
+[LICENSE](./LICENSE) file for the complete terms.
