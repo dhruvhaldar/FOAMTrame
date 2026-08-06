@@ -163,8 +163,7 @@ The planned chatbot should not automate browser clicks. Buttons and chatbot tool
 - A modern browser with WebSocket support
 - Enough memory for the selected VTK dataset and OpenFOAM container workload
 
-Verified direct dependencies are reproducibly pinned in
-[requirements.txt](./requirements.txt):
+Verified direct dependencies are reproducibly pinned in [requirements.txt](./requirements.txt):
 
 - Trame 3 and Trame-Vuetify 3
 - VTK 9.3+
