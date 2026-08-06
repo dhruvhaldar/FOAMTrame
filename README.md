@@ -280,8 +280,7 @@ FOAMTrame stores operational application state in one embedded database:
 foamtrame.db
 ```
 
-The database and its WAL sidecar files are excluded by
-[.gitignore](./.gitignore) because they may contain machine-specific paths and local run history. SQLite stores configuration and simulation runs in relational tables; case folders, OpenFOAM result files, and large logs remain in the case workspace and are referenced by path rather than copied into database blobs.
+The database and its WAL sidecar files are excluded by [.gitignore](./.gitignore) because they may contain machine-specific paths and local run history. SQLite stores configuration and simulation runs in relational tables; case folders, OpenFOAM result files, and large logs remain in the case workspace and are referenced by path rather than copied into database blobs.
 
 JSON is now an interchange format only. A portable backup schema example remains available at [app_state.json.example](./app_state.json.example):
 
@@ -341,8 +340,7 @@ Restore replaces the persisted case configuration and run history. It does **not
 | `.stl` | Triangulated surface |
 | `.obj` | Wavefront surface |
 
-Parallel XML collections such as `.pvtu` are not accepted through the single-file
-browser uploader because their referenced piece files must travel together.
+Parallel XML collections such as `.pvtu` are not accepted through the single-file browser uploader because their referenced piece files must travel together.
 
 ## Optional Flask API
 
