@@ -480,7 +480,7 @@ def build_plots_content():
         fluid=True,
         classes="fill-height pa-4 overflow-y-auto",
         v_if="active_tab === 4",
-        style="max-height: calc(100vh - 64px);",
+        style="max-height: calc(100vh - 48px);",
     ):
         with vuetify.VRow(dense=True):
             with vuetify.VCol(cols="12"):

@@ -155,25 +155,30 @@ def build_settings_content():
     state, ctrl = server.state, server.controller
 
     download_exec = client.JSEval(
-        exec=(
-            "utils.download($event.name, $event.content, $event.mime_type)",
-        )
+        exec="utils.download($event.name, $event.content, $event.mime_type)"
     )
 
     def backup_app_state():
-        backup_json = export_app_state_json()
-        state.app_state_backup_json = backup_json
-        state.app_state_settings_status = "App-state backup downloaded."
-        state.app_state_settings_status_color = "success"
-        state.dirty("app_state_backup_json")
+        try:
+            backup_json = export_app_state_json()
+            state.app_state_backup_json = backup_json
+            state.dirty("app_state_backup_json")
+            state.flush()
+            download_exec.exec(
+                {
+                    "name": "foamtrame-app-state.json",
+                    "content": backup_json,
+                    "mime_type": "application/json;charset=utf-8",
+                }
+            )
+            state.app_state_settings_status = (
+                "Backup download started. Check your browser downloads."
+            )
+            state.app_state_settings_status_color = "success"
+        except Exception as exc:
+            state.app_state_settings_status = f"Backup failed: {exc}"
+            state.app_state_settings_status_color = "error"
         state.flush()
-        download_exec.exec(
-            {
-                "name": "foamtrame-app-state.json",
-                "content": backup_json,
-                "mime_type": "application/json",
-            }
-        )
 
     ctrl.backup_app_state = backup_app_state
 

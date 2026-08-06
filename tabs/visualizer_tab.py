@@ -652,6 +652,13 @@ def build_visualizer_drawer(ctrl):
             outlined=True,
             classes="mb-3",
         )
+        with vuetify.VBtn(
+            click=ctrl.reset_camera,
+            block=True,
+            classes="theme-btn-primary mb-3",
+        ):
+            vuetify.VIcon("mdi-camera-retake-outline", classes="mr-2")
+            html.Span("Reset Camera")
         vuetify.VDivider(classes="my-3")
 
         # --- Operation selector ---

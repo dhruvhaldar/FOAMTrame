@@ -27,3 +27,6 @@ __pycache__/
 # OS generated files
 .DS_Store
 Thumbs.db
+foamtrame.db
+foamtrame.db-shm
+foamtrame.db-wal

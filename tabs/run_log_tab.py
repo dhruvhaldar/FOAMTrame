@@ -38,7 +38,7 @@ _load_run_history = load_run_history
 
 def _save_run_history(history: list[dict]) -> None:
     if not update_run_history(history):
-        logger.error("Failed to save run history to app_state.json")
+        logger.error("Failed to save run history to the application database")
 
 
 def setup_run_log_tab(server):
@@ -420,7 +420,7 @@ def build_run_log_content():
         fluid=True,
         classes="fill-height pa-6 overflow-y-auto",
         v_if="active_tab === 3",
-        style="max-height: calc(100vh - 64px);",
+        style="max-height: calc(100vh - 48px);",
     ):
         with vuetify.VRow(justify="center"):
             with vuetify.VCol(cols="12", lg="10"):

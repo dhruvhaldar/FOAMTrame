@@ -67,12 +67,12 @@ with SinglePageWithDrawerLayout(server) as layout:
             html.Img(
                 src="/static/icons/logo.svg",
                 alt="App Logo",
-                height="32",
+                height="34",
                 classes="mr-2",
                 style="object-fit: contain;",
             )
             html.H1("FOAMTrame", classes="foamtrame-brand")
-    layout.title.style = "min-width: 200px; overflow: visible;"
+    layout.title.style = "min-width: 206px; overflow: visible;"
     layout.icon.hide()
     
     # Inject CSS style sheet into the HTML head using client.Style
@@ -80,7 +80,7 @@ with SinglePageWithDrawerLayout(server) as layout:
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
         
         .foamtrame-brand {
-            font-size: 1.5rem !important; /* 24px equivalent to text-2xl */
+            font-size: 1.5rem !important;
             font-weight: 700 !important; /* font-bold */
             color: #000000 !important; /* text-black */
             margin: 0 !important;
@@ -136,7 +136,7 @@ with SinglePageWithDrawerLayout(server) as layout:
         }
         /* Setup screen: let the cards comfortably fill the available viewport. */
         .v-application .setup-page {
-            min-height: calc(100vh - 64px);
+            min-height: calc(100vh - 48px);
         }
         .v-application .setup-page-row {
             width: 100%;
@@ -149,7 +149,7 @@ with SinglePageWithDrawerLayout(server) as layout:
             gap: clamp(12px, 1.8vh, 22px);
             width: 100%;
             max-width: 1040px;
-            min-height: calc(100vh - 112px);
+            min-height: calc(100vh - 96px);
             padding-top: 0;
             padding-bottom: 0;
         }
@@ -480,41 +480,67 @@ with SinglePageWithDrawerLayout(server) as layout:
             -webkit-backdrop-filter: blur(20px) !important;
             border-bottom: 1px solid rgba(255, 255, 255, 0.5) !important;
             box-shadow: none !important;
+            height: 48px !important;
+            min-height: 48px !important;
+        }
+        .v-application .glass-navbar .v-toolbar__content {
+            height: 48px !important;
+            min-height: 48px !important;
+            width: 100% !important;
+            max-width: 1520px !important;
+            margin: 0 auto !important;
+            padding: 0 18px !important;
         }
         /* Navbar Project Title Visibility */
-        .v-application .v-toolbar__title {
+        .v-application .glass-navbar .v-toolbar__title {
             overflow: visible !important;
             white-space: nowrap !important;
             text-overflow: clip !important;
             flex: none !important;
-            margin-right: 24px !important;
+            margin-right: 14px !important;
         }
-        /* Active Case Name Pill Truncation and Squishing Prevention */
-        .v-application .v-chip {
-            overflow: visible !important;
+        /* Compact active-case badge next to the project title. */
+        .v-application .active-case-chip {
+            max-width: 190px;
+            height: 24px !important;
+            overflow: hidden !important;
             white-space: nowrap !important;
             flex: none !important;
             flex-shrink: 0 !important;
-            margin-right: 24px !important;
+            margin-right: 14px !important;
+            padding: 0 10px !important;
+            border: 1px solid rgba(6, 154, 181, 0.14);
+            font-size: 0.78rem !important;
         }
-        .v-application .v-chip .v-chip__content {
-            overflow: visible !important;
+        .v-application .active-case-chip .v-chip__content {
+            display: block !important;
+            min-width: 0;
+            overflow: hidden !important;
+            text-overflow: ellipsis;
             white-space: nowrap !important;
         }
-        /* Centered pill navigation tabs layout spacing fix */
+        /* Compact natural-width navigation with a moving pill. */
         .glass-navbar .v-tabs {
-            height: 36px !important;
+            height: 38px !important;
             align-self: center !important;
             min-width: 0 !important;
             overflow: hidden !important;
         }
+        .glass-navbar .compact-navbar-tabs {
+            flex: 1 1 auto !important;
+            width: auto !important;
+            max-width: none !important;
+            margin-left: 0 !important;
+        }
         .glass-navbar .v-tabs-bar {
-            height: 36px !important;
+            height: 38px !important;
             background-color: transparent !important;
         }
         .glass-navbar .v-tabs-bar__content {
-            height: 36px !important;
+            width: 100% !important;
+            height: 38px !important;
             align-items: center !important;
+            justify-content: space-between !important;
             position: relative !important;
             isolation: isolate;
         }
@@ -522,17 +548,17 @@ with SinglePageWithDrawerLayout(server) as layout:
             text-transform: none !important;
             font-weight: 700 !important;
             letter-spacing: normal !important;
-            font-size: 0.92rem !important;
-            border-radius: 12px !important;
-            margin: 0 4px !important;
-            min-width: 110px !important;  /* Uniform width for equal spacing */
-            max-width: 110px !important;  /* Prevent stretching */
-            width: 110px !important;      /* Force identical widths */
-            flex: none !important;        /* Prevent flexbox resizing */
-            padding: 0 8px !important;
+            font-size: 0.95rem !important;
+            border-radius: 9px !important;
+            margin: 0 2px !important;
+            min-width: auto !important;
+            max-width: none !important;
+            width: auto !important;
+            flex: 0 0 auto !important;
+            padding: 0 18px !important;
             justify-content: center !important;
             text-align: center !important;
-            height: 36px !important;
+            height: 38px !important;
             color: #334155 !important; /* slate-700 */
             transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
             align-self: center !important;
@@ -557,9 +583,9 @@ with SinglePageWithDrawerLayout(server) as layout:
         .glass-navbar .v-tabs-slider-wrapper {
             display: block !important;
             z-index: 0 !important;
-            height: 36px !important;
+            height: 38px !important;
             bottom: 0 !important;
-            border-radius: 12px !important;
+            border-radius: 9px !important;
             overflow: visible !important;
             transition:
                 left 320ms cubic-bezier(0.4, 0, 0.2, 1),
@@ -571,11 +597,84 @@ with SinglePageWithDrawerLayout(server) as layout:
         .glass-navbar .v-tabs-slider {
             width: 100% !important;
             height: 100% !important;
-            border-radius: 12px !important;
+            border-radius: 9px !important;
             background: linear-gradient(135deg, #069ab5 0%, #0c6e87 100%) !important;
             box-shadow:
                 0 4px 12px rgba(6, 154, 181, 0.30),
                 inset 0 1px 0 rgba(255, 255, 255, 0.24) !important;
+        }
+        @media (max-width: 1300px) {
+            .v-application .active-case-chip {
+                max-width: 140px;
+            }
+            .glass-navbar .v-tab {
+                padding-right: 13px !important;
+                padding-left: 13px !important;
+                font-size: 0.88rem !important;
+            }
+        }
+        @media (max-width: 1100px) {
+            .v-application .active-case-chip {
+                display: none !important;
+            }
+            .v-application .glass-navbar .v-toolbar__title {
+                min-width: 190px !important;
+                margin-right: 10px !important;
+            }
+        }
+        @media (max-width: 900px) {
+            .v-application .glass-navbar .v-toolbar__content {
+                padding-right: 10px !important;
+                padding-left: 10px !important;
+            }
+            .glass-navbar .v-tabs {
+                margin-left: 0 !important;
+            }
+            /* At narrower widths Vuetify's arrows keep every tab reachable. */
+            .glass-navbar .v-tabs-bar__content {
+                justify-content: flex-start !important;
+            }
+            .glass-navbar .v-tab {
+                padding-right: 12px !important;
+                padding-left: 12px !important;
+            }
+        }
+        @media (max-width: 700px) {
+            .v-application .glass-navbar .v-toolbar__content {
+                padding-right: 6px !important;
+                padding-left: 6px !important;
+            }
+            .v-application .glass-navbar .v-toolbar__title {
+                min-width: 44px !important;
+                max-width: 44px !important;
+                margin-right: 6px !important;
+            }
+            .v-application .glass-navbar .v-toolbar__title img {
+                height: 30px !important;
+                margin-right: 0 !important;
+            }
+            .foamtrame-brand {
+                display: none !important;
+            }
+            .glass-navbar .v-tab {
+                padding-right: 11px !important;
+                padding-left: 11px !important;
+                font-size: 0.82rem !important;
+            }
+        }
+        @media (max-width: 420px) {
+            .v-application .glass-navbar .v-toolbar__title {
+                min-width: 38px !important;
+                max-width: 38px !important;
+                margin-right: 2px !important;
+            }
+            .v-application .glass-navbar .v-toolbar__title img {
+                height: 27px !important;
+            }
+            .glass-navbar .v-tab {
+                padding-right: 10px !important;
+                padding-left: 10px !important;
+            }
         }
         /* Glassify inner tabs and card components (e.g. Case Creation tabs) */
         .v-application .glass-card .v-tabs,
@@ -739,15 +838,16 @@ with SinglePageWithDrawerLayout(server) as layout:
         }
         /* Settings / portable app-state management */
         .glass-navbar .v-tab.settings-nav-tab {
-            min-width: 52px !important;
-            max-width: 52px !important;
-            width: 52px !important;
+            min-width: 42px !important;
+            max-width: 42px !important;
+            width: 42px !important;
+            padding: 0 8px !important;
         }
         .glass-navbar .settings-nav-tab .v-icon {
-            font-size: 1.35rem;
+            font-size: 1.2rem;
         }
         .v-application .settings-page {
-            min-height: calc(100vh - 64px);
+            min-height: calc(100vh - 48px);
         }
         .v-application .settings-page-row {
             width: 100%;
@@ -843,13 +943,14 @@ with SinglePageWithDrawerLayout(server) as layout:
     """)
 
     layout.toolbar.classes = "glass-navbar"
+    layout.toolbar.height = 48
     with layout.toolbar:
         # Active case display chip next to FOAMTrame title
         vuetify.VChip(
             "{{ active_case }}",
             color="cyan lighten-5",
             text_color="cyan darken-3",
-            classes="ml-3 font-weight-bold",
+            classes="ml-2 font-weight-bold active-case-chip",
             label=True,
             small=True,
             v_if="active_case",
@@ -858,7 +959,7 @@ with SinglePageWithDrawerLayout(server) as layout:
             v_model=("active_tab", 0),
             dense=True,
             background_color="transparent",
-            classes="ml-4",
+            classes="ml-2 compact-navbar-tabs",
             show_arrows=True,
         ):
             vuetify.VTab("Setup")
@@ -873,15 +974,6 @@ with SinglePageWithDrawerLayout(server) as layout:
                 aria_label="Settings",
             ):
                 vuetify.VIcon("mdi-cog-outline")
-        vuetify.VSpacer()
-        vuetify.VBtn(
-            "Reset camera",
-            click=ctrl.reset_camera,
-            icon="mdi-camera-retake-outline",
-            text=True,
-            v_if="active_tab === 5",
-        )
-
     state.setdefault("drawer_open", True)
 
     @state.change("active_tab")

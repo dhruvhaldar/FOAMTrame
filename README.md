@@ -79,7 +79,7 @@ Placeholder: [tabs/meshing_tab.py](./tabs/meshing_tab.py)
 - Runs `Allrun`, `Allclean`, `blockMesh`, `simpleFoam`, `pimpleFoam`,
   `decomposePar`, `reconstructPar`, and `foamToVTK`.
 - Streams console output and supports stopping the active process.
-- Retains up to 100 run-history records in the consolidated app state.
+- Retains up to 100 indexed run-history records in the application database.
 
 Implementation: [tabs/run_log_tab.py](./tabs/run_log_tab.py)
 
@@ -109,11 +109,9 @@ Implementation: [tabs/visualizer_tab.py](./tabs/visualizer_tab.py) and
 
 - Downloads case configuration and run history as one versioned JSON backup.
 - Validates uploaded backups before enabling restore.
-- Applies restored configuration and history to disk and the live Trame state.
-- Uses atomic file replacement to reduce the risk of partial state writes.
+- Applies restored configuration and history transactionally to SQLite and the live Trame state.
 
-Implementation: [tabs/settings_tab.py](./tabs/settings_tab.py) and
-[app_state.py](./app_state.py)
+Implementation: [tabs/settings_tab.py](./tabs/settings_tab.py) and [app_state.py](./app_state.py). Database schema and transactions are implemented in [database.py](./database.py).
 
 ## Application workflow
 
@@ -131,22 +129,35 @@ Implementation: [tabs/settings_tab.py](./tabs/settings_tab.py) and
 flowchart LR
     Browser["Browser UI<br>Vue 2 + Vuetify"]
     Trame["Trame server<br>app.py :8087"]
-    State["app_state.json<br>config + run history"]
+    Services["Application services<br>shared human/agent commands"]
+    State["foamtrame.db<br>SQLite + WAL"]
+    Backup["Portable JSON<br>backup / restore"]
+    Agent["Future chatbot<br>typed tool calls"]
     Docker["Docker daemon<br>OpenFOAM image"]
     Cases["Case workspace<br>tutorial_cases/"]
     VTK["VTK pipeline<br>geometry + post-processing"]
 
     Browser <-->|"wslink state and actions"| Trame
-    Trame <-->|"atomic read/write"| State
+    Trame --> Services
+    Agent -->|"validated actions"| Services
+    Services <-->|"transactions"| State
+    State <-->|"export / restore"| Backup
     Trame <-->|"container execution"| Docker
     Docker <-->|"mounted case data"| Cases
     Trame <-->|"scan/import/run"| Cases
     Trame <-->|"server-side rendering"| VTK
 ```
 
-The primary entry point is [app.py](./app.py). It composes each tab under
-[tabs/](./tabs), connects backend managers under [backend/](./backend), and
-starts Trame on port `8087`.
+The primary entry point is [app.py](./app.py). It composes each tab under [tabs/](./tabs), connects backend managers under [backend/](./backend), and starts Trame on port `8087`.
+
+### Database decision
+
+FOAMTrame uses [SQLite](https://www.sqlite.org/) as its operational database. This is deliberate: the current application is local, single-process software, so an embedded database preserves simple installation and portable project state without requiring a database server, credentials, or another container. WAL mode, foreign keys, a busy timeout, and short-lived per-operation connections make background simulation-thread access predictable.
+
+The database boundary lives in [database.py](./database.py), while [app_state.py](./app_state.py) retains the stable application-facing API. If FOAMTrame later becomes a hosted multi-user service or runs independent workers, that boundary should move to PostgreSQL rather than exposing SQL throughout the
+UI and backend modules.
+
+The planned chatbot should not automate browser clicks. Buttons and chatbot tools should invoke the same application-service commands. The `automation_actions` table is reserved for durable parameters, confirmation state, execution status, results, errors, and audit history; destructive or expensive commands can therefore require explicit confirmation before execution.
 
 ## Requirements
 
@@ -156,8 +167,7 @@ starts Trame on port `8087`.
 - A modern browser with WebSocket support
 - Enough memory for the selected VTK dataset and OpenFOAM container workload
 
-Python dependencies are pinned by compatible major version in
-[requirements.txt](./requirements.txt):
+Python dependencies are pinned by compatible major version in [requirements.txt](./requirements.txt):
 
 - Trame 3 and Trame-Vuetify 3
 - VTK 9.3+
@@ -269,15 +279,20 @@ Run history records command, case, status, timestamps, and duration.
 
 ## App-state persistence
 
-FOAMTrame stores persistent application state in one file:
+FOAMTrame stores operational application state in one embedded database:
 
 ```text
-app_state.json
+foamtrame.db
 ```
 
-The runtime file is excluded by [.gitignore](./.gitignore) because it may contain
-machine-specific paths and local run history. A portable schema example is
-available at [app_state.json.example](./app_state.json.example).
+The database and its WAL sidecar files are excluded by
+[.gitignore](./.gitignore) because they may contain machine-specific paths and
+local run history. SQLite stores configuration and simulation runs in relational
+tables; case folders, OpenFOAM result files, and large logs remain in the case
+workspace and are referenced by path rather than copied into database blobs.
+
+JSON is now an interchange format only. A portable backup schema example remains
+available at [app_state.json.example](./app_state.json.example):
 
 ```json
 {
@@ -292,9 +307,20 @@ available at [app_state.json.example](./app_state.json.example).
 }
 ```
 
-Writes use a temporary file followed by an atomic replacement. Existing
-`case_config.json` and `run_history.json` files from older versions are merged
-once and removed only after the consolidated state is safely written.
+Database updates use transactions. On first launch, an existing `app_state.json`
+is imported into SQLite; older `case_config.json` and `run_history.json` files are
+also supported as migration sources. Legacy files are left untouched so migration
+is recoverable, but SQLite becomes the source of truth once initialized.
+
+The initial schema contains:
+
+| Table | Responsibility |
+| --- | --- |
+| `schema_metadata` | Schema version and initialization markers |
+| `app_config` | Typed JSON values for case root, active case, Docker image, and OpenFOAM version |
+| `simulation_runs` | Indexed command, case, status, timestamps, duration, and complete compatible run record |
+| `cases` | Relational case catalogue ready for workspace synchronization |
+| `automation_actions` | Future chatbot/automation command queue and audit trail |
 
 ## Backup and restore
 
@@ -364,7 +390,8 @@ python flask_server.py
 ```text
 .
 ├── app.py                    # Main Trame application and global visual system
-├── app_state.py              # Consolidated persistence, migration, backup/restore
+├── app_state.py              # State API, legacy migration, JSON backup/restore
+├── database.py               # SQLite schema, transactions, and repository boundary
 ├── app_state.json.example    # Portable state schema example
 ├── flask_server.py           # Optional companion HTTP API
 ├── run.py                    # Process wrapper and log forwarding
@@ -393,6 +420,7 @@ Follow the links below for the principal implementation surfaces:
 
 - [Main application](./app.py)
 - [State persistence](./app_state.py)
+- [Database repository and schema](./database.py)
 - [UI tabs](./tabs)
 - [Backend modules](./backend)
 - [Static assets](./static)
@@ -403,14 +431,14 @@ Compile the main Python modules after making changes:
 
 ```bash
 python -m py_compile \
-  app.py app_state.py flask_server.py \
+  app.py app_state.py database.py flask_server.py \
   tabs/setup_tab.py tabs/run_log_tab.py tabs/settings_tab.py
 ```
 
-Validate the persisted state schema:
+Validate database initialization and the persisted state schema:
 
 ```bash
-python -c "import app_state; state = app_state.load_app_state(); print(state['version'], state.keys())"
+python -c "import app_state; from database import database; state = app_state.load_app_state(); print(database.path, state['version'], state.keys())"
 ```
 
 For UI changes, check at least one desktop and one constrained viewport. Confirm

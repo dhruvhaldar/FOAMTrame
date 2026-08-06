@@ -3,18 +3,18 @@ from __future__ import annotations
 import copy
 import json
 import logging
-import os
-import tempfile
 import threading
 from pathlib import Path
 from typing import Any
 
+from database import SCHEMA_VERSION, database
+
 logger = logging.getLogger("FOAMTrame")
 
-APP_STATE_FILE = Path("app_state.json")
+LEGACY_APP_STATE_FILE = Path("app_state.json")
 LEGACY_CONFIG_FILE = Path("case_config.json")
 LEGACY_RUN_HISTORY_FILE = Path("run_history.json")
-APP_STATE_VERSION = 1
+APP_STATE_VERSION = SCHEMA_VERSION
 
 _state_lock = threading.RLock()
 
@@ -60,32 +60,15 @@ def _normalise_app_state(data: Any) -> dict[str, Any]:
     }
 
 
-def _atomic_write(data: dict[str, Any]) -> None:
-    target = APP_STATE_FILE.resolve()
-    target.parent.mkdir(parents=True, exist_ok=True)
-    temp_path: Path | None = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8",
-            dir=target.parent,
-            prefix=f".{target.stem}-",
-            suffix=".tmp",
-            delete=False,
-        ) as stream:
-            json.dump(data, stream, indent=2)
-            stream.write("\n")
-            stream.flush()
-            os.fsync(stream.fileno())
-            temp_path = Path(stream.name)
-        os.replace(temp_path, target)
-    finally:
-        if temp_path is not None and temp_path.exists():
-            temp_path.unlink(missing_ok=True)
-
-
 def _migrate_legacy_state() -> dict[str, Any]:
     migrated = default_app_state()
+
+    if LEGACY_APP_STATE_FILE.exists():
+        try:
+            with LEGACY_APP_STATE_FILE.open("r", encoding="utf-8") as stream:
+                return _normalise_app_state(json.load(stream))
+        except Exception as exc:
+            logger.warning("Could not migrate legacy app state: %s", exc)
 
     if LEGACY_CONFIG_FILE.exists():
         try:
@@ -105,23 +88,17 @@ def _migrate_legacy_state() -> dict[str, Any]:
         except Exception as exc:
             logger.warning("Could not migrate legacy run history: %s", exc)
 
-    migrated = _normalise_app_state(migrated)
-    _atomic_write(migrated)
-
-    # The consolidated file is safely on disk, so legacy state can no longer
-    # diverge from the source of truth.
-    LEGACY_CONFIG_FILE.unlink(missing_ok=True)
-    LEGACY_RUN_HISTORY_FILE.unlink(missing_ok=True)
-    return migrated
+    return _normalise_app_state(migrated)
 
 
 def load_app_state() -> dict[str, Any]:
     with _state_lock:
-        if not APP_STATE_FILE.exists():
-            return copy.deepcopy(_migrate_legacy_state())
         try:
-            with APP_STATE_FILE.open("r", encoding="utf-8") as stream:
-                return _normalise_app_state(json.load(stream))
+            if not database.has_app_state():
+                migrated = _migrate_legacy_state()
+                database.save_app_state(migrated)
+                logger.info("Migrated application state to %s", database.path)
+            return _normalise_app_state(database.load_app_state())
         except Exception as exc:
             logger.error("Failed to load app state: %s", exc)
             return default_app_state()
@@ -130,7 +107,7 @@ def load_app_state() -> dict[str, Any]:
 def save_app_state(data: dict[str, Any]) -> bool:
     with _state_lock:
         try:
-            _atomic_write(_normalise_app_state(data))
+            database.save_app_state(_normalise_app_state(data))
             return True
         except Exception as exc:
             logger.error("Failed to save app state: %s", exc)
