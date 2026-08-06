@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sys
+
 from runtime import configure_logging, settings
 
 configure_logging()
@@ -1037,9 +1039,15 @@ def main():
             load_dataset(args.data)
         except Exception as exc:
             state.error_message = str(exc)
-    # Trame's built-in --port/--host arguments remain available. The explicit
-    # default keeps historical port 8087 while allowing CLI overrides.
-    port = getattr(args, "port", None) or settings.default_port
+    # Trame initializes args.port to its own default (8080), so checking that
+    # value cannot distinguish an explicit --port from no user override.
+    # Passing None preserves an explicit Trame CLI value; otherwise FOAMTrame
+    # supplies its historical/configured default.
+    explicit_port = any(
+        token in {"--port", "-p"} or token.startswith("--port=")
+        for token in sys.argv[1:]
+    )
+    port = None if explicit_port else settings.default_port
     server.start(port=port)
 
 

@@ -245,10 +245,13 @@ On Windows, replace `.venv/bin/python` with `.venv\Scripts\python.exe`.
 | `FOAMTRAME_DATABASE_PATH` | `<data-dir>/foamtrame.db` | Explicit SQLite database path |
 | `FOAMTRAME_LOG_DIR` | `<data-dir>/logs` | Rotating application logs |
 | `FOAMTRAME_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL` |
+| `FOAMTRAME_FRAMEWORK_LOG_LEVEL` | `WARNING` | Trame/wslink verbosity; set to `INFO` only for framework diagnostics |
 | `FOAMTRAME_PORT` | `8087` | Default port when `--port` is omitted |
 
-Logs rotate at 5 MB with three retained backups. CLI `--host` and `--port`
-override runtime defaults.
+Structured application logs rotate at 5 MB with three retained backups under
+`logs/foamtrame.log`. Every start-script session is also appended verbatim to
+`run.log`, including child stdout, stderr, the invoked command, timestamps, and
+exit code. CLI `--host` and `--port` override runtime defaults.
 
 ### Load a dataset at startup
 
@@ -519,26 +522,14 @@ Stop the existing process or select another port:
 
 ### Installation diagnostics fail
 
-Run `python manage.py doctor` with the installed interpreter and inspect the JSON
-result. A missing Docker executable is a warning because the UI can start without
-it, but OpenFOAM tutorial and simulation operations require a reachable daemon.
+Run `python manage.py doctor` with the installed interpreter and inspect the JSON result. A missing Docker executable is a warning because the UI can start without it, but OpenFOAM tutorial and simulation operations require a reachable daemon.
 
 ## Security notes
 
-FOAMTrame can execute Docker containers and OpenFOAM commands against local case
-directories. **Run it only in a trusted environment**, review imported state
-files, and keep the default loopback binding for local use. The Settings restore
-flow validates structure and file size, but a restored case-root path still
-controls where the application reads and writes case data.
+FOAMTrame can execute Docker containers and OpenFOAM commands against local case directories. **Run it only in a trusted environment**, review imported state files, and keep the default loopback binding for local use. The Settings restore flow validates structure and file size, but a restored case-root path still controls where the application reads and writes case data.
 
-Do not expose the single-process application directly to an untrusted network.
-A hosted or multi-user deployment needs TLS at a reverse proxy, authentication,
-per-user authorization, resource quotas, and a Trame launcher/process-isolation
-strategy. Chatbot actions that create cases, execute containers, or alter files
-must use the confirmation and audit boundary described in [Architecture](#architecture).
+Do not expose the single-process application directly to an untrusted network. A hosted or multi-user deployment needs TLS at a reverse proxy, authentication, per-user authorization, resource quotas, and a Trame launcher/process-isolation strategy. Chatbot actions that create cases, execute containers, or alter files must use the confirmation and audit boundary described in [Architecture](#architecture).
 
 ## License
 
-FOAMTrame is licensed under the
-[GNU General Public License v3.0](./LICENSE). See the repository's
-[LICENSE](./LICENSE) file for the complete terms.
+FOAMTrame is licensed under the [GNU General Public License v3.0](./LICENSE). See the repository's [LICENSE](./LICENSE) file for the complete terms.

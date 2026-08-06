@@ -40,6 +40,7 @@ class RuntimeSettings:
     database_path: Path
     default_port: int
     log_level: str
+    framework_log_level: str
 
     @property
     def log_file(self) -> Path:
@@ -56,6 +57,19 @@ def load_runtime_settings(env: Mapping[str, str] | None = None) -> RuntimeSettin
     log_level = values.get("FOAMTRAME_LOG_LEVEL", "INFO").strip().upper()
     if log_level not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
         raise ValueError("FOAMTRAME_LOG_LEVEL is not a valid Python logging level.")
+    framework_log_level = values.get(
+        "FOAMTRAME_FRAMEWORK_LOG_LEVEL", "WARNING"
+    ).strip().upper()
+    if framework_log_level not in {
+        "DEBUG",
+        "INFO",
+        "WARNING",
+        "ERROR",
+        "CRITICAL",
+    }:
+        raise ValueError(
+            "FOAMTRAME_FRAMEWORK_LOG_LEVEL is not a valid Python logging level."
+        )
     return RuntimeSettings(
         project_root=PROJECT_ROOT,
         data_dir=data_dir,
@@ -63,6 +77,7 @@ def load_runtime_settings(env: Mapping[str, str] | None = None) -> RuntimeSettin
         database_path=database_path,
         default_port=_env_int(values, "FOAMTRAME_PORT", 8087),
         log_level=log_level,
+        framework_log_level=framework_log_level,
     )
 
 
@@ -106,6 +121,13 @@ def configure_logging(config: RuntimeSettings = settings) -> None:
     root.addHandler(console)
     root.addHandler(rotating_file)
     root._foamtrame_configured = True  # type: ignore[attr-defined]
+
+    # Trame emits very detailed expression/namespace translation records at
+    # INFO. They are useful for framework debugging but obscure application
+    # startup and operational messages in normal deployments.
+    framework_level = getattr(logging, config.framework_log_level)
+    for logger_name in ("trame_server", "trame_client", "wslink", "aiohttp"):
+        logging.getLogger(logger_name).setLevel(framework_level)
 
 
 def run_preflight(
@@ -173,6 +195,7 @@ def run_preflight(
             "log_file": str(config.log_file),
             "database_path": str(config.database_path),
             "default_port": config.default_port,
+            "framework_log_level": config.framework_log_level,
         },
         "checks": checks,
     }

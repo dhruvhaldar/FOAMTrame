@@ -4,10 +4,12 @@ import json
 import tempfile
 import threading
 import unittest
+from io import StringIO
 from pathlib import Path
 
 import app_state
 from database import AppDatabase
+from run import tee_stream
 
 try:
     import pytest
@@ -139,6 +141,18 @@ class AppStateMigrationIntegrationTest(unittest.TestCase):
         self.assertEqual("motorBike", restored["case_config"]["ACTIVE_CASE"])
         self.assertEqual("motorBike", app_state.load_case_config()["ACTIVE_CASE"])
         self.assertTrue(app_state.LEGACY_APP_STATE_FILE.exists())
+
+
+class LauncherLoggingIntegrationTest(unittest.TestCase):
+    def test_child_output_is_copied_to_console_and_run_log(self):
+        source = StringIO("first line\nsecond line\n")
+        console = StringIO()
+        run_log = StringIO()
+
+        tee_stream(source, console, run_log)
+
+        self.assertEqual(source.getvalue(), console.getvalue())
+        self.assertEqual(source.getvalue(), run_log.getvalue())
 
 
 if __name__ == "__main__":
