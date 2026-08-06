@@ -1,72 +1,37 @@
+from __future__ import annotations
+
+import signal
 import subprocess
 import sys
-import os
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parent
 
 
-def main():
-    python_exe = sys.executable or os.path.join("venv", "Scripts", "python.exe")
+def main(argv: list[str] | None = None) -> int:
+    """Run FOAMTrame with signal forwarding and the active Python environment."""
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    command = [sys.executable, str(PROJECT_ROOT / "app.py"), "--server", *arguments]
+    process = subprocess.Popen(command, cwd=PROJECT_ROOT)
 
-    log_file = open("run.log", "w", encoding="utf-8", buffering=1)
+    def stop_child(_signum=None, _frame=None):
+        if process.poll() is None:
+            process.terminate()
 
-    def log_msg(msg):
-        try:
-            print(msg, flush=True)
-        except Exception:
-            pass
-        try:
-            log_file.write(msg + "\n")
-            log_file.flush()
-        except Exception:
-            pass
-
-    log_msg("Starting Trame visualization server...")
-    trame_process = subprocess.Popen(
-        [python_exe, "app.py", "--server"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
-    )
-
-    import threading
-
-    def forward_logs(process, prefix):
-        try:
-            while process.poll() is None or process.stdout:
-                line = process.stdout.readline()
-                if not line:
-                    break
-                log_msg(f"[{prefix}] {line.strip()}")
-        except (ValueError, OSError):
-            pass
-
-    t = threading.Thread(target=forward_logs, args=(trame_process, "Trame"), daemon=True)
-    t.start()
+    for signal_name in ("SIGINT", "SIGTERM"):
+        if hasattr(signal, signal_name):
+            signal.signal(getattr(signal, signal_name), stop_child)
 
     try:
-        while True:
-            if trame_process.poll() is not None:
-                log_msg("Trame server stopped.")
-                break
-            import time
-            time.sleep(0.5)
+        return process.wait()
     except KeyboardInterrupt:
-        log_msg("Stopping server...")
-    finally:
+        stop_child()
         try:
-            trame_process.terminate()
-            trame_process.wait(timeout=3)
-        except Exception:
-            try:
-                trame_process.kill()
-            except Exception:
-                pass
-        log_msg("Server stopped.")
-        try:
-            log_file.close()
-        except Exception:
-            pass
+            return process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            return process.wait()
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

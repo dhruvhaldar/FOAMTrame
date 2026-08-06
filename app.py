@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from runtime import configure_logging, settings
+
+configure_logging()
+
 from trame.app import get_server
 from trame.ui.vuetify import SinglePageWithDrawerLayout
 from trame.widgets import vuetify, html, client
@@ -1033,7 +1037,10 @@ def main():
             load_dataset(args.data)
         except Exception as exc:
             state.error_message = str(exc)
-    server.start(port=8087)
+    # Trame's built-in --port/--host arguments remain available. The explicit
+    # default keeps historical port 8087 while allowing CLI overrides.
+    port = getattr(args, "port", None) or settings.default_port
+    server.start(port=port)
 
 
 if __name__ == "__main__":

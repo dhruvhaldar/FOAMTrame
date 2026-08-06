@@ -9,9 +9,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
+from runtime import settings
+
 logger = logging.getLogger("FOAMTrame")
 
-DATABASE_PATH = Path("foamtrame.db")
+DATABASE_PATH = settings.database_path
 SCHEMA_VERSION = 1
 
 
@@ -214,4 +216,3 @@ class AppDatabase:
 
 
 database = AppDatabase()
-

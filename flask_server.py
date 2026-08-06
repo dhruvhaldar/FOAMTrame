@@ -11,9 +11,9 @@ from flask import Flask, jsonify, request
 from flask_compress import Compress
 
 from app_state import load_case_config, update_case_config
+from runtime import configure_logging
 
-# Setup logging
-logging.basicConfig(level=logging.INFO)
+configure_logging()
 logger = logging.getLogger("FOAMTrameBackend")
 
 app = Flask(__name__)

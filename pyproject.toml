@@ -1,0 +1,9 @@
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+  "integration: persistence and service-boundary integration tests",
+  "smoke: launches the complete FOAMTrame server and checks HTTP availability",
+]
+

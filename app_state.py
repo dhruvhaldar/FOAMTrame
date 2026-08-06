@@ -8,12 +8,13 @@ from pathlib import Path
 from typing import Any
 
 from database import SCHEMA_VERSION, database
+from runtime import settings
 
 logger = logging.getLogger("FOAMTrame")
 
-LEGACY_APP_STATE_FILE = Path("app_state.json")
-LEGACY_CONFIG_FILE = Path("case_config.json")
-LEGACY_RUN_HISTORY_FILE = Path("run_history.json")
+LEGACY_APP_STATE_FILE = settings.data_dir / "app_state.json"
+LEGACY_CONFIG_FILE = settings.data_dir / "case_config.json"
+LEGACY_RUN_HISTORY_FILE = settings.data_dir / "run_history.json"
 APP_STATE_VERSION = SCHEMA_VERSION
 
 _state_lock = threading.RLock()
@@ -21,7 +22,7 @@ _state_lock = threading.RLock()
 
 def default_case_config() -> dict[str, str]:
     return {
-        "CASE_ROOT": str(Path("tutorial_cases").resolve()),
+        "CASE_ROOT": str((settings.data_dir / "tutorial_cases").resolve()),
         "DOCKER_IMAGE": "haldardhruv/ubuntu_noble_openfoam:v12",
         "OPENFOAM_VERSION": "12",
         "ACTIVE_CASE": "",

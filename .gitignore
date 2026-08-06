@@ -6,6 +6,7 @@ ENV/
 tutorial_cases/
 app_state.json
 run.log
+logs/
 
 # Python cache & build files
 __pycache__/
@@ -30,3 +31,5 @@ Thumbs.db
 foamtrame.db
 foamtrame.db-shm
 foamtrame.db-wal
+.coverage
+.pytest_cache/

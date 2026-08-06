@@ -163,7 +163,8 @@ The planned chatbot should not automate browser clicks. Buttons and chatbot tool
 - A modern browser with WebSocket support
 - Enough memory for the selected VTK dataset and OpenFOAM container workload
 
-Python dependencies are pinned by compatible major version in [requirements.txt](./requirements.txt):
+Verified direct dependencies are reproducibly pinned in
+[requirements.txt](./requirements.txt):
 
 - Trame 3 and Trame-Vuetify 3
 - VTK 9.3+
@@ -173,72 +174,89 @@ Python dependencies are pinned by compatible major version in [requirements.txt]
 
 ## Installation
 
-Clone or download the repository, then create an isolated Python environment.
+Clone or download the repository. The supported installers create an isolated `.venv`, install pinned-compatible dependencies, initialize SQLite, run machine-readable diagnostics, and preserve any existing database or JSON migration data.
 
 ### Windows PowerShell
 
 ```powershell
-py -3.12 -m venv venv
-.\venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+.\install.ps1
 ```
 
-If PowerShell blocks activation, run Python directly from the environment:
+Install development/test dependencies as well:
 
 ```powershell
-.\venv\Scripts\python.exe -m pip install -r requirements.txt
+.\install.ps1 --dev
 ```
 
-### Linux or macOS
+### Linux
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+bash ./install.sh
+# Include test tooling:
+bash ./install.sh --dev
 ```
 
-Make sure Docker is running and pull the default image if it is not already
-available:
+Linux requires the distribution's Python venv package, commonly `python3-venv`. Both installers accept `--help`, `--venv`,
+`--no-upgrade-tools`, and `--skip-docker-check`. The shared implementation is [install.py](./install.py), so Windows and Linux follow the same installation logic.
+
+Make sure Docker is running and pull the default image if it is not already available:
 
 ```bash
 docker pull haldardhruv/ubuntu_noble_openfoam:v12
 ```
 
-The image, OpenFOAM version, and case-root directory can be changed later under
-**Setup → Advanced Settings**.
+The image, OpenFOAM version, and case-root directory can be changed later under **Setup → Advanced Settings**.
 
 ## Running FOAMTrame
 
-Start the main Trame application:
-
-```bash
-python app.py
-```
-
-Open [http://localhost:8087](http://localhost:8087) if the browser does not open
-automatically.
-
-On Windows without environment activation:
+Use the platform launcher after installation:
 
 ```powershell
-.\venv\Scripts\python.exe app.py
+.\start.ps1
 ```
-
-The wrapper below also starts the Trame process and forwards output into
-`run.log`:
 
 ```bash
-python run.py
+./start.sh
 ```
+
+The launchers call [run.py](./run.py), forward termination signals, use the
+installed interpreter, and keep the working directory deterministic. Open
+[http://localhost:8087](http://localhost:8087) if the browser does not open.
+
+Trame's standard server arguments remain supported:
+
+```bash
+./start.sh --port 8090 --host 127.0.0.1
+```
+
+Run diagnostics or initialize/upgrade the database independently:
+
+```bash
+.venv/bin/python manage.py doctor
+.venv/bin/python manage.py init-db
+```
+
+On Windows, replace `.venv/bin/python` with `.venv\Scripts\python.exe`.
+
+### Runtime configuration
+
+| Environment variable | Default | Purpose |
+| --- | --- | --- |
+| `FOAMTRAME_DATA_DIR` | Repository directory | Database and legacy migration data |
+| `FOAMTRAME_DATABASE_PATH` | `<data-dir>/foamtrame.db` | Explicit SQLite database path |
+| `FOAMTRAME_LOG_DIR` | `<data-dir>/logs` | Rotating application logs |
+| `FOAMTRAME_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL` |
+| `FOAMTRAME_PORT` | `8087` | Default port when `--port` is omitted |
+
+Logs rotate at 5 MB with three retained backups. CLI `--host` and `--port`
+override runtime defaults.
 
 ### Load a dataset at startup
 
 Use `--data` with a server-local supported dataset:
 
 ```bash
-python app.py --data /path/to/model.vtu
+./start.sh --data /path/to/model.vtu
 ```
 
 ## Using the application
@@ -374,10 +392,20 @@ python flask_server.py
 ├── app.py                    # Main Trame application and global visual system
 ├── app_state.py              # State API, legacy migration, JSON backup/restore
 ├── database.py               # SQLite schema, transactions, and repository boundary
+├── runtime.py                # Runtime paths, logging, and preflight diagnostics
+├── manage.py                 # Doctor and database administration commands
+├── install.py                # Shared cross-platform installer implementation
+├── install.ps1 / install.sh  # Windows and Linux installer entry points
+├── start.ps1 / start.sh      # Installed-environment launchers
 ├── app_state.json.example    # Portable state schema example
 ├── flask_server.py           # Optional companion HTTP API
-├── run.py                    # Process wrapper and log forwarding
+├── run.py                    # Process wrapper and signal forwarding
 ├── requirements.txt          # Python dependencies
+├── requirements-dev.txt      # Test-only dependencies
+├── tests/
+│   ├── integration/          # Database, migration, rollback, concurrency
+│   └── smoke/                # One complete server availability test
+├── .github/workflows/ci.yml  # Windows/Linux automated verification
 ├── backend/
 │   ├── case/                 # Case-management helpers
 │   ├── geometry/             # Geometry managers and visualization
@@ -409,6 +437,12 @@ Follow the links below for the principal implementation surfaces:
 
 ## Development checks
 
+Install the development profile first:
+
+```bash
+python install.py --dev
+```
+
 Compile the main Python modules after making changes:
 
 ```bash
@@ -422,6 +456,24 @@ Validate database initialization and the persisted state schema:
 ```bash
 python -c "import app_state; from database import database; state = app_state.load_app_state(); print(database.path, state['version'], state.keys())"
 ```
+
+Run the integration suite:
+
+```bash
+python -m unittest discover -s tests/integration -v
+# or
+python -m pytest -m integration
+```
+
+Run the single end-to-end server smoke test:
+
+```bash
+python -m unittest tests.smoke.test_server_starts -v
+# or
+python -m pytest -m smoke
+```
+
+The smoke test starts the complete application on an ephemeral loopback port, waits for an HTTP 200 HTML response, and always terminates the child process. It skips only when Trame/VTK are absent from the selected interpreter. The [CI workflow](./.github/workflows/ci.yml) installs the full runtime and runs all tests on both Windows and Linux.
 
 For UI changes, check at least one desktop and one constrained viewport. Confirm that navigation remains reachable, cards do not overflow, and controls retain visible focus states.
 
@@ -460,12 +512,31 @@ The backup stores the case name and root path, not the case directory. Copy the 
 
 ### Port 8087 is already in use
 
-Stop the existing process or change the `server.start(port=8087)` value in
-[app.py](./app.py).
+Stop the existing process or select another port:
+
+```bash
+./start.sh --port 8090
+```
+
+### Installation diagnostics fail
+
+Run `python manage.py doctor` with the installed interpreter and inspect the JSON
+result. A missing Docker executable is a warning because the UI can start without
+it, but OpenFOAM tutorial and simulation operations require a reachable daemon.
 
 ## Security notes
 
-FOAMTrame can execute Docker containers and OpenFOAM commands against local case directories. **Run it only in a trusted environment**, review imported state files, and do not expose the development server directly to an untrusted network. The Settings restore flow validates structure and file size, but a restored case-root path still controls where the application reads and writes case data.
+FOAMTrame can execute Docker containers and OpenFOAM commands against local case
+directories. **Run it only in a trusted environment**, review imported state
+files, and keep the default loopback binding for local use. The Settings restore
+flow validates structure and file size, but a restored case-root path still
+controls where the application reads and writes case data.
+
+Do not expose the single-process application directly to an untrusted network.
+A hosted or multi-user deployment needs TLS at a reverse proxy, authentication,
+per-user authorization, resource quotas, and a Trame launcher/process-isolation
+strategy. Chatbot actions that create cases, execute containers, or alter files
+must use the confirmation and audit boundary described in [Architecture](#architecture).
 
 ## License
 
