@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import asyncio
 import io
 import logging
 import os
@@ -17,6 +18,7 @@ logger = logging.getLogger("FOAMTrame")
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -78,25 +80,12 @@ def _make_empty_chart(message: str = "No data yet") -> str:
     return _fig_to_b64(fig)
 
 
-def _draw_mode_badge(ax, mode: str):
-    """Draw a small mode badge on the top right of the axis."""
-    mode_label = "LIVE" if mode == MODE_LIVE else "CACHED"
-    mode_color = "#ef4444" if mode == MODE_LIVE else "#06b6d4"
-    ax.text(
-        0.98, 0.96, mode_label,
-        transform=ax.transAxes, ha="right", va="top",
-        fontsize=6, color=mode_color, fontweight="bold",
-        bbox=dict(boxstyle="round,pad=0.2", facecolor="#0f172a", edgecolor=mode_color, alpha=0.8),
-    )
-
-
 def _build_line_chart(
     time_vals: List[float],
     fields_data: Dict[str, List[float]],
     target_fields: List[str],
     title: str,
     y_label: str,
-    mode: str,
     color_offset: int = 0
 ) -> str:
     """Generic helper to build line charts."""
@@ -137,19 +126,12 @@ def _build_line_chart(
         loc="upper left"
     )
 
-    _draw_mode_badge(ax, mode)
     fig.tight_layout()
     return _fig_to_b64(fig)
 
 
-def _build_residuals_chart(residuals: Dict[str, list], mode: str) -> str:
+def _build_residuals_chart(residuals: Dict[str, list]) -> str:
     """Render residuals on a log-scale chart."""
-    time_vals = list(residuals.get("time", []))
-    if not time_vals:
-        return _make_empty_chart(
-            "No residuals log found\n(log.foamRun missing or simulation not started)"
-        )
-
     active_fields = [
         f for f in _RESIDUAL_FIELDS
         if f in residuals and len(residuals[f]) > 0
@@ -160,27 +142,33 @@ def _build_residuals_chart(residuals: Dict[str, list], mode: str) -> str:
             active_fields.append(f)
 
     if not active_fields:
-        return _make_empty_chart("No residual fields found in log")
+        return _make_empty_chart(
+            "No solver residuals yet\n(waiting for log.foamRun output)"
+        )
 
     fig, ax = plt.subplots(figsize=(6, 2.8), facecolor="#0f172a")
     ax.set_facecolor("#0f172a")
 
     for i, field in enumerate(active_fields):
         values = list(residuals[field])
-        n = min(len(time_vals), len(values))
+        n = len(values)
         if n < 1:
             continue
         color = _COLORS[i % len(_COLORS)]
         ax.semilogy(
-            time_vals[:n], values[:n],
+            range(1, n + 1), values,
             label=field,
             color=color,
             linewidth=1.4,
             alpha=0.9,
         )
 
-    ax.set_xlabel("Time (s)", color="#94a3b8", fontsize=8)
+    ax.set_xlabel("Solver iteration", color="#94a3b8", fontsize=8)
     ax.set_ylabel("Residual", color="#94a3b8", fontsize=8)
+    # Plain scientific notation avoids Matplotlib's math-text parser. Besides
+    # being clearer at small sizes, this removes a thread-sensitive parser path
+    # that can fail on labels such as ``$\mathdefault{10^{-3}}$``.
+    ax.yaxis.set_major_formatter(mticker.LogFormatter(base=10, labelOnlyBase=False))
     ax.tick_params(colors="#94a3b8", labelsize=7)
     for spine in ax.spines.values():
         spine.set_edgecolor("#334155")
@@ -191,7 +179,6 @@ def _build_residuals_chart(residuals: Dict[str, list], mode: str) -> str:
         loc="upper left"
     )
 
-    _draw_mode_badge(ax, mode)
     fig.tight_layout()
     return _fig_to_b64(fig)
 
@@ -204,20 +191,64 @@ def setup_plots_tab(server):
     state, ctrl = server.state, server.controller
 
     # --- State defaults ---
-    state.setdefault("plots_scalar_chart", _make_empty_chart("Select an active case to start"))
-    state.setdefault("plots_umag_chart", _make_empty_chart("Select an active case to start"))
-    state.setdefault("plots_ucomponents_chart", _make_empty_chart("Select an active case to start"))
-    state.setdefault("plots_residuals_chart", _make_empty_chart("Select an active case to start"))
+    initial_case = getattr(state, "active_case", "") or ""
+    loading_chart = _make_empty_chart("Loading...")
+    initial_chart = (
+        loading_chart
+        if initial_case
+        else _make_empty_chart("Select an active case to start")
+    )
+    state.setdefault("plots_scalar_chart", initial_chart)
+    state.setdefault("plots_umag_chart", initial_chart)
+    state.setdefault("plots_ucomponents_chart", initial_chart)
+    state.setdefault("plots_residuals_chart", initial_chart)
 
     state.setdefault("plots_available_fields", [])
     state.setdefault("plots_selected_fields", [])
-    state.setdefault("plots_status", "Idle")
-    state.setdefault("plots_polling", False)
-    state.setdefault("plots_poll_interval", _POLL_INTERVAL)
+    state.setdefault(
+        "plots_status",
+        f"Loading plot data for {initial_case}..."
+        if initial_case
+        else "Waiting for an active case",
+    )
+    state.setdefault("plots_status_type", "info")
     state.setdefault("plots_mode", MODE_CACHED)
+    state.setdefault("plots_loading", bool(initial_case))
 
     _stop_event = threading.Event()
+    _wake_event = threading.Event()
+    _poll_lock = threading.Lock()
     _poller_thread: list = [None]
+    _plots_visible = [False]
+    _simulation_running = [False]
+    _refresh_requested = [True]
+    _server_event_loop = [None]
+    _loaded_case = [None]
+    _chart_signatures: dict[str, object] = {}
+    plot_state_keys = (
+        "plots_scalar_chart",
+        "plots_umag_chart",
+        "plots_ucomponents_chart",
+        "plots_residuals_chart",
+        "plots_available_fields",
+        "plots_selected_fields",
+        "plots_status",
+        "plots_status_type",
+        "plots_mode",
+        "plots_loading",
+    )
+
+    def request_refresh():
+        _refresh_requested[0] = True
+        _wake_event.set()
+
+    def publish_plot_state():
+        """Publish background plot changes on Trame's wslink event loop."""
+        state.dirty(*plot_state_keys)
+        state.flush()
+        loop = _server_event_loop[0]
+        if loop is not None and loop.is_running():
+            loop.call_soon_threadsafe(server.force_state_push, *plot_state_keys)
 
     def _get_case_dir() -> Optional[Path]:
         from tabs.setup_tab import load_config
@@ -230,36 +261,54 @@ def setup_plots_tab(server):
         return path if path.is_dir() else None
 
     def _poll_once():
-        from backend.plots.realtime_plots import (
-            OpenFOAMFieldParser,
-            clear_cache,
-        )
+        from backend.plots.realtime_plots import OpenFOAMFieldParser
 
         case_dir = _get_case_dir()
         if case_dir is None:
             state.plots_status = "No active case selected"
-            state.flush()
+            state.plots_status_type = "warning"
+            state.plots_loading = False
+            publish_plot_state()
             return
 
-        mode = getattr(state, "plots_mode", MODE_CACHED)
-        case_dir_str = str(case_dir)
+        if not _poll_lock.acquire(blocking=False):
+            return
 
-        if mode == MODE_LIVE:
-            clear_cache(case_dir_str)
+        mode = MODE_LIVE if _simulation_running[0] else MODE_CACHED
+        state.plots_mode = mode
+        case_dir_str = str(case_dir)
+        first_load = _loaded_case[0] != case_dir_str
 
         try:
+            if first_load:
+                state.plots_loading = True
+                state.plots_status = f"Loading plot data for {case_dir.name}..."
+                state.plots_status_type = "info"
+                publish_plot_state()
+
             parser = OpenFOAMFieldParser(case_dir_str)
 
             try:
                 case_mtime = os.stat(case_dir_str).st_mtime
             except OSError:
                 state.plots_status = "Case directory not accessible"
-                state.flush()
+                state.plots_status_type = "error"
                 return
+
+            time_dirs = parser.get_time_directories(known_mtime=case_mtime)
+            latest_dir_mtime = None
+            if time_dirs:
+                try:
+                    latest_dir_mtime = os.stat(
+                        str(parser.get_data_root() / time_dirs[-1])
+                    ).st_mtime
+                except OSError:
+                    pass
 
             field_data = parser.get_all_time_series_data(
                 max_points=200,
                 known_case_mtime=case_mtime,
+                known_latest_mtime=latest_dir_mtime,
             )
 
             time_vals = field_data.get("time", []) if field_data else []
@@ -280,22 +329,44 @@ def setup_plots_tab(server):
                         selected = available[:3]
                     state.plots_selected_fields = selected
 
-                # 1. Scalar Plot (selected scalar fields, e.g. p, T, rho)
-                state.plots_scalar_chart = _build_line_chart(
-                    time_vals, field_data, selected, "Scalar Fields", "Value", mode, color_offset=0
+                # Publish field discovery before the more expensive PNG renders.
+                # The selector is therefore usable as soon as case data is found.
+                if first_load:
+                    publish_plot_state()
+
+                series_signature = (
+                    tuple(selected),
+                    len(time_vals),
+                    time_vals[-1] if time_vals else None,
+                    tuple(
+                        (field, len(field_data.get(field, [])),
+                         field_data[field][-1] if field_data.get(field) else None)
+                        for field in available
+                    ),
                 )
 
-                # 2. Velocity Magnitude Plot (U_mag)
-                umag_fields = [f for f in ["U_mag"] if f in available]
-                state.plots_umag_chart = _build_line_chart(
-                    time_vals, field_data, umag_fields, "Velocity Magnitude", "Velocity (m/s)", mode, color_offset=3
-                )
+                # Rendering four PNGs is substantially more expensive than checking
+                # the filesystem. Only redraw field charts when their data changed.
+                if _chart_signatures.get("series") != series_signature:
+                    state.plots_scalar_chart = _build_line_chart(
+                        time_vals, field_data, selected, "Scalar Fields", "Value", color_offset=0
+                    )
+                    if first_load:
+                        publish_plot_state()
 
-                # 3. Velocity Components Plot (Ux, Uy, Uz)
-                ucomp_fields = [f for f in ["Ux", "Uy", "Uz"] if f in available]
-                state.plots_ucomponents_chart = _build_line_chart(
-                    time_vals, field_data, ucomp_fields, "Velocity Components", "Velocity (m/s)", mode, color_offset=5
-                )
+                    umag_fields = [f for f in ["U_mag"] if f in available]
+                    ucomp_fields = [f for f in ["Ux", "Uy", "Uz"] if f in available]
+                    state.plots_umag_chart = _build_line_chart(
+                        time_vals, field_data, umag_fields, "Velocity Magnitude", "Velocity (m/s)", color_offset=3
+                    )
+                    if first_load:
+                        publish_plot_state()
+                    state.plots_ucomponents_chart = _build_line_chart(
+                        time_vals, field_data, ucomp_fields, "Velocity Components", "Velocity (m/s)", color_offset=5
+                    )
+                    if first_load:
+                        publish_plot_state()
+                    _chart_signatures["series"] = series_signature
             else:
                 state.plots_scalar_chart = _make_empty_chart("No time step data found")
                 state.plots_umag_chart = _make_empty_chart("No velocity data found")
@@ -303,26 +374,50 @@ def setup_plots_tab(server):
 
             # 4. Solver Residuals Plot
             residuals = parser.get_residuals_from_log()
-            state.plots_residuals_chart = _build_residuals_chart(residuals, mode)
-
-            n_steps = len(list(time_vals))
-            mode_tag = "🔴 LIVE" if mode == MODE_LIVE else "🔵 CACHED"
-            state.plots_status = (
-                f"{mode_tag}  ·  {time.strftime('%H:%M:%S')}  ·  {n_steps} steps"
+            residual_signature = (
+                tuple(
+                    (field, len(values), values[-1] if len(values) else None)
+                    for field, values in residuals.items()
+                ),
             )
+            if _chart_signatures.get("residuals") != residual_signature:
+                state.plots_residuals_chart = _build_residuals_chart(residuals)
+                _chart_signatures["residuals"] = residual_signature
+
+            n_steps = len(time_vals)
+            if mode == MODE_LIVE:
+                state.plots_status = f"LIVE · updating automatically · {n_steps} time steps"
+                state.plots_status_type = "success"
+            else:
+                state.plots_status = f"CACHED · synchronized at {time.strftime('%H:%M:%S')} · {n_steps} time steps"
+                state.plots_status_type = "info"
+            state.plots_loading = False
+            _loaded_case[0] = case_dir_str
 
         except Exception as exc:
             logger.error(f"[plots_tab] Poll error: {exc}")
             state.plots_status = f"Error: {exc}"
-
-        state.flush()
+            state.plots_status_type = "error"
+            state.plots_loading = False
+        finally:
+            try:
+                publish_plot_state()
+            finally:
+                _poll_lock.release()
 
     def _poller_loop():
         while not _stop_event.is_set():
-            if getattr(state, "active_tab", -1) == 4:
-                _poll_once()
-            interval = float(getattr(state, "plots_poll_interval", _POLL_INTERVAL))
-            _stop_event.wait(timeout=max(0.5, interval))
+            _wake_event.clear()
+            is_live = _simulation_running[0]
+            is_visible = _plots_visible[0]
+            should_refresh = _refresh_requested[0] or is_live or is_visible
+            _refresh_requested[0] = False
+            if should_refresh:
+                try:
+                    _poll_once()
+                except Exception:
+                    logger.exception("[plots_tab] Automatic update failed")
+            _wake_event.wait(timeout=_POLL_INTERVAL if is_live else None)
 
     def start_polling():
         if _poller_thread[0] and _poller_thread[0].is_alive():
@@ -331,53 +426,74 @@ def setup_plots_tab(server):
         t = threading.Thread(target=_poller_loop, daemon=True)
         t.start()
         _poller_thread[0] = t
-        state.plots_polling = True
-        state.plots_status = "Polling started"
-        state.flush()
+        request_refresh()
 
     def stop_polling():
         _stop_event.set()
-        state.plots_polling = False
-        state.plots_status = "Polling stopped"
-        state.flush()
+        _wake_event.set()
 
-    def refresh_now():
-        threading.Thread(target=_poll_once, daemon=True).start()
-
-    def set_mode_cached():
-        state.plots_mode = MODE_CACHED
-        state.flush()
-        threading.Thread(target=_poll_once, daemon=True).start()
-
-    def set_mode_live():
-        state.plots_mode = MODE_LIVE
-        state.flush()
-        threading.Thread(target=_poll_once, daemon=True).start()
+    def set_plots_visible(active_tab):
+        _plots_visible[0] = int(active_tab) == 4
+        if _plots_visible[0]:
+            request_refresh()
 
     ctrl.plots_start_polling = start_polling
     ctrl.plots_stop_polling = stop_polling
-    ctrl.plots_refresh_now = refresh_now
-    ctrl.plots_set_mode_cached = set_mode_cached
-    ctrl.plots_set_mode_live = set_mode_live
+    ctrl.plots_wake = request_refresh
+    ctrl.plots_set_visible = set_plots_visible
+
+    @ctrl.add("on_server_ready")
+    def on_plots_server_ready(**_):
+        _server_event_loop[0] = asyncio.get_running_loop()
+        start_polling()
+        request_refresh()
+
+    @ctrl.add("on_client_connected")
+    def on_plots_client_connected(**_):
+        # A client may connect after the initial cached render completed.
+        # Always publish a fresh snapshot for that client.
+        request_refresh()
 
     @state.change("active_case")
     def on_active_case_change_plots(**_):
         state.plots_available_fields = []
         state.plots_selected_fields = []
-        state.plots_scalar_chart = _make_empty_chart("Loading...")
-        state.plots_umag_chart = _make_empty_chart("Loading...")
-        state.plots_ucomponents_chart = _make_empty_chart("Loading...")
-        state.plots_residuals_chart = _make_empty_chart("Loading...")
+        state.plots_scalar_chart = loading_chart
+        state.plots_umag_chart = loading_chart
+        state.plots_ucomponents_chart = loading_chart
+        state.plots_residuals_chart = loading_chart
+        _chart_signatures.clear()
+        _loaded_case[0] = None
+        state.plots_loading = True
+        state.plots_status = "Loading plot data for the active case..."
+        state.plots_status_type = "info"
         state.flush()
-        if getattr(state, "plots_polling", False):
-            threading.Thread(target=_poll_once, daemon=True).start()
+        request_refresh()
 
     @state.change("plots_selected_fields")
     def on_field_selection_change(**_):
-        threading.Thread(target=_poll_once, daemon=True).start()
+        _chart_signatures.pop("series", None)
+        request_refresh()
 
-    start_polling()
+    @state.change("active_tab")
+    def on_plots_tab_visibility_change(active_tab, **_):
+        set_plots_visible(active_tab)
 
+    @state.change("is_running")
+    def on_simulation_state_change(is_running, **_):
+        # A run transition invalidates prior data once. During the run, the
+        # parser's append-only caches are retained for efficient incremental I/O.
+        from backend.plots.realtime_plots import clear_cache
+
+        was_running = _simulation_running[0]
+        _simulation_running[0] = bool(is_running)
+        case_dir = _get_case_dir()
+        if case_dir is not None and was_running != _simulation_running[0]:
+            clear_cache(str(case_dir))
+        _chart_signatures.clear()
+        state.plots_mode = MODE_LIVE if _simulation_running[0] else MODE_CACHED
+        state.flush()
+        request_refresh()
 
 # ---------------------------------------------------------------------------
 # UI
@@ -386,76 +502,21 @@ def setup_plots_tab(server):
 def build_plots_drawer():
     from trame.app import get_server
     server = get_server()
-    ctrl = server.controller
 
     with html.Div(v_show="active_tab === 4", classes="pa-4"):
-        # Mode selector
-        html.Div("Mode", classes="text-overline text--secondary mb-1")
-        with html.Div(classes="mb-4"):
+        html.Div("Automatic Updates", classes="text-overline text--secondary mb-1")
+        with vuetify.VCard(classes="glass-card pa-3 mb-4", outlined=True):
+            with html.Div(classes="d-flex align-center mb-1"):
+                vuetify.VIcon(
+                    "mdi-access-point",
+                    color=("plots_mode === 'live' ? 'success' : 'cyan darken-2'",),
+                    small=True,
+                    classes="mr-2",
+                )
+                html.Strong("{{ plots_mode === 'live' ? 'Live' : 'Cached' }}")
             html.P(
-                "Cached: incremental updates (low I/O).\nLive: full re-read (always current).",
-                classes="text-caption text--secondary mb-2 style-white-space-pre-line",
-                style="white-space: pre-line;",
-            )
-            with vuetify.VBtnToggle(
-                v_model=("plots_mode", MODE_CACHED),
-                mandatory=True,
-                dense=True,
-                classes="w-100",
-            ):
-                vuetify.VBtn(
-                    "Cached",
-                    value=MODE_CACHED,
-                    small=True,
-                    click=ctrl.plots_set_mode_cached,
-                    classes="flex-grow-1",
-                )
-                vuetify.VBtn(
-                    "Live",
-                    value=MODE_LIVE,
-                    small=True,
-                    click=ctrl.plots_set_mode_live,
-                    classes="flex-grow-1",
-                )
-
-        vuetify.VDivider(classes="my-3")
-
-        # Polling controls
-        html.Div("Polling Controls", classes="text-overline text--secondary mb-1")
-        with html.Div(classes="mb-4"):
-            with vuetify.VRow(dense=True, classes="mb-2"):
-                with vuetify.VCol(cols="6"):
-                    vuetify.VBtn(
-                        "Start",
-                        click=ctrl.plots_start_polling,
-                        block=True,
-                        small=True,
-                        classes="theme-btn-success",
-                        disabled=("plots_polling",),
-                    )
-                with vuetify.VCol(cols="6"):
-                    vuetify.VBtn(
-                        "Stop",
-                        click=ctrl.plots_stop_polling,
-                        block=True,
-                        small=True,
-                        classes="theme-btn-warning",
-                        disabled=("!plots_polling",),
-                    )
-            vuetify.VBtn(
-                "Refresh Now",
-                click=ctrl.plots_refresh_now,
-                block=True,
-                small=True,
-                classes="theme-btn-primary mb-3",
-            )
-            vuetify.VTextField(
-                v_model=("plots_poll_interval", _POLL_INTERVAL),
-                label="Interval (s)",
-                type="number",
-                outlined=True,
-                dense=True,
-                hide_details=True,
+                "{{ plots_mode === 'live' ? 'New solver data is detected every second.' : 'The completed result is served from the synchronized cache.' }}",
+                classes="text-caption text--secondary mb-0",
             )
 
         vuetify.VDivider(classes="my-3")
@@ -484,13 +545,21 @@ def build_plots_content():
     ):
         with vuetify.VRow(dense=True):
             with vuetify.VCol(cols="12"):
-                vuetify.VAlert(
-                    "{{ plots_status }}",
+                with vuetify.VAlert(
                     dense=True,
-                    outlined=True,
-                    type=("plots_polling ? (plots_mode === 'live' ? 'error' : 'info') : 'warning'",),
-                    classes="mb-2",
-                )
+                    text=True,
+                    type=("plots_status_type", "info"),
+                    classes="mb-2 plots-status-alert",
+                ):
+                    vuetify.VProgressCircular(
+                        v_if="plots_loading",
+                        indeterminate=True,
+                        size=20,
+                        width=2,
+                        color="info",
+                        classes="mr-3",
+                    )
+                    html.Span("{{ plots_status }}")
 
         with vuetify.VRow(dense=True):
             # 1. Scalar fields chart

@@ -324,6 +324,41 @@ with SinglePageWithDrawerLayout(server) as layout:
         .v-application .setup-status-alert .v-alert__content {
             font-weight: 600;
         }
+        /* Readable tinted notifications for plot synchronization states. */
+        .v-application .plots-status-alert {
+            border: 1px solid currentColor !important;
+            box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06) !important;
+        }
+        .v-application .plots-status-alert.v-alert--text::before {
+            opacity: 0 !important;
+        }
+        .v-application .plots-status-alert.info--text {
+            background: rgba(224, 242, 254, 0.92) !important;
+            border-color: #38bdf8 !important;
+            color: #0369a1 !important;
+        }
+        .v-application .plots-status-alert.success--text {
+            background: rgba(209, 250, 229, 0.92) !important;
+            border-color: #34d399 !important;
+            color: #065f46 !important;
+        }
+        .v-application .plots-status-alert.warning--text {
+            background: rgba(254, 243, 199, 0.94) !important;
+            border-color: #f59e0b !important;
+            color: #92400e !important;
+        }
+        .v-application .plots-status-alert.error--text {
+            background: rgba(254, 226, 226, 0.94) !important;
+            border-color: #f87171 !important;
+            color: #991b1b !important;
+        }
+        .v-application .plots-status-alert .v-alert__icon,
+        .v-application .plots-status-alert .v-alert__content {
+            color: inherit !important;
+        }
+        .v-application .plots-status-alert .v-alert__content {
+            font-weight: 600;
+        }
         .v-application .setup-case-card {
             flex: 1 0 295px;
             min-height: 295px;
@@ -968,16 +1003,17 @@ with SinglePageWithDrawerLayout(server) as layout:
             classes="ml-2 compact-navbar-tabs",
             show_arrows=True,
         ):
-            vuetify.VTab("Setup")
-            vuetify.VTab("Geometry")
-            vuetify.VTab("Meshing")
-            vuetify.VTab("Run/Log")
-            vuetify.VTab("Plots")
-            vuetify.VTab("Post")
+            vuetify.VTab("Setup", click=lambda: ctrl.plots_set_visible(0))
+            vuetify.VTab("Geometry", click=lambda: ctrl.plots_set_visible(1))
+            vuetify.VTab("Meshing", click=lambda: ctrl.plots_set_visible(2))
+            vuetify.VTab("Run/Log", click=lambda: ctrl.plots_set_visible(3))
+            vuetify.VTab("Plots", click=lambda: ctrl.plots_set_visible(4))
+            vuetify.VTab("Post", click=lambda: ctrl.plots_set_visible(5))
             with vuetify.VTab(
                 classes="settings-nav-tab",
                 title="Settings",
                 aria_label="Settings",
+                click=lambda: ctrl.plots_set_visible(6),
             ):
                 vuetify.VIcon("mdi-cog-outline")
     state.setdefault("drawer_open", True)
@@ -986,6 +1022,7 @@ with SinglePageWithDrawerLayout(server) as layout:
     def _on_tab_change(active_tab, **_):
         state.drawer_open = True
         state.flush()
+        ctrl.plots_set_visible(active_tab)
 
     layout.drawer.classes = "glass-drawer"
     layout.drawer.v_model = ("drawer_open",)

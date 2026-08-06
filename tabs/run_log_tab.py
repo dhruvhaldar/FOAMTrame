@@ -208,35 +208,54 @@ def setup_run_log_tab(server):
                 )
                 _active_container[0] = container
 
-                log_lines = []
-                for line in container.logs(stream=True):
-                    decoded = line.decode(errors="ignore")
-                    log_lines.append(decoded)
-                    # Limit buffer in UI state for performance
-                    current_text = state.run_log_text
-                    if current_text == "Ready for output...":
-                        state.run_log_text = decoded
-                    else:
-                        # Keep last 50000 characters to prevent huge memory buildup
-                        new_text = current_text + decoded
-                        if len(new_text) > 60000:
-                            new_text = new_text[-50000:]
-                        state.run_log_text = new_text
-                    state.flush()
+                log_dir = case_path / "logs"
+                log_dir.mkdir(parents=True, exist_ok=True)
+                archive_log_path = log_dir / f"run_{run_id}.log"
+                is_solver_run = command == "./Allrun" or command.lower().endswith("foam")
+                live_log_path = case_path / "log.foamRun" if is_solver_run else None
+
+                # Tee solver output to log.foamRun while it is produced. The plots
+                # parser can then consume residuals incrementally rather than waiting
+                # for the container to finish and an archive to be written.
+                live_log = None
+                archive_log = None
+                try:
+                    try:
+                        archive_log = archive_log_path.open("w", encoding="utf-8", buffering=1)
+                    except OSError as log_err:
+                        logger.warning(f"Could not open run archive log: {log_err}")
+                    if live_log_path is not None:
+                        try:
+                            live_log = live_log_path.open("w", encoding="utf-8", buffering=1)
+                        except OSError as log_err:
+                            logger.warning(f"Could not open live residual log: {log_err}")
+
+                    for line in container.logs(stream=True):
+                        decoded = line.decode(errors="ignore")
+                        if archive_log is not None:
+                            archive_log.write(decoded)
+                        if live_log is not None:
+                            live_log.write(decoded)
+
+                        # Limit buffer in UI state for performance
+                        current_text = state.run_log_text
+                        if current_text == "Ready for output...":
+                            state.run_log_text = decoded
+                        else:
+                            new_text = current_text + decoded
+                            if len(new_text) > 60000:
+                                new_text = new_text[-50000:]
+                            state.run_log_text = new_text
+                        state.flush()
+                finally:
+                    if archive_log is not None:
+                        archive_log.close()
+                    if live_log is not None:
+                        live_log.close()
 
                 result = container.wait()
                 if result.get("StatusCode", 0) != 0:
                     status = "Failed"
-
-                # Save log file in case logs directory
-                try:
-                    log_dir = case_path / "logs"
-                    log_dir.mkdir(parents=True, exist_ok=True)
-                    log_file = log_dir / f"run_{run_id}.log"
-                    with log_file.open("w", encoding="utf-8") as lf:
-                        lf.writelines(log_lines)
-                except Exception as log_err:
-                    logger.error(f"Failed writing log file: {log_err}")
 
             except Exception as exc:
                 status = "Failed"
