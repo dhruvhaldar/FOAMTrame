@@ -47,8 +47,7 @@ FOAMTrame brings case selection, tutorial import, OpenFOAM command execution, li
 - Scans a configurable case-root directory and restores the last active case.
 - Creates a blank OpenFOAM case with `0`, `constant`, and `system` directories.
 - Discovers official tutorials inside the Docker image.
-- Provides searchable tutorial browsing and imports a selected tutorial into the
-  local workspace.
+- Provides searchable tutorial browsing and imports a selected tutorial into the local workspace.
 - Disables active-case selection with a clear empty state when no cases exist.
 
 Implementation: [tabs/setup_tab.py](./tabs/setup_tab.py)
