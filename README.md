@@ -18,10 +18,7 @@
   <a href="./LICENSE"><img alt="GNU GPLv3" src="https://img.shields.io/badge/License-GPLv3-0c6e87"></a>
 </p>
 
-FOAMTrame brings case selection, tutorial import, OpenFOAM command execution,
-live logs, run history, plots, and VTK post-processing into one glass-styled web
-interface. OpenFOAM operations run through a configured Docker image, while VTK
-rendering and data processing remain server-side.
+FOAMTrame brings case selection, tutorial import, OpenFOAM command execution, live logs, run history, plots, and VTK post-processing into one glass-styled web interface. OpenFOAM operations run through a configured Docker image, while VTK rendering and data processing remain server-side.
 
 ## Table of contents
 
@@ -67,8 +64,8 @@ Implementation: [tabs/geometry_tab.py](./tabs/geometry_tab.py)
 
 ### Meshing
 
-The Meshing navigation surface is currently reserved for future meshing tools.
-OpenFOAM meshing commands such as `blockMesh` are available from **Run/Log**.
+- The Meshing navigation surface is currently reserved for future meshing tools.
+- OpenFOAM meshing commands such as `blockMesh` are available from **Run/Log**.
 
 Placeholder: [tabs/meshing_tab.py](./tabs/meshing_tab.py)
 
@@ -264,8 +261,7 @@ The case is created below the configured `CASE_ROOT` and becomes active.
 4. Select a tutorial source.
 5. Select **Import Tutorial**.
 
-Tutorial discovery and import use the configured Docker image. The tutorial is
-copied into the local case workspace rather than edited inside the image.
+Tutorial discovery and import use the configured Docker image. The tutorial is copied into the local case workspace rather than edited inside the image.
 
 ### Run a case
 
@@ -286,13 +282,9 @@ foamtrame.db
 ```
 
 The database and its WAL sidecar files are excluded by
-[.gitignore](./.gitignore) because they may contain machine-specific paths and
-local run history. SQLite stores configuration and simulation runs in relational
-tables; case folders, OpenFOAM result files, and large logs remain in the case
-workspace and are referenced by path rather than copied into database blobs.
+[.gitignore](./.gitignore) because they may contain machine-specific paths and local run history. SQLite stores configuration and simulation runs in relational tables; case folders, OpenFOAM result files, and large logs remain in the case workspace and are referenced by path rather than copied into database blobs.
 
-JSON is now an interchange format only. A portable backup schema example remains
-available at [app_state.json.example](./app_state.json.example):
+JSON is now an interchange format only. A portable backup schema example remains available at [app_state.json.example](./app_state.json.example):
 
 ```json
 {
@@ -307,10 +299,7 @@ available at [app_state.json.example](./app_state.json.example):
 }
 ```
 
-Database updates use transactions. On first launch, an existing `app_state.json`
-is imported into SQLite; older `case_config.json` and `run_history.json` files are
-also supported as migration sources. Legacy files are left untouched so migration
-is recoverable, but SQLite becomes the source of truth once initialized.
+Database updates use transactions. On first launch, an existing `app_state.json` is imported into SQLite; older `case_config.json` and `run_history.json` files are also supported as migration sources. Legacy files are left untouched so migration is recoverable, but SQLite becomes the source of truth once initialized.
 
 The initial schema contains:
 
@@ -337,10 +326,7 @@ The initial schema contains:
 3. Wait for validation to succeed.
 4. Select **Restore App State**.
 
-Restore replaces the persisted case configuration and run history. It does
-**not** copy case directories, simulation results, uploaded VTK datasets, or
-Docker images. If a backup references a case root that does not exist on the
-new machine, update **Advanced Settings** after restoring.
+Restore replaces the persisted case configuration and run history. It does **not** copy case directories, simulation results, uploaded VTK datasets, or Docker images. If a backup references a case root that does not exist on the new machine, update **Advanced Settings** after restoring.
 
 ## Supported datasets
 
@@ -441,9 +427,7 @@ Validate database initialization and the persisted state schema:
 python -c "import app_state; from database import database; state = app_state.load_app_state(); print(database.path, state['version'], state.keys())"
 ```
 
-For UI changes, check at least one desktop and one constrained viewport. Confirm
-that navigation remains reachable, cards do not overflow, and controls retain
-visible focus states.
+For UI changes, check at least one desktop and one constrained viewport. Confirm that navigation remains reachable, cards do not overflow, and controls retain visible focus states.
 
 ## Troubleshooting
 
@@ -470,8 +454,7 @@ visible focus states.
 
 ### A restored active case disappears
 
-The backup stores the case name and root path, not the case directory. Copy the
-case data to the restored `CASE_ROOT`, or update the root path and refresh.
+The backup stores the case name and root path, not the case directory. Copy the case data to the restored `CASE_ROOT`, or update the root path and refresh.
 
 ### A dataset does not load
 
@@ -486,11 +469,7 @@ Stop the existing process or change the `server.start(port=8087)` value in
 
 ## Security notes
 
-FOAMTrame can execute Docker containers and OpenFOAM commands against local case
-directories. Run it only in a trusted environment, review imported state files,
-and do not expose the development server directly to an untrusted network. The
-Settings restore flow validates structure and file size, but a restored case-root
-path still controls where the application reads and writes case data.
+FOAMTrame can execute Docker containers and OpenFOAM commands against local case directories. **Run it only in a trusted environment**, review imported state files, and do not expose the development server directly to an untrusted network. The Settings restore flow validates structure and file size, but a restored case-root path still controls where the application reads and writes case data.
 
 ## License
 
