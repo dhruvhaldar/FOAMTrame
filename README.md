@@ -346,8 +346,7 @@ browser uploader because their referenced piece files must travel together.
 
 ## Optional Flask API
 
-[flask_server.py](./flask_server.py) exposes a companion HTTP API on port `5000`.
-It is not required for the main Trame UI.
+[flask_server.py](./flask_server.py) exposes a companion HTTP API on port `5000`. It is not required for the main Trame UI.
 
 Start it separately when API access is needed:
 
