@@ -536,7 +536,14 @@ def build_setup_content():
                 # Clear glass shell with matte glass panels, inspired by FOAMFlask.
                 with html.Div(classes="setup-glass-shell"):
                     # Active Case Card
-                    with vuetify.VCard(classes="pa-4 glass-card setup-main-card setup-case-card"):
+                    with vuetify.VCard(
+                        classes="pa-4 glass-card setup-main-card setup-case-card",
+                        style=(
+                            "((case_creation_tab === 0 && new_case_name && new_case_name.trim().length > 0) || "
+                            "(case_creation_tab === 1 && ((tutorial_search && tutorial_search.trim().length > 0) || selected_tutorial))) "
+                            "? 'opacity: 0.56; filter: saturate(0.72); transform: scale(0.995);' : ''",
+                        ),
+                    ):
                         with vuetify.VCardTitle():
                             html.H2("Active Case", classes="setup-card-heading")
                         with vuetify.VCardText():
@@ -705,48 +712,46 @@ def build_setup_content():
                             )
 
                 # Footer Glass Overlay Card
-                with vuetify.VCard(classes="pa-3 glass-card setup-footer-card"):
-                    with html.Div(classes="d-flex flex-wrap align-center justify-space-between text-center gap-2"):
-                        html.Div(
-                            "FOAMTrame © 2026",
-                            classes="text-subtitle-2 font-weight-bold mx-2",
-                            style="color: #0f172a;",
-                        )
-                        html.Div(
-                            "Licensed under GNU GPLv3",
-                            classes="text-caption font-weight-medium mx-2",
-                            style="color: #475569;",
-                        )
-                        with html.Div(
-                            classes="footer-openfoam-version d-flex align-center mx-2",
-                            title=("openfoam_runtime_source",),
-                        ):
-                            vuetify.VIcon(
-                                "mdi-cube-outline",
-                                small=True,
-                                classes="mr-1",
-                                color="cyan darken-3",
+                with vuetify.VCard(classes="glass-card setup-footer-card"):
+                    with html.Div(classes="setup-footer-layout"):
+                        with html.Div(classes="setup-footer-identity"):
+                            html.Div(
+                                "FOAMTrame © 2026",
+                                classes="setup-footer-title",
                             )
-                            html.Span(
-                                "{{ openfoam_runtime_label }}",
-                                classes="text-caption font-weight-bold",
+                            html.Div(
+                                "Licensed under GNU GPLv3",
+                                classes="setup-footer-license",
                             )
-                        with html.Div(classes="d-flex align-center justify-center mx-2"):
+                        with html.Div(classes="setup-footer-powered"):
                             html.Span(
-                                "Powered by:",
-                                classes="text-caption font-weight-medium mr-2",
-                                style="color: #475569;",
+                                "Powered by",
+                                classes="setup-footer-label",
                             )
                             html.Img(
                                 src="/static/icons/docker-logo.avif",
                                 alt="Docker Logo",
-                                height="26",
-                                classes="mr-3",
-                                style="object-fit: contain;",
+                                classes="setup-footer-docker-logo",
                             )
                             html.Img(
                                 src="/static/icons/trame-text.svg",
                                 alt="Trame Logo",
-                                height="22",
-                                style="object-fit: contain;",
+                                classes="setup-footer-trame-logo",
+                            )
+                        with html.Div(
+                            classes="footer-openfoam-version d-flex align-center",
+                            title=("openfoam_runtime_source",),
+                        ):
+                            html.Img(
+                                src=(
+                                    "(String(openfoam_runtime_version || openfoam_version || '').match(/\\d/g) || []).length >= 4 "
+                                    "? '/static/icons/openfoam-vXXXX_series.svg' "
+                                    ": '/static/icons/openfoam-vXX_series.png'",
+                                ),
+                                alt="OpenFOAM Logo",
+                                classes="footer-openfoam-logo",
+                            )
+                            html.Span(
+                                "{{ openfoam_runtime_label }}",
+                                classes="setup-footer-version-text",
                             )

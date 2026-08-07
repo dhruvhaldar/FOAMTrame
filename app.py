@@ -304,11 +304,58 @@ with SinglePageWithDrawerLayout(server) as layout:
             font-size: clamp(1rem, 0.86rem + 0.25vw, 1.15rem) !important;
             line-height: 1.35;
         }
-        .v-application .setup-footer-card,
-        .v-application .setup-footer-card .text-caption,
-        .v-application .setup-footer-card .text-subtitle-2 {
-            font-size: clamp(0.95rem, 0.82rem + 0.22vw, 1.08rem) !important;
-            line-height: 1.4;
+        .v-application .setup-footer-card {
+            padding: 14px 20px !important;
+            overflow: hidden;
+        }
+        .v-application .setup-footer-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            align-items: center;
+            column-gap: 18px;
+            row-gap: 10px;
+            width: 100%;
+        }
+        .v-application .setup-footer-identity {
+            min-width: 0;
+            text-align: left;
+        }
+        .v-application .setup-footer-title {
+            color: #0f172a;
+            font-size: 0.96rem;
+            font-weight: 700;
+            line-height: 1.3;
+        }
+        .v-application .setup-footer-license,
+        .v-application .setup-footer-label {
+            color: #64748b;
+            font-size: 0.76rem;
+            font-weight: 500;
+            line-height: 1.35;
+        }
+        .v-application .setup-footer-license {
+            margin-top: 2px;
+        }
+        .v-application .setup-footer-powered {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            grid-column: 1 / -1;
+            grid-row: 2;
+            padding-top: 9px;
+            border-top: 1px solid rgba(100, 116, 139, 0.14);
+            white-space: nowrap;
+        }
+        .v-application .setup-footer-docker-logo {
+            width: auto;
+            height: 25px;
+            object-fit: contain;
+        }
+        .v-application .setup-footer-trame-logo {
+            width: auto;
+            height: 20px;
+            object-fit: contain;
         }
         /* High-contrast success notices that still fit the cyan/teal palette. */
         .v-application .setup-status-alert.v-alert--outlined.success--text {
@@ -420,6 +467,13 @@ with SinglePageWithDrawerLayout(server) as layout:
         .v-application .setup-case-card {
             flex: 1 0 295px;
             min-height: 295px;
+            transform-origin: center;
+            transition:
+                opacity 260ms ease,
+                filter 260ms ease,
+                transform 260ms ease,
+                box-shadow 300ms ease,
+                border-color 300ms ease !important;
         }
         .v-application .setup-case-card:has(.setup-empty-state) {
             background: rgba(226, 232, 240, 0.58) !important;
@@ -479,6 +533,10 @@ with SinglePageWithDrawerLayout(server) as layout:
             flex: 0 0 auto;
         }
         .v-application .footer-openfoam-version {
+            grid-column: 2;
+            grid-row: 1;
+            justify-self: end;
+            gap: 7px;
             min-height: 30px;
             padding: 4px 10px;
             color: #0c6e87;
@@ -486,6 +544,165 @@ with SinglePageWithDrawerLayout(server) as layout:
             border: 1px solid rgba(6, 154, 181, 0.34);
             border-radius: 999px;
             white-space: nowrap;
+        }
+        .v-application .footer-openfoam-logo {
+            display: block;
+            flex: 0 0 auto;
+            width: auto;
+            height: 22px;
+            max-width: 62px;
+            object-fit: contain;
+        }
+        .v-application .setup-footer-version-text {
+            font-size: 0.78rem;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+        @media (max-width: 900px) {
+            .v-application .setup-footer-layout {
+                grid-template-columns: 1fr;
+                justify-items: center;
+                gap: 11px;
+            }
+            .v-application .setup-footer-identity {
+                grid-column: 1;
+                grid-row: 1;
+                text-align: center;
+            }
+            .v-application .footer-openfoam-version {
+                grid-column: 1;
+                grid-row: 2;
+                justify-self: center;
+            }
+            .v-application .setup-footer-powered {
+                grid-column: 1;
+                grid-row: 3;
+                width: 100%;
+            }
+        }
+        .v-application .run-log-drawer {
+            max-height: calc(100vh - 48px);
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(71, 85, 105, 0.5) transparent;
+        }
+        .v-application .run-log-drawer::-webkit-scrollbar,
+        .v-application .case-workflow-list::-webkit-scrollbar {
+            width: 8px;
+        }
+        .v-application .run-log-drawer::-webkit-scrollbar-track,
+        .v-application .case-workflow-list::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .v-application .case-workflow-list::-webkit-scrollbar-track {
+            margin-block: 7px;
+        }
+        .v-application .run-log-drawer::-webkit-scrollbar-thumb,
+        .v-application .case-workflow-list::-webkit-scrollbar-thumb {
+            min-height: 30px;
+            background: rgba(71, 85, 105, 0.5);
+            background-clip: padding-box;
+            border: 2px solid transparent;
+            border-radius: 999px;
+        }
+        .v-application .run-log-drawer::-webkit-scrollbar-thumb:hover,
+        .v-application .case-workflow-list::-webkit-scrollbar-thumb:hover {
+            background: rgba(51, 65, 85, 0.68);
+            background-clip: padding-box;
+        }
+        .v-application .capability-summary {
+            display: flex;
+            align-items: center;
+            padding: 8px 10px;
+            color: #0c6e87;
+            background: rgba(207, 250, 254, 0.62);
+            border: 1px solid rgba(6, 154, 181, 0.28);
+            border-radius: 10px;
+            font-size: 0.78rem;
+            line-height: 1.3;
+        }
+        .v-application .capability-summary__content {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: baseline;
+            column-gap: 8px;
+            row-gap: 3px;
+            min-width: 0;
+            line-height: 1.35;
+        }
+        .v-application .capability-summary__count {
+            font-weight: 500;
+        }
+        .v-application .capability-summary__solver {
+            display: inline-flex;
+            align-items: baseline;
+            gap: 4px;
+            white-space: nowrap;
+        }
+        .v-application .capability-summary__dot {
+            color: #069ab5;
+            font-size: 1rem;
+            line-height: 0;
+            margin-right: 1px;
+        }
+        .v-application .capability-summary__solver strong {
+            color: #075f75;
+            font-weight: 700;
+        }
+        .v-application .case-workflow-list {
+            max-height: 250px;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(71, 85, 105, 0.5) transparent;
+            background: rgba(255, 255, 255, 0.45) !important;
+            border: 1px solid rgba(255, 255, 255, 0.72);
+            border-radius: 12px;
+        }
+        .v-application .case-workflow-item + .case-workflow-item {
+            border-top: 1px solid rgba(100, 116, 139, 0.12);
+        }
+        .v-application .case-workflow-item {
+            min-height: 56px;
+            height: auto !important;
+            align-items: flex-start;
+        }
+        .v-application .case-workflow-item .v-list-item__icon {
+            align-self: flex-start;
+        }
+        .v-application .case-workflow-item .v-list-item__title,
+        .v-application .case-action-reason {
+            display: block;
+            max-width: 100%;
+            white-space: normal !important;
+            overflow: visible !important;
+            text-overflow: clip !important;
+            overflow-wrap: anywhere;
+            -webkit-line-clamp: unset !important;
+        }
+        .v-application .case-workflow-item .v-list-item__title {
+            line-height: 1.25;
+            margin-bottom: 2px;
+        }
+        .v-application .case-action-reason {
+            line-height: 1.28;
+            font-size: 0.69rem;
+        }
+        .v-application .clean-preview-list,
+        .v-application .guided-run-list {
+            max-height: 300px;
+            overflow-y: auto;
+            background: rgba(255, 255, 255, 0.52) !important;
+            border-radius: 12px;
+        }
+        .v-application .run-log-drawer .v-btn.v-btn--disabled {
+            color: #64748b !important;
+            background: rgba(226, 232, 240, 0.72) !important;
+            border-color: rgba(100, 116, 139, 0.3) !important;
+            box-shadow: none !important;
+            opacity: 0.78;
+        }
+        .v-application .run-log-drawer .v-btn.v-btn--disabled .v-btn__content {
+            color: #64748b !important;
         }
 
         @media (max-height: 820px), (max-width: 959px) {
@@ -842,12 +1059,18 @@ with SinglePageWithDrawerLayout(server) as layout:
             line-height: 1.4;
         }
         .v-application .tutorial-picker-row {
-            margin: -6px;
+            width: 100%;
+            margin: 0 !important;
         }
-        .v-application .tutorial-list-column,
+        .v-application .tutorial-list-column {
+            display: flex;
+            min-width: 0;
+            padding: 0 6px 0 0;
+        }
         .v-application .tutorial-action-column {
             display: flex;
-            padding: 6px;
+            min-width: 0;
+            padding: 0 0 0 6px;
         }
         .v-application .tutorial-list {
             position: relative;
@@ -890,6 +1113,14 @@ with SinglePageWithDrawerLayout(server) as layout:
             white-space: normal;
         }
         @media (max-width: 959px) {
+            .v-application .tutorial-list-column,
+            .v-application .tutorial-action-column {
+                padding-left: 0;
+                padding-right: 0;
+            }
+            .v-application .tutorial-action-column {
+                padding-top: 12px;
+            }
             .v-application .setup-glass-shell .tutorial-import-button {
                 min-height: 64px !important;
             }
@@ -1093,6 +1324,12 @@ with SinglePageWithDrawerLayout(server) as layout:
 
     layout.drawer.classes = "glass-drawer"
     layout.drawer.v_model = ("drawer_open",)
+    # Run/Log contains capability explanations and workflow controls that need
+    # more horizontal room. Keep the standard drawer on compact viewports so
+    # the main content is not unnecessarily crowded.
+    layout.drawer.width = (
+        "active_tab === 3 && !$vuetify.breakpoint.smAndDown ? 360 : 300",
+    )
     with layout.drawer:
         build_setup_drawer()
         build_geometry_drawer()

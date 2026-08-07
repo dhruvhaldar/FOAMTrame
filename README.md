@@ -75,12 +75,28 @@ Placeholder: [tabs/meshing_tab.py](./tabs/meshing_tab.py)
 
 - Detects logical and physical CPU counts.
 - Configures process count and reports decomposition status.
-- Runs `Allrun`, `Allclean`, `blockMesh`, `simpleFoam`, `pimpleFoam`,
-  `decomposePar`, `reconstructPar`, and `foamToVTK`.
+- Scans the active case and configured Docker image to expose only validated
+  application actions while keeping unavailable commands visible with their
+  exact missing prerequisite.
+- Prefers a case-provided `Allrun`; otherwise offers a reviewable guided sequence
+  containing only confidently detected preprocessing, meshing, and solver steps.
+- Derives the solver application and optional solver module from
+  `system/controlDict` instead of assuming `simpleFoam` or `pimpleFoam`.
+- Detects `surfaceFeatureExtract`, `blockMesh`, `snappyHexMesh`, `topoSet`,
+  `setFields`, `decomposePar`, `reconstructPar`, and `foamToVTK` from their
+  dictionaries, decomposition directories, result times, and Docker executables.
+- Requires confirmation before `Allclean` and provides a separate safe-clean
+  preview limited to detected time results, processor directories,
+  `postProcessing`, `VTK`, and `log.*` files. The initial `0` directory and
+  `constant/polyMesh` are preserved.
 - Streams console output and supports stopping the active process.
 - Retains up to 100 indexed run-history records in the application database.
 
-Implementation: [tabs/run_log_tab.py](./tabs/run_log_tab.py)
+Implementation: [tabs/run_log_tab.py](./tabs/run_log_tab.py) and the shared,
+fixed-ID action service in
+[backend/case/capabilities.py](./backend/case/capabilities.py). UI controls and
+future chatbot tools should resolve actions through this service rather than
+submitting arbitrary shell strings.
 
 ### Plots
 
