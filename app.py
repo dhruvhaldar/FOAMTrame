@@ -478,6 +478,15 @@ with SinglePageWithDrawerLayout(server) as layout:
         .v-application .setup-footer-card {
             flex: 0 0 auto;
         }
+        .v-application .footer-openfoam-version {
+            min-height: 30px;
+            padding: 4px 10px;
+            color: #0c6e87;
+            background: rgba(207, 250, 254, 0.68);
+            border: 1px solid rgba(6, 154, 181, 0.34);
+            border-radius: 999px;
+            white-space: nowrap;
+        }
 
         @media (max-height: 820px), (max-width: 959px) {
             .v-application .setup-page {

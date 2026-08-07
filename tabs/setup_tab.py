@@ -5,6 +5,7 @@ import logging
 import os
 import platform
 import posixpath
+import re
 import shutil
 import threading
 from pathlib import Path
@@ -29,6 +30,40 @@ def get_docker_client():
         return None
 
 
+def detect_openfoam_version(client, docker_image: str, configured_version: str) -> str:
+    """Read the OpenFOAM runtime version from the configured Docker image.
+
+    Sourcing the image's bashrc and reading WM_PROJECT_VERSION avoids inferring
+    a version from an image tag, which may be renamed or locally rebuilt.
+    """
+    shell_script = r'''
+requested="$1"
+bashrc="/opt/openfoam${requested}/etc/bashrc"
+if [ ! -f "$bashrc" ]; then
+    bashrc="$(find /opt -maxdepth 4 -type f -path '*/etc/bashrc' 2>/dev/null | head -n 1)"
+fi
+[ -n "$bashrc" ] && [ -f "$bashrc" ] || exit 2
+source "$bashrc" >/dev/null 2>&1 || exit 3
+printf '%s' "${WM_PROJECT_VERSION:-}"
+'''
+    output = client.containers.run(
+        docker_image,
+        ["bash", "-c", shell_script, "detect_openfoam_version", str(configured_version)],
+        remove=True,
+        stdout=True,
+        stderr=False,
+        network_disabled=True,
+    )
+    version = output.decode("utf-8", errors="replace").strip()
+    if not version:
+        raise RuntimeError("WM_PROJECT_VERSION was empty after sourcing OpenFOAM")
+    # Keep the footer compact and reject unexpected multiline/noisy output.
+    version = version.splitlines()[-1].strip()
+    if not re.fullmatch(r"[A-Za-z0-9._+-]{1,64}", version):
+        raise RuntimeError("The container returned an invalid OpenFOAM version")
+    return version
+
+
 # --- Setup Tab Controller and State ---
 def setup_setup_tab(server):
     state, ctrl = server.state, server.controller
@@ -38,6 +73,12 @@ def setup_setup_tab(server):
     state.setdefault("case_root", config["CASE_ROOT"])
     state.setdefault("docker_image", config["DOCKER_IMAGE"])
     state.setdefault("openfoam_version", config["OPENFOAM_VERSION"])
+    state.setdefault("openfoam_runtime_version", "")
+    state.setdefault("openfoam_runtime_label", "OpenFOAM: detecting…")
+    state.setdefault(
+        "openfoam_runtime_source",
+        "Detecting the runtime version from the configured Docker image.",
+    )
 
     state.setdefault("docker_checking", True)
     state.setdefault("setup_status", "Initializing...")
@@ -68,6 +109,9 @@ def setup_setup_tab(server):
             "filtered_tutorials",
             "tutorials_loaded",
             "tutorials_loading",
+            "openfoam_runtime_version",
+            "openfoam_runtime_label",
+            "openfoam_runtime_source",
         )
 
     def publish_tutorial_state(*keys):
@@ -113,16 +157,38 @@ def setup_setup_tab(server):
 
     def run_docker_checks():
         state.docker_checking = True
+        state.openfoam_runtime_version = ""
+        state.openfoam_runtime_label = "OpenFOAM: detecting…"
+        state.openfoam_runtime_source = (
+            "Detecting the runtime version from the configured Docker image."
+        )
         state.setup_status = "Checking Docker executable..."
         state.setup_status_color = "info"
-        state.dirty("setup_status", "setup_status_color", "docker_checking")
+        state.dirty(
+            "setup_status",
+            "setup_status_color",
+            "docker_checking",
+            "openfoam_runtime_version",
+            "openfoam_runtime_label",
+            "openfoam_runtime_source",
+        )
         state.flush()
 
         if not shutil.which("docker"):
             state.setup_status = "Docker executable not found in PATH."
             state.setup_status_color = "error"
             state.docker_checking = False
-            state.dirty("setup_status", "setup_status_color", "docker_checking")
+            state.openfoam_runtime_label = f"OpenFOAM {state.openfoam_version} (configured)"
+            state.openfoam_runtime_source = (
+                "Docker is unavailable; showing the configured version instead."
+            )
+            state.dirty(
+                "setup_status",
+                "setup_status_color",
+                "docker_checking",
+                "openfoam_runtime_label",
+                "openfoam_runtime_source",
+            )
             state.flush()
             return
 
@@ -135,7 +201,17 @@ def setup_setup_tab(server):
             state.setup_status = "Cannot connect to Docker daemon. Make sure Docker Desktop is running."
             state.setup_status_color = "error"
             state.docker_checking = False
-            state.dirty("setup_status", "setup_status_color", "docker_checking")
+            state.openfoam_runtime_label = f"OpenFOAM {state.openfoam_version} (configured)"
+            state.openfoam_runtime_source = (
+                "Docker is unavailable; showing the configured version instead."
+            )
+            state.dirty(
+                "setup_status",
+                "setup_status_color",
+                "docker_checking",
+                "openfoam_runtime_label",
+                "openfoam_runtime_source",
+            )
             state.flush()
             return
 
@@ -146,10 +222,40 @@ def setup_setup_tab(server):
         try:
             import docker.errors
             client.images.get(state.docker_image)
+            try:
+                detected_version = detect_openfoam_version(
+                    client,
+                    state.docker_image,
+                    state.openfoam_version,
+                )
+                state.openfoam_runtime_version = detected_version
+                state.openfoam_runtime_label = f"OpenFOAM {detected_version}"
+                state.openfoam_runtime_source = (
+                    f"Detected from Docker image {state.docker_image}."
+                )
+            except Exception as version_error:
+                logger.warning(
+                    "Could not detect OpenFOAM version from %s: %s",
+                    state.docker_image,
+                    version_error,
+                )
+                state.openfoam_runtime_label = (
+                    f"OpenFOAM {state.openfoam_version} (configured)"
+                )
+                state.openfoam_runtime_source = (
+                    "Runtime detection failed; showing the configured version instead."
+                )
             state.setup_status = "Docker integration ready."
             state.setup_status_color = "success"
             state.docker_checking = False
-            state.dirty("setup_status", "setup_status_color", "docker_checking")
+            state.dirty(
+                "setup_status",
+                "setup_status_color",
+                "docker_checking",
+                "openfoam_runtime_version",
+                "openfoam_runtime_label",
+                "openfoam_runtime_source",
+            )
             state.flush()
             fetch_tutorials()
         except Exception as e:
@@ -161,7 +267,17 @@ def setup_setup_tab(server):
                 state.setup_status = f"Error checking image: {e}"
                 state.setup_status_color = "error"
             state.docker_checking = False
-            state.dirty("setup_status", "setup_status_color", "docker_checking")
+            state.openfoam_runtime_label = f"OpenFOAM {state.openfoam_version} (configured)"
+            state.openfoam_runtime_source = (
+                "The Docker image could not be inspected; showing the configured version."
+            )
+            state.dirty(
+                "setup_status",
+                "setup_status_color",
+                "docker_checking",
+                "openfoam_runtime_label",
+                "openfoam_runtime_source",
+            )
             state.flush()
 
     def fetch_tutorials():
@@ -601,6 +717,20 @@ def build_setup_content():
                             classes="text-caption font-weight-medium mx-2",
                             style="color: #475569;",
                         )
+                        with html.Div(
+                            classes="footer-openfoam-version d-flex align-center mx-2",
+                            title=("openfoam_runtime_source",),
+                        ):
+                            vuetify.VIcon(
+                                "mdi-cube-outline",
+                                small=True,
+                                classes="mr-1",
+                                color="cyan darken-3",
+                            )
+                            html.Span(
+                                "{{ openfoam_runtime_label }}",
+                                classes="text-caption font-weight-bold",
+                            )
                         with html.Div(classes="d-flex align-center justify-center mx-2"):
                             html.Span(
                                 "Powered by:",

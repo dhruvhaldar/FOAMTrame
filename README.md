@@ -44,6 +44,9 @@ FOAMTrame brings case selection, tutorial import, OpenFOAM command execution, li
 ### Setup and case management
 
 - Verifies the Trame server, Docker daemon, and configured OpenFOAM image.
+- Detects `WM_PROJECT_VERSION` from the configured Docker image and displays it
+  in the footer, with an explicitly labelled configured-version fallback when
+  the container runtime cannot be inspected.
 - Scans a configurable case-root directory and restores the last active case.
 - Creates a blank OpenFOAM case with `0`, `constant`, and `system` directories.
 - Discovers official tutorials inside the Docker image.
