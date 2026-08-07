@@ -74,6 +74,12 @@ class AppDatabase:
                     updated_at TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS app_preferences (
+                    key TEXT PRIMARY KEY,
+                    value_json TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS simulation_runs (
                     run_key TEXT PRIMARY KEY,
                     position INTEGER NOT NULL,
@@ -150,17 +156,30 @@ class AppDatabase:
             config_rows = connection.execute(
                 "SELECT key, value_json FROM app_config ORDER BY key"
             ).fetchall()
+            preference_rows = connection.execute(
+                "SELECT key, value_json FROM app_preferences ORDER BY key"
+            ).fetchall()
             run_rows = connection.execute(
                 "SELECT record_json FROM simulation_runs ORDER BY position LIMIT 100"
             ).fetchall()
 
         config = {row["key"]: json.loads(row["value_json"]) for row in config_rows}
+        preferences = {
+            row["key"]: json.loads(row["value_json"])
+            for row in preference_rows
+        }
         history = [json.loads(row["record_json"]) for row in run_rows]
-        return {"version": SCHEMA_VERSION, "case_config": config, "run_history": history}
+        return {
+            "version": SCHEMA_VERSION,
+            "case_config": config,
+            "plot_preferences": preferences,
+            "run_history": history,
+        }
 
     def save_app_state(self, data: dict[str, Any]) -> None:
         self.initialize()
         config = data["case_config"]
+        preferences = data.get("plot_preferences", {})
         history = data["run_history"][:100]
         now = _utc_now()
 
@@ -171,6 +190,15 @@ class AppDatabase:
                 [
                     (key, json.dumps(value, ensure_ascii=False), now)
                     for key, value in config.items()
+                ],
+            )
+
+            connection.execute("DELETE FROM app_preferences")
+            connection.executemany(
+                "INSERT INTO app_preferences(key, value_json, updated_at) VALUES(?, ?, ?)",
+                [
+                    (key, json.dumps(value, ensure_ascii=False), now)
+                    for key, value in preferences.items()
                 ],
             )
 

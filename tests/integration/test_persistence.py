@@ -28,6 +28,7 @@ def sample_state(case: str = "cavity") -> dict:
             "OPENFOAM_VERSION": "12",
             "ACTIVE_CASE": case,
         },
+        "plot_preferences": app_state.default_plot_preferences(),
         "run_history": [
             {
                 "id": 42,
@@ -137,9 +138,14 @@ class AppStateMigrationIntegrationTest(unittest.TestCase):
         self.assertEqual(legacy, backup)
 
         backup["case_config"]["ACTIVE_CASE"] = "motorBike"
+        backup["plot_preferences"].update(
+            {"font": "roboto", "background": "black"}
+        )
         restored = app_state.restore_app_state_json(json.dumps(backup))
         self.assertEqual("motorBike", restored["case_config"]["ACTIVE_CASE"])
         self.assertEqual("motorBike", app_state.load_case_config()["ACTIVE_CASE"])
+        self.assertEqual("roboto", app_state.load_plot_preferences()["font"])
+        self.assertEqual("black", app_state.load_plot_preferences()["background"])
         self.assertTrue(app_state.LEGACY_APP_STATE_FILE.exists())
 
 

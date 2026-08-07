@@ -81,10 +81,21 @@ Implementation: [tabs/run_log_tab.py](./tabs/run_log_tab.py)
 
 ### Plots
 
-- Supports cached incremental updates and live full re-reads.
-- Provides configurable polling and manual refresh.
+- Detects running simulations automatically, streams live updates, and serves
+  completed results from the synchronized cache without a manual refresh.
 - Selects scalar fields and renders scalar, velocity-magnitude, velocity-component,
   and residual charts.
+- Switches between glass, white, black, and grey plot backgrounds with
+  contrast-aware palettes.
+- Supports Helvetica Neue-style (bundled TeX Gyre Heros), bundled Roboto, Times
+  New Roman, and Arial typography plus no logo, the FOAMFlask logo, or a custom
+  image.
+- Maximizes any plot while keeping the remaining charts available in a responsive
+  sidebar.
+- Exports each chart as a publication-friendly PNG with a consistent white paper
+  background, regardless of the selected on-screen theme.
+- Persists plot appearance and logo preferences in the unified app state so they
+  participate in JSON backup and restore.
 
 Implementation: [tabs/plots_tab.py](./tabs/plots_tab.py)
 
@@ -103,7 +114,8 @@ Implementation: [tabs/visualizer_tab.py](./tabs/visualizer_tab.py) and
 
 ### Settings
 
-- Downloads case configuration and run history as one versioned JSON backup.
+- Downloads case configuration, plot preferences, and run history as one versioned
+  JSON backup.
 - Validates uploaded backups before enabling restore.
 - Applies restored configuration and history transactionally to SQLite and the live Trame state.
 

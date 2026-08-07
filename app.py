@@ -359,6 +359,64 @@ with SinglePageWithDrawerLayout(server) as layout:
         .v-application .plots-status-alert .v-alert__content {
             font-weight: 600;
         }
+        .v-application .plot-card {
+            overflow: hidden;
+        }
+        .v-application .plot-rendered-image,
+        .v-application .plots-maximized-image {
+            background: transparent !important;
+        }
+        .v-application .plots-maximized-dialog {
+            background:
+                radial-gradient(circle at 78% 10%, rgba(6, 182, 212, 0.18), transparent 34%),
+                linear-gradient(180deg, #d8f5fb 0%, #eee2f1 100%) !important;
+        }
+        .v-application .plots-maximized-body {
+            height: calc(100vh - 48px);
+            overflow: auto;
+        }
+        .v-application .plots-maximized-sidebar {
+            background: rgba(255, 255, 255, 0.48);
+            border: 1px solid rgba(255, 255, 255, 0.72);
+            border-radius: 16px;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            min-width: 0;
+            overflow: hidden;
+        }
+        .v-application .plots-maximized-sidebar .v-btn {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            min-height: 40px;
+            height: auto !important;
+            padding: 8px 12px !important;
+        }
+        .v-application .plots-maximized-sidebar .v-btn__content {
+            display: block;
+            width: 100%;
+            max-width: 100%;
+            white-space: normal !important;
+            overflow-wrap: anywhere;
+            word-break: normal;
+            line-height: 1.25;
+            text-align: left;
+        }
+        .v-application .plots-maximized-image .v-image__image {
+            image-rendering: auto;
+        }
+        @media (max-width: 959px) {
+            .v-application .plots-maximized-body {
+                height: auto;
+                min-height: calc(100vh - 48px);
+            }
+            .v-application .plots-maximized-sidebar {
+                margin-bottom: 12px;
+            }
+            .v-application .plots-maximized-sidebar .v-btn {
+                min-height: 38px;
+            }
+        }
         .v-application .setup-case-card {
             flex: 1 0 295px;
             min-height: 295px;

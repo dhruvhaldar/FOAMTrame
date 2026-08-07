@@ -29,10 +29,20 @@ def default_case_config() -> dict[str, str]:
     }
 
 
+def default_plot_preferences() -> dict[str, str]:
+    return {
+        "font": "helvetica_neue",
+        "background": "glass",
+        "logo_mode": "none",
+        "custom_logo_data": "",
+    }
+
+
 def default_app_state() -> dict[str, Any]:
     return {
         "version": APP_STATE_VERSION,
         "case_config": default_case_config(),
+        "plot_preferences": default_plot_preferences(),
         "run_history": [],
     }
 
@@ -42,11 +52,14 @@ def _normalise_app_state(data: Any) -> dict[str, Any]:
         raise ValueError("App state must be a JSON object.")
 
     config = data.get("case_config", {})
+    plot_preferences = data.get("plot_preferences", {})
     history = data.get("run_history", [])
     if not isinstance(config, dict):
         raise ValueError("case_config must be a JSON object.")
     if not isinstance(history, list) or not all(isinstance(item, dict) for item in history):
         raise ValueError("run_history must be a JSON array of objects.")
+    if not isinstance(plot_preferences, dict):
+        raise ValueError("plot_preferences must be a JSON object.")
 
     normalised_config = default_case_config()
     for key in normalised_config:
@@ -54,9 +67,31 @@ def _normalise_app_state(data: Any) -> dict[str, Any]:
             value = config[key]
             normalised_config[key] = "" if value is None else str(value)
 
+    normalised_plots = default_plot_preferences()
+    for key in normalised_plots:
+        if key in plot_preferences:
+            value = plot_preferences[key]
+            normalised_plots[key] = "" if value is None else str(value)
+
+    if normalised_plots["font"] not in {
+        "helvetica_neue",
+        "roboto",
+        "times_new_roman",
+        "arial",
+    }:
+        normalised_plots["font"] = "helvetica_neue"
+    if normalised_plots["background"] not in {"glass", "white", "black", "grey"}:
+        normalised_plots["background"] = "glass"
+    if normalised_plots["logo_mode"] not in {"none", "foamflask", "custom"}:
+        normalised_plots["logo_mode"] = "none"
+    if len(normalised_plots["custom_logo_data"]) > 3_000_000:
+        normalised_plots["custom_logo_data"] = ""
+        normalised_plots["logo_mode"] = "none"
+
     return {
         "version": APP_STATE_VERSION,
         "case_config": normalised_config,
+        "plot_preferences": normalised_plots,
         "run_history": copy.deepcopy(history[:100]),
     }
 
@@ -123,6 +158,17 @@ def update_case_config(updates: dict[str, Any]) -> bool:
     with _state_lock:
         data = load_app_state()
         data["case_config"].update(updates)
+        return save_app_state(data)
+
+
+def load_plot_preferences() -> dict[str, str]:
+    return copy.deepcopy(load_app_state()["plot_preferences"])
+
+
+def update_plot_preferences(updates: dict[str, Any]) -> bool:
+    with _state_lock:
+        data = load_app_state()
+        data["plot_preferences"].update(updates)
         return save_app_state(data)
 
 
