@@ -1,10 +1,27 @@
 {
-  "version": 1,
+  "version": 2,
   "case_config": {
     "CASE_ROOT": "C:\\path\\to\\tutorial_cases",
     "DOCKER_IMAGE": "haldardhruv/ubuntu_noble_openfoam:v12",
     "OPENFOAM_VERSION": "12",
     "ACTIVE_CASE": ""
   },
-  "run_history": []
+  "run_history": [],
+  "plot_preferences": {
+    "font": "roboto",
+    "background": "glass",
+    "logo_mode": "foamtrame",
+    "custom_logo": ""
+  },
+  "security_preferences": {
+    "security_enabled": false,
+    "bind_mode": "loopback",
+    "cors_mode": "same_origin",
+    "cors_origin": "",
+    "security_headers": true,
+    "api_key_enabled": false,
+    "api_key_hash": "",
+    "max_request_mb": 2,
+    "websocket_max_message_mb": 4
+  }
 }

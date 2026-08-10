@@ -14,7 +14,7 @@ from runtime import settings
 logger = logging.getLogger("FOAMTrame")
 
 DATABASE_PATH = settings.database_path
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 def _utc_now() -> str:
@@ -75,6 +75,12 @@ class AppDatabase:
                 );
 
                 CREATE TABLE IF NOT EXISTS app_preferences (
+                    key TEXT PRIMARY KEY,
+                    value_json TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS security_preferences (
                     key TEXT PRIMARY KEY,
                     value_json TEXT NOT NULL,
                     updated_at TEXT NOT NULL
@@ -159,6 +165,9 @@ class AppDatabase:
             preference_rows = connection.execute(
                 "SELECT key, value_json FROM app_preferences ORDER BY key"
             ).fetchall()
+            security_rows = connection.execute(
+                "SELECT key, value_json FROM security_preferences ORDER BY key"
+            ).fetchall()
             run_rows = connection.execute(
                 "SELECT record_json FROM simulation_runs ORDER BY position LIMIT 100"
             ).fetchall()
@@ -168,11 +177,16 @@ class AppDatabase:
             row["key"]: json.loads(row["value_json"])
             for row in preference_rows
         }
+        security_preferences = {
+            row["key"]: json.loads(row["value_json"])
+            for row in security_rows
+        }
         history = [json.loads(row["record_json"]) for row in run_rows]
         return {
             "version": SCHEMA_VERSION,
             "case_config": config,
             "plot_preferences": preferences,
+            "security_preferences": security_preferences,
             "run_history": history,
         }
 
@@ -180,6 +194,7 @@ class AppDatabase:
         self.initialize()
         config = data["case_config"]
         preferences = data.get("plot_preferences", {})
+        security_preferences = data.get("security_preferences", {})
         history = data["run_history"][:100]
         now = _utc_now()
 
@@ -190,6 +205,15 @@ class AppDatabase:
                 [
                     (key, json.dumps(value, ensure_ascii=False), now)
                     for key, value in config.items()
+                ],
+            )
+
+            connection.execute("DELETE FROM security_preferences")
+            connection.executemany(
+                "INSERT INTO security_preferences(key, value_json, updated_at) VALUES(?, ?, ?)",
+                [
+                    (key, json.dumps(value, ensure_ascii=False), now)
+                    for key, value in security_preferences.items()
                 ],
             )
 

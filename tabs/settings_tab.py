@@ -2,11 +2,18 @@ from __future__ import annotations
 
 import base64
 import json
+import secrets
 from typing import Any
 
 from trame.widgets import client, html, vuetify
 
-from app_state import export_app_state_json, restore_app_state_json
+from app_state import (
+    export_app_state_json,
+    load_security_preferences,
+    restore_app_state_json,
+    update_security_preferences,
+)
+from security import hash_api_key, normalise_security_preferences
 
 MAX_APP_STATE_UPLOAD_BYTES = 2 * 1024 * 1024
 
@@ -55,6 +62,61 @@ def setup_settings_tab(server):
     state.setdefault("app_state_restore_name", "")
     state.setdefault("app_state_settings_status", "Your app state is ready to back up.")
     state.setdefault("app_state_settings_status_color", "info")
+    security_preferences = load_security_preferences()
+    state.setdefault(
+        "security_enabled", security_preferences["security_enabled"]
+    )
+    state.setdefault(
+        "security_allow_network", security_preferences["bind_mode"] == "network"
+    )
+    state.setdefault("security_cors_mode", security_preferences["cors_mode"])
+    state.setdefault("security_cors_origin", security_preferences["cors_origin"])
+    state.setdefault(
+        "security_headers_enabled", security_preferences["security_headers"]
+    )
+    state.setdefault(
+        "security_api_key_enabled", security_preferences["api_key_enabled"]
+    )
+    state.setdefault(
+        "security_api_key_configured", bool(security_preferences["api_key_hash"])
+    )
+    state.setdefault("security_api_key_new", "")
+    state.setdefault("security_max_request_mb", security_preferences["max_request_mb"])
+    state.setdefault(
+        "security_websocket_max_message_mb",
+        security_preferences["websocket_max_message_mb"],
+    )
+    state.setdefault(
+        "security_settings_status",
+        (
+            "Optional security is enabled. Restart after changing startup policies."
+            if security_preferences["security_enabled"]
+            else "Optional security is disabled. Enable it below to activate these controls."
+        ),
+    )
+    state.setdefault("security_settings_status_color", "info")
+    state.setdefault(
+        "security_cors_options",
+        [
+            {"text": "Same origin (recommended)", "value": "same_origin"},
+            {"text": "One trusted origin", "value": "trusted_origin"},
+            {"text": "Any origin (unsafe)", "value": "any"},
+        ],
+    )
+
+    def publish_security_preferences(preferences: dict[str, Any]) -> None:
+        state.security_enabled = preferences["security_enabled"]
+        state.security_allow_network = preferences["bind_mode"] == "network"
+        state.security_cors_mode = preferences["cors_mode"]
+        state.security_cors_origin = preferences["cors_origin"]
+        state.security_headers_enabled = preferences["security_headers"]
+        state.security_api_key_enabled = preferences["api_key_enabled"]
+        state.security_api_key_configured = bool(preferences["api_key_hash"])
+        state.security_api_key_new = ""
+        state.security_max_request_mb = preferences["max_request_mb"]
+        state.security_websocket_max_message_mb = preferences[
+            "websocket_max_message_mb"
+        ]
 
     @state.change("active_tab")
     def refresh_backup_preview(active_tab, **_):
@@ -108,6 +170,7 @@ def setup_settings_tab(server):
             state.openfoam_version = config["OPENFOAM_VERSION"]
             state.active_case = config["ACTIVE_CASE"]
             state.run_history = restored["run_history"]
+            publish_security_preferences(restored["security_preferences"])
             state.app_state_backup_json = json.dumps(restored, indent=2) + "\n"
             state.app_state_restore_pending = ""
             state.app_state_restore_name = ""
@@ -124,6 +187,64 @@ def setup_settings_tab(server):
 
     ctrl.restore_app_state = restore_app_state
 
+    def generate_api_key():
+        state.security_api_key_new = secrets.token_urlsafe(32)
+        state.security_settings_status = (
+            "A new API key was generated. Copy it before saving; it is stored only as a hash."
+        )
+        state.security_settings_status_color = "warning"
+        state.flush()
+
+    ctrl.generate_security_api_key = generate_api_key
+
+    def save_security_settings():
+        try:
+            current = load_security_preferences()
+            api_key_hash = current.get("api_key_hash", "")
+            new_api_key = str(state.security_api_key_new or "").strip()
+            if state.security_api_key_enabled and new_api_key:
+                api_key_hash = hash_api_key(new_api_key)
+            elif not state.security_api_key_enabled:
+                api_key_hash = ""
+
+            preferences = normalise_security_preferences(
+                {
+                    "security_enabled": state.security_enabled,
+                    "bind_mode": (
+                        "network" if state.security_allow_network else "loopback"
+                    ),
+                    "cors_mode": state.security_cors_mode,
+                    "cors_origin": state.security_cors_origin,
+                    "security_headers": state.security_headers_enabled,
+                    "api_key_enabled": state.security_api_key_enabled,
+                    "api_key_hash": api_key_hash,
+                    "max_request_mb": state.security_max_request_mb,
+                    "websocket_max_message_mb": (
+                        state.security_websocket_max_message_mb
+                    ),
+                }
+            )
+            if not update_security_preferences(preferences):
+                raise OSError("Security preferences could not be saved.")
+            publish_security_preferences(preferences)
+            if preferences["security_enabled"]:
+                state.security_settings_status = (
+                    "Optional security enabled. Restart FOAMTrame to apply server "
+                    "binding, CORS headers, and WebSocket limits."
+                )
+            else:
+                state.security_settings_status = (
+                    "Optional security disabled. Restart FOAMTrame to remove any "
+                    "startup-time security policies."
+                )
+            state.security_settings_status_color = "success"
+        except Exception as exc:
+            state.security_settings_status = f"Security settings were not saved: {exc}"
+            state.security_settings_status_color = "error"
+        state.flush()
+
+    ctrl.save_security_settings = save_security_settings
+
 
 def build_settings_drawer():
     from trame.app import get_server
@@ -136,7 +257,7 @@ def build_settings_drawer():
             vuetify.VIcon("mdi-cog-outline", color="cyan darken-3", classes="mr-2")
             html.Div("Settings", classes="text-subtitle-1 font-weight-bold")
         html.P(
-            "Back up or restore configuration and run history from one portable JSON file.",
+            "Manage portable app state and optional server security policies.",
             classes="text-caption mb-3",
             style="color: #475569; line-height: 1.5;",
         )
@@ -243,3 +364,180 @@ def build_settings_content():
                         ):
                             vuetify.VIcon("mdi-restore", classes="mr-2")
                             html.Span("Restore App State")
+
+                with vuetify.VCard(
+                    classes="glass-card settings-glass-card settings-security-card pa-6 mt-5"
+                ):
+                    with html.Div(classes="d-flex align-center mb-2"):
+                        vuetify.VIcon(
+                            "mdi-shield-lock-outline",
+                            classes="settings-title-icon mr-3",
+                        )
+                        html.H2("Security", classes="settings-title")
+                    html.P(
+                        "Optional controls for network exposure, browser origins, API access, and resource limits.",
+                        classes="settings-description mb-5",
+                    )
+
+                    vuetify.VAlert(
+                        "{{ security_settings_status }}",
+                        type=("security_settings_status_color", "info"),
+                        dense=True,
+                        text=True,
+                        classes="mb-5 security-settings-alert",
+                    )
+
+                    with vuetify.VCard(classes="settings-action-card pa-5 mb-4"):
+                        html.H3("Optional Security", classes="settings-action-title")
+                        html.P(
+                            "Disabled by default. Enable this master switch before any policy below is enforced.",
+                            classes="settings-action-description mb-3",
+                        )
+                        vuetify.VSwitch(
+                            v_model=("security_enabled", False),
+                            label="Enable optional security controls",
+                            color="cyan darken-2",
+                            inset=True,
+                            hide_details=True,
+                            classes="security-setting-switch",
+                        )
+
+                    with vuetify.VCard(
+                        classes="settings-action-card pa-5 mb-4",
+                        disabled=("!security_enabled",),
+                    ):
+                        html.H3("Network & Browser Access", classes="settings-action-title")
+                        html.P(
+                            "Loopback-only access is safest. Network access and CORS changes require a restart.",
+                            classes="settings-action-description mb-3",
+                        )
+                        vuetify.VSwitch(
+                            v_model=("security_allow_network", False),
+                            label="Allow access from other devices (bind to 0.0.0.0)",
+                            color="warning",
+                            inset=True,
+                            hide_details=True,
+                            classes="security-setting-switch mb-4",
+                        )
+                        vuetify.VSelect(
+                            v_model=("security_cors_mode", "same_origin"),
+                            items=("security_cors_options",),
+                            label="CORS policy",
+                            outlined=True,
+                            dense=True,
+                            hide_details=True,
+                            classes="mb-4",
+                        )
+                        vuetify.VTextField(
+                            v_model=("security_cors_origin", ""),
+                            label="Trusted origin",
+                            placeholder="https://example.com",
+                            outlined=True,
+                            dense=True,
+                            hide_details=True,
+                            v_if="security_cors_mode === 'trusted_origin'",
+                            classes="mb-4",
+                        )
+                        vuetify.VAlert(
+                            "Any-origin CORS allows every website to read eligible responses. Use it only for an intentionally public deployment.",
+                            type="warning",
+                            dense=True,
+                            text=True,
+                            v_if="security_cors_mode === 'any'",
+                            classes="mb-4",
+                        )
+                        vuetify.VSwitch(
+                            v_model=("security_headers_enabled", True),
+                            label="Send restrictive browser security headers",
+                            color="cyan darken-2",
+                            inset=True,
+                            hide_details=True,
+                            classes="security-setting-switch",
+                        )
+
+                    with vuetify.VCard(
+                        classes="settings-action-card pa-5 mb-4",
+                        disabled=("!security_enabled",),
+                    ):
+                        html.H3("Resource Limits", classes="settings-action-title")
+                        html.P(
+                            "Bound request and WebSocket message sizes to reduce accidental or hostile memory pressure.",
+                            classes="settings-action-description mb-4",
+                        )
+                        with vuetify.VRow():
+                            with vuetify.VCol(cols="12", sm="6"):
+                                vuetify.VTextField(
+                                    v_model=("security_max_request_mb", 2),
+                                    label="Maximum API request (MB)",
+                                    type="number",
+                                    min="1",
+                                    max="64",
+                                    outlined=True,
+                                    dense=True,
+                                    hide_details=True,
+                                )
+                            with vuetify.VCol(cols="12", sm="6"):
+                                vuetify.VTextField(
+                                    v_model=("security_websocket_max_message_mb", 4),
+                                    label="Maximum WebSocket message (MB)",
+                                    type="number",
+                                    min="1",
+                                    max="64",
+                                    outlined=True,
+                                    dense=True,
+                                    hide_details=True,
+                                )
+
+                    with vuetify.VCard(
+                        classes="settings-action-card pa-5 mb-5",
+                        disabled=("!security_enabled",),
+                    ):
+                        html.H3("Companion API Key", classes="settings-action-title")
+                        html.P(
+                            "Require X-FOAMTrame-API-Key for POST requests to the optional Flask API. The key is stored as a PBKDF2 hash.",
+                            classes="settings-action-description mb-3",
+                        )
+                        vuetify.VSwitch(
+                            v_model=("security_api_key_enabled", False),
+                            label="Protect mutating companion API requests",
+                            color="cyan darken-2",
+                            inset=True,
+                            hide_details=True,
+                            classes="security-setting-switch mb-4",
+                        )
+                        with html.Div(
+                            v_if="security_api_key_enabled",
+                            classes="security-api-key-layout",
+                        ):
+                            vuetify.VTextField(
+                                v_model=("security_api_key_new", ""),
+                                label=(
+                                    "security_api_key_configured ? 'New API key (leave blank to keep current)' : 'New API key'",
+                                ),
+                                type="password",
+                                outlined=True,
+                                dense=True,
+                                hide_details=True,
+                                autocomplete="new-password",
+                            )
+                            with vuetify.VBtn(
+                                click=ctrl.generate_security_api_key,
+                                outlined=True,
+                                color="cyan darken-3",
+                                classes="security-generate-key-button",
+                            ):
+                                vuetify.VIcon("mdi-key-plus", classes="mr-2")
+                                html.Span("Generate")
+                        html.P(
+                            "Configured key present. Enter a new value only to rotate it.",
+                            v_if="security_api_key_enabled && security_api_key_configured",
+                            classes="settings-action-description mt-3 mb-0",
+                        )
+
+                    with vuetify.VBtn(
+                        click=ctrl.save_security_settings,
+                        block=True,
+                        classes="theme-btn-primary settings-security-save-button",
+                    ):
+                        vuetify.VIcon("mdi-content-save-lock-outline", classes="mr-2")
+                        html.Span("Save Security Settings")

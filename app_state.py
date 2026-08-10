@@ -9,6 +9,7 @@ from typing import Any
 
 from database import SCHEMA_VERSION, database
 from runtime import settings
+from security import default_security_preferences, normalise_security_preferences
 
 logger = logging.getLogger("FOAMTrame")
 
@@ -43,6 +44,7 @@ def default_app_state() -> dict[str, Any]:
         "version": APP_STATE_VERSION,
         "case_config": default_case_config(),
         "plot_preferences": default_plot_preferences(),
+        "security_preferences": default_security_preferences(),
         "run_history": [],
     }
 
@@ -53,6 +55,7 @@ def _normalise_app_state(data: Any) -> dict[str, Any]:
 
     config = data.get("case_config", {})
     plot_preferences = data.get("plot_preferences", {})
+    security_preferences = data.get("security_preferences", {})
     history = data.get("run_history", [])
     if not isinstance(config, dict):
         raise ValueError("case_config must be a JSON object.")
@@ -60,6 +63,8 @@ def _normalise_app_state(data: Any) -> dict[str, Any]:
         raise ValueError("run_history must be a JSON array of objects.")
     if not isinstance(plot_preferences, dict):
         raise ValueError("plot_preferences must be a JSON object.")
+    if not isinstance(security_preferences, dict):
+        raise ValueError("security_preferences must be a JSON object.")
 
     normalised_config = default_case_config()
     for key in normalised_config:
@@ -92,6 +97,9 @@ def _normalise_app_state(data: Any) -> dict[str, Any]:
         "version": APP_STATE_VERSION,
         "case_config": normalised_config,
         "plot_preferences": normalised_plots,
+        "security_preferences": normalise_security_preferences(
+            security_preferences
+        ),
         "run_history": copy.deepcopy(history[:100]),
     }
 
@@ -169,6 +177,17 @@ def update_plot_preferences(updates: dict[str, Any]) -> bool:
     with _state_lock:
         data = load_app_state()
         data["plot_preferences"].update(updates)
+        return save_app_state(data)
+
+
+def load_security_preferences() -> dict[str, Any]:
+    return copy.deepcopy(load_app_state()["security_preferences"])
+
+
+def update_security_preferences(updates: dict[str, Any]) -> bool:
+    with _state_lock:
+        data = load_app_state()
+        data["security_preferences"].update(updates)
         return save_app_state(data)
 
 

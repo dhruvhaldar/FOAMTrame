@@ -133,10 +133,13 @@ Implementation: [tabs/visualizer_tab.py](./tabs/visualizer_tab.py) and
 
 ### Settings
 
-- Downloads case configuration, plot preferences, and run history as one versioned
-  JSON backup.
+- Downloads case configuration, plot preferences, security preferences, and run
+  history as one versioned JSON backup.
 - Validates uploaded backups before enabling restore.
 - Applies restored configuration and history transactionally to SQLite and the live Trame state.
+- Provides disabled-by-default, opt-in network binding, CORS, response-header,
+  request-size, WebSocket-size, and companion-API-key controls. The ordinary
+  server listener remains loopback-only unless explicitly changed.
 
 Implementation: [tabs/settings_tab.py](./tabs/settings_tab.py) and [app_state.py](./app_state.py). Database schema and transactions are implemented in [database.py](./database.py).
 
@@ -218,6 +221,21 @@ Install development/test dependencies as well:
 .\install.ps1 --dev
 ```
 
+Choose a specific Trame port, or let the installer select a free one:
+
+```powershell
+.\install.ps1 --port 5087
+.\install.ps1 --auto-port
+```
+
+Run a fully unattended installation with no console progress:
+
+```powershell
+.\install.ps1 --silent
+# Unattended and automatically select a free port:
+.\install.ps1 --silent --auto-port
+```
+
 ### Linux
 
 ```bash
@@ -226,8 +244,122 @@ bash ./install.sh
 bash ./install.sh --dev
 ```
 
+```bash
+bash ./install.sh --port 5087
+bash ./install.sh --auto-port
+```
+
+```bash
+# Fully unattended; command output is recorded instead of printed:
+bash ./install.sh --silent
+bash ./install.sh --silent --auto-port
+```
+
 Linux requires the distribution's Python venv package, commonly `python3-venv`. Both installers accept `--help`, `--venv`,
-`--no-upgrade-tools`, and `--skip-docker-check`. The shared implementation is [install.py](./install.py), so Windows and Linux follow the same installation logic.
+`--no-upgrade-tools`, `--skip-docker-check`, `--port`, `--auto-port`, and
+`--silent` (also `--quiet` or `-q`). The shared implementation is
+[install.py](./install.py), so Windows and Linux follow the same installation
+logic.
+
+When neither port option is supplied, the installer uses `8087`. It verifies
+and reserves the selected port before creating the virtual environment or
+installing packages. If `8087` (or an explicitly requested port) is unavailable,
+installation stops with instructions to use `--port PORT` or `--auto-port`.
+The successful selection is stored locally in `.foamtrame-port` and used by the
+start scripts.
+
+Silent mode is non-interactive: subprocess stdin is disabled, pip prompts and
+progress output are disabled, and detailed command output is appended to
+`logs/YYYYMMDD/install.log`. A successful silent install exits with code `0`
+without console output. Failures return a nonzero code and print only the log
+location. Silent mode does not weaken port validation: without a port option it
+still requires `8087` to be free; use `--port PORT` or `--auto-port` when that is
+unsuitable.
+
+### Automated silent-install examples
+
+Invoke the Windows installer directly from deployment software without loading a
+user profile or opening an interactive shell:
+
+```powershell
+# Windows PowerShell 5.1
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\install.ps1 --silent --auto-port
+
+# PowerShell 7+
+pwsh -NoProfile -NonInteractive -File .\install.ps1 --silent --auto-port
+```
+
+Use the documented default port (`8087`) and fail if it is occupied:
+
+```powershell
+# Windows PowerShell
+.\install.ps1 --silent
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+```
+
+```bash
+# Linux shell
+./install.sh --silent
+```
+
+Use a fixed deployment port:
+
+```powershell
+.\install.ps1 --silent --port 5087
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+```
+
+```bash
+./install.sh --silent --port 5087
+```
+
+Automatically reserve a free port and read the selected value after installation:
+
+```powershell
+.\install.ps1 --silent --auto-port
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+$FoamTramePort = (Get-Content -LiteralPath .\.foamtrame-port -Raw).Trim()
+Write-Output "FOAMTrame installed on port $FoamTramePort"
+```
+
+```bash
+./install.sh --silent --auto-port
+FOAMTRAME_PORT="$(<.foamtrame-port)"
+printf 'FOAMTrame installed on port %s\n' "$FOAMTRAME_PORT"
+```
+
+Surface the dated installer log when an unattended installation fails:
+
+```powershell
+.\install.ps1 --silent --auto-port
+$InstallExitCode = $LASTEXITCODE
+if ($InstallExitCode -ne 0) {
+    $LogFile = Join-Path (Join-Path .\logs (Get-Date -Format yyyyMMdd)) install.log
+    if (Test-Path -LiteralPath $LogFile) { Get-Content -LiteralPath $LogFile -Tail 100 }
+    exit $InstallExitCode
+}
+```
+
+```bash
+if ! ./install.sh --silent --auto-port; then
+  log_file="logs/$(date +%Y%m%d)/install.log"
+  [[ -f "$log_file" ]] && tail -n 100 "$log_file"
+  exit 1
+fi
+```
+
+Example GitHub Actions steps:
+
+```yaml
+- name: Install FOAMTrame unattended
+  shell: bash
+  run: ./install.sh --silent --auto-port
+
+- name: Publish selected port to later steps
+  shell: bash
+  run: echo "FOAMTRAME_PORT=$(cat .foamtrame-port)" >> "$GITHUB_ENV"
+```
 
 Make sure Docker is running and pull the default image if it is not already available:
 
@@ -250,8 +382,9 @@ Use the platform launcher after installation:
 ```
 
 The launchers call [run.py](./run.py), forward termination signals, use the
-installed interpreter, and keep the working directory deterministic. Open
-[http://localhost:8087](http://localhost:8087) if the browser does not open.
+installed interpreter, and keep the working directory deterministic. The
+installer prints the selected URL; with no port option it is
+[http://localhost:8087](http://localhost:8087).
 
 Trame's standard server arguments remain supported:
 
@@ -274,15 +407,18 @@ On Windows, replace `.venv/bin/python` with `.venv\Scripts\python.exe`.
 | --- | --- | --- |
 | `FOAMTRAME_DATA_DIR` | Repository directory | Database and legacy migration data |
 | `FOAMTRAME_DATABASE_PATH` | `<data-dir>/foamtrame.db` | Explicit SQLite database path |
-| `FOAMTRAME_LOG_DIR` | `<data-dir>/logs` | Rotating application logs |
+| `FOAMTRAME_LOG_DIR` | `<data-dir>/logs` | Base directory for date-grouped application logs |
 | `FOAMTRAME_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL` |
 | `FOAMTRAME_FRAMEWORK_LOG_LEVEL` | `WARNING` | Trame/wslink verbosity; set to `INFO` only for framework diagnostics |
-| `FOAMTRAME_PORT` | `8087` | Default port when `--port` is omitted |
+| `FOAMTRAME_PORT` | Installer selection (`8087` when skipped) | Override the installed port when `--port` is omitted |
 
+Operational logs are grouped by the local start date using `YYYYMMDD` folders.
 Structured application logs rotate at 5 MB with three retained backups under
-`logs/foamtrame.log`. Every start-script session is also appended verbatim to
-`run.log`, including child stdout, stderr, the invoked command, timestamps, and
-exit code. CLI `--host` and `--port` override runtime defaults.
+`logs/YYYYMMDD/foamtrame.log`. Every start-script session is also appended
+verbatim to `logs/YYYYMMDD/run.log`, including child stdout, stderr, the invoked
+command, timestamps, and exit code. Silent installer output uses
+`logs/YYYYMMDD/install.log`. CLI `--host` and `--port` override runtime defaults. When `--host` is
+omitted, the Trame host comes from **Settings → Security** (`127.0.0.1` by default).
 
 ### Load a dataset at startup
 
@@ -337,14 +473,25 @@ JSON is now an interchange format only. A portable backup schema example remains
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "case_config": {
     "CASE_ROOT": "/path/to/tutorial_cases",
     "DOCKER_IMAGE": "haldardhruv/ubuntu_noble_openfoam:v12",
     "OPENFOAM_VERSION": "12",
     "ACTIVE_CASE": "aerofoilNACA0012"
   },
-  "run_history": []
+  "run_history": [],
+  "security_preferences": {
+    "security_enabled": false,
+    "bind_mode": "loopback",
+    "cors_mode": "same_origin",
+    "cors_origin": "",
+    "security_headers": true,
+    "api_key_enabled": false,
+    "api_key_hash": "",
+    "max_request_mb": 2,
+    "websocket_max_message_mb": 4
+  }
 }
 ```
 
@@ -357,6 +504,8 @@ The initial schema contains:
 | `schema_metadata` | Schema version and initialization markers |
 | `app_config` | Typed JSON values for case root, active case, Docker image, and OpenFOAM version |
 | `simulation_runs` | Indexed command, case, status, timestamps, duration, and complete compatible run record |
+| `plot_preferences` | Plot typography, background, and logo preferences |
+| `security_preferences` | Validated network, CORS, header, size-limit, and API-key policy |
 | `cases` | Relational case catalogue ready for workspace synchronization |
 | `automation_actions` | Future chatbot/automation command queue and audit trail |
 
@@ -375,7 +524,12 @@ The initial schema contains:
 3. Wait for validation to succeed.
 4. Select **Restore App State**.
 
-Restore replaces the persisted case configuration and run history. It does **not** copy case directories, simulation results, uploaded VTK datasets, or Docker images. If a backup references a case root that does not exist on the new machine, update **Advanced Settings** after restoring.
+Restore replaces the persisted case configuration, plot and security preferences,
+and run history. It does **not** copy case directories, simulation results,
+uploaded VTK datasets, or Docker images. If a backup references a case root that
+does not exist on the new machine, update **Advanced Settings** after restoring.
+Security preferences containing an API-key hash are transferable, but the original
+plain-text key cannot be recovered from a backup.
 
 ## Supported datasets
 
@@ -402,6 +556,11 @@ Start it separately when API access is needed:
 ```bash
 python flask_server.py
 ```
+
+When API-key protection is enabled in **Settings → Security**, mutating requests
+(`POST`, `PUT`, `PATCH`, and `DELETE`) must include the generated key as
+`X-FOAMTrame-API-Key`. Read-only requests remain available, subject to the selected
+CORS policy. The companion API remains loopback-bound by default.
 
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
@@ -543,9 +702,17 @@ The backup stores the case name and root path, not the case directory. Copy the 
 - For case auto-loading, verify the file is inside the active case directory.
 - Use a server-local `--data` path for very large datasets.
 
-### Port 8087 is already in use
+### The selected server port is already in use
 
-Stop the existing process or select another port:
+Run the installer with another port or request automatic assignment:
+
+```bash
+./install.sh --port 8090
+./install.sh --auto-port
+```
+
+For an already installed application, a one-time launch override remains
+available:
 
 ```bash
 ./start.sh --port 8090
@@ -557,7 +724,32 @@ Run `python manage.py doctor` with the installed interpreter and inspect the JSO
 
 ## Security notes
 
-FOAMTrame can execute Docker containers and OpenFOAM commands against local case directories. **Run it only in a trusted environment**, review imported state files, and keep the default loopback binding for local use. The Settings restore flow validates structure and file size, but a restored case-root path still controls where the application reads and writes case data.
+FOAMTrame can execute Docker containers and OpenFOAM commands against local case
+directories. **Run it only in a trusted environment**, review imported state files,
+and keep the default loopback binding for local use. The Settings restore flow
+validates structure and file size, but a restored case-root path still controls
+where the application reads and writes case data.
+
+Optional controls are under **Settings → Security**. The entire security feature
+set is disabled by default and no optional policy is enforced until **Enable
+optional security controls** is switched on and saved:
+
+- **Allow network access** changes the Trame listener from `127.0.0.1` to
+  `0.0.0.0`. A CLI `--host` value still takes precedence.
+- **CORS** defaults to same-origin, can allow one exact trusted HTTP(S) origin, or
+  can allow any origin. The any-origin mode is intentionally marked unsafe.
+- **Security headers** add content-type, referrer, framing, and permissions-policy
+  protections to Trame and companion-API responses.
+- **API key protection** applies to mutating companion-API calls. Keys are generated
+  with cryptographic randomness and persisted only as PBKDF2-SHA256 hashes. Copy a
+  new key before saving because it cannot be displayed again.
+- **Request and WebSocket limits** cap companion-API request bodies and wslink
+  messages between 1 and 64 MiB.
+
+Listener, CORS, and WebSocket-limit changes require an application restart. The
+companion API evaluates its CORS, header, request-size, and API-key policy on each
+request. CORS is a browser policy—not authentication—and TLS should still terminate
+at a trusted reverse proxy for any network deployment.
 
 Do not expose the single-process application directly to an untrusted network. A hosted or multi-user deployment needs TLS at a reverse proxy, authentication, per-user authorization, resource quotas, and a Trame launcher/process-isolation strategy. Chatbot actions that create cases, execute containers, or alter files must use the confirmation and audit boundary described in [Architecture](#architecture).
 

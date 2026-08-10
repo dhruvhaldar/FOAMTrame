@@ -21,7 +21,7 @@ except ImportError:  # unittest remains dependency-free
 
 def sample_state(case: str = "cavity") -> dict:
     return {
-        "version": 1,
+        "version": app_state.APP_STATE_VERSION,
         "case_config": {
             "CASE_ROOT": "C:/cases",
             "DOCKER_IMAGE": "openfoam:test",
@@ -29,6 +29,7 @@ def sample_state(case: str = "cavity") -> dict:
             "ACTIVE_CASE": case,
         },
         "plot_preferences": app_state.default_plot_preferences(),
+        "security_preferences": app_state.default_security_preferences(),
         "run_history": [
             {
                 "id": 42,
@@ -68,7 +69,13 @@ class DatabaseIntegrationTests(unittest.TestCase):
             mode = connection.execute("PRAGMA journal_mode").fetchone()[0]
 
         self.assertTrue(
-            {"app_config", "simulation_runs", "cases", "automation_actions"}
+            {
+                "app_config",
+                "security_preferences",
+                "simulation_runs",
+                "cases",
+                "automation_actions",
+            }
             <= tables
         )
         self.assertEqual("wal", mode.lower())
@@ -146,6 +153,9 @@ class AppStateMigrationIntegrationTest(unittest.TestCase):
         self.assertEqual("motorBike", app_state.load_case_config()["ACTIVE_CASE"])
         self.assertEqual("roboto", app_state.load_plot_preferences()["font"])
         self.assertEqual("black", app_state.load_plot_preferences()["background"])
+        self.assertEqual(
+            "loopback", app_state.load_security_preferences()["bind_mode"]
+        )
         self.assertTrue(app_state.LEGACY_APP_STATE_FILE.exists())
 
 

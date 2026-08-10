@@ -3,6 +3,8 @@ from __future__ import annotations
 import sys
 
 from runtime import configure_logging, settings
+from app_state import load_security_preferences
+from security import apply_trame_security, trame_bind_host
 
 configure_logging()
 
@@ -50,6 +52,8 @@ server = get_server(client_type="vue2")
 server.cli.add_argument("--data", help="Optional dataset to load at startup")
 server.serve["static"] = "static"
 state, ctrl = server.state, server.controller
+startup_security_preferences = load_security_preferences()
+apply_trame_security(server, startup_security_preferences)
 
 # Set browser page title and favicon
 state.trame__title = "FOAMTrame"
@@ -1242,10 +1246,33 @@ with SinglePageWithDrawerLayout(server) as layout:
             margin: 0 0 6px;
         }
         .v-application .settings-action-button,
-        .v-application .settings-restore-button {
+        .v-application .settings-restore-button,
+        .v-application .settings-security-save-button {
             min-height: 52px !important;
             text-transform: none !important;
             white-space: nowrap;
+        }
+        .v-application .settings-security-card .v-input {
+            margin-top: 0;
+        }
+        .v-application .security-setting-switch .v-label {
+            color: #334155;
+            font-weight: 600;
+            line-height: 1.35;
+        }
+        .v-application .security-api-key-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 12px;
+        }
+        .v-application .security-generate-key-button {
+            min-height: 48px !important;
+            text-transform: none !important;
+        }
+        .v-application .security-settings-alert {
+            border: 1px solid rgba(6, 154, 181, 0.2);
+            background: rgba(224, 247, 250, 0.46) !important;
         }
         @media (max-width: 700px) {
             .v-application .settings-page {
@@ -1261,6 +1288,12 @@ with SinglePageWithDrawerLayout(server) as layout:
                 gap: 16px;
             }
             .v-application .settings-action-button {
+                width: 100%;
+            }
+            .v-application .security-api-key-layout {
+                grid-template-columns: 1fr;
+            }
+            .v-application .security-generate-key-button {
                 width: 100%;
             }
         }
@@ -1389,7 +1422,16 @@ def main():
         for token in sys.argv[1:]
     )
     port = None if explicit_port else settings.default_port
-    server.start(port=port)
+    explicit_host = any(
+        token == "--host" or token.startswith("--host=")
+        for token in sys.argv[1:]
+    )
+    host = (
+        None
+        if explicit_host
+        else trame_bind_host(startup_security_preferences)
+    )
+    server.start(port=port, host=host)
 
 
 if __name__ == "__main__":

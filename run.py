@@ -13,7 +13,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 
 
 def tee_stream(source: TextIO, console: TextIO, log_file: TextIO) -> None:
-    """Copy complete child output to both the terminal and run.log."""
+    """Copy complete child output to both the terminal and the daily run log."""
     for line in source:
         console.write(line)
         console.flush()
@@ -25,7 +25,7 @@ def main(argv: list[str] | None = None) -> int:
     """Run FOAMTrame with signal forwarding and complete output capture."""
     arguments = list(sys.argv[1:] if argv is None else argv)
     command = [sys.executable, str(PROJECT_ROOT / "app.py"), "--server", *arguments]
-    run_log_path = settings.data_dir / "run.log"
+    run_log_path = settings.daily_log_dir / "run.log"
     run_log_path.parent.mkdir(parents=True, exist_ok=True)
 
     with run_log_path.open("a", encoding="utf-8", buffering=1) as log_file:

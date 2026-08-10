@@ -10,14 +10,20 @@ from pathlib import Path
 from flask import Flask, jsonify, request
 from flask_compress import Compress
 
-from app_state import load_case_config, update_case_config
+from app_state import (
+    load_case_config,
+    load_security_preferences,
+    update_case_config,
+)
 from runtime import configure_logging
+from security import configure_flask_security
 
 configure_logging()
 logger = logging.getLogger("FOAMTrameBackend")
 
 app = Flask(__name__)
 Compress(app)
+configure_flask_security(app, load_security_preferences)
 
 load_config = load_case_config
 save_config = update_case_config

@@ -14,7 +14,31 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
+from log_paths import dated_log_directory
+
 PROJECT_ROOT = Path(__file__).resolve().parent
+DEFAULT_SERVER_PORT = 8087
+INSTALLED_PORT_FILE = PROJECT_ROOT / ".foamtrame-port"
+
+
+def installed_server_port(
+    path: Path = INSTALLED_PORT_FILE,
+    fallback: int = DEFAULT_SERVER_PORT,
+) -> int:
+    """Return the installer-selected port, or the documented default."""
+    try:
+        value = path.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        return fallback
+    except OSError as exc:
+        raise ValueError(f"Could not read installed server port from {path}: {exc}") from exc
+    try:
+        port = int(value)
+    except ValueError as exc:
+        raise ValueError(f"Installed server port in {path} is not an integer.") from exc
+    if not 1 <= port <= 65535:
+        raise ValueError(f"Installed server port in {path} must be between 1 and 65535.")
+    return port
 
 
 def _env_path(env: Mapping[str, str], key: str, default: Path) -> Path:
@@ -43,8 +67,12 @@ class RuntimeSettings:
     framework_log_level: str
 
     @property
+    def daily_log_dir(self) -> Path:
+        return dated_log_directory(self.log_dir)
+
+    @property
     def log_file(self) -> Path:
-        return self.log_dir / "foamtrame.log"
+        return self.daily_log_dir / "foamtrame.log"
 
 
 def load_runtime_settings(env: Mapping[str, str] | None = None) -> RuntimeSettings:
@@ -70,12 +98,17 @@ def load_runtime_settings(env: Mapping[str, str] | None = None) -> RuntimeSettin
         raise ValueError(
             "FOAMTRAME_FRAMEWORK_LOG_LEVEL is not a valid Python logging level."
         )
+    default_port = (
+        _env_int(values, "FOAMTRAME_PORT", DEFAULT_SERVER_PORT)
+        if values.get("FOAMTRAME_PORT", "").strip()
+        else installed_server_port()
+    )
     return RuntimeSettings(
         project_root=PROJECT_ROOT,
         data_dir=data_dir,
         log_dir=log_dir,
         database_path=database_path,
-        default_port=_env_int(values, "FOAMTRAME_PORT", 8087),
+        default_port=default_port,
         log_level=log_level,
         framework_log_level=framework_log_level,
     )
@@ -86,7 +119,7 @@ settings = load_runtime_settings()
 
 def ensure_runtime_directories(config: RuntimeSettings = settings) -> None:
     config.data_dir.mkdir(parents=True, exist_ok=True)
-    config.log_dir.mkdir(parents=True, exist_ok=True)
+    config.daily_log_dir.mkdir(parents=True, exist_ok=True)
     config.database_path.parent.mkdir(parents=True, exist_ok=True)
 
 
