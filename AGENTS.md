@@ -8,6 +8,48 @@ If a subproject later adds a nested `AGENTS.md`, the nearest file governs that
 subtree and may refine these instructions. Explicit user instructions take
 precedence over this file.
 
+## Repository overview
+
+FOAMTrame is a Python 3.10+ desktop-oriented web application built with Trame,
+Vue 2/Vuetify, VTK, Matplotlib, Flask, SQLite, and the Docker SDK. It provides one
+responsive browser workspace for managing local OpenFOAM cases: setup and tutorial
+import, geometry inspection, meshing, validated simulation execution, realtime
+plots, and VTK post-processing.
+
+The main execution flow is:
+
+```text
+Browser UI
+  ↕ Trame/wslink
+app.py and tabs/*
+  ↕ validated controllers and services
+backend/*
+  ├─ Docker/OpenFOAM containers
+  ├─ local case workspace
+  ├─ server-side VTK/Matplotlib processing
+  └─ foamtrame.db via app_state.py/database.py
+```
+
+Repository areas:
+
+- `app.py` and `tabs/`: Trame composition, shared navigation, responsive UI, and
+  tab-specific state/controllers.
+- `backend/`: case capabilities, Docker/OpenFOAM operations, geometry, meshing,
+  plotting parsers/cache, and post-processing services.
+- `app_state.py`, `database.py`, and `security.py`: persisted state, SQLite
+  transactions, backup normalization, and optional security policies.
+- `install.py`, `runtime.py`, `run.py`, and platform wrappers: installation, port
+  selection, diagnostics, launch behavior, and dated logs.
+- `static/`: bundled logos, icons, and fonts; avoid runtime CDN dependencies.
+- `tests/integration/` and `tests/smoke/`: behavioral regressions and full-server
+  startup coverage on Windows and Linux CI.
+
+The application is local-first and single-process. SQLite stores operational
+metadata, while OpenFOAM case directories, simulation output, and large datasets
+remain on disk and are referenced by path. Docker supplies the configured OpenFOAM
+runtime; Docker unavailability should degrade relevant features without preventing
+the UI from starting.
+
 ## Setup commands
 
 Run commands from the repository root. Use the platform wrapper for a normal
