@@ -3,6 +3,11 @@ venv/
 .venv/
 env/
 ENV/
+tutorial_cases/
+app_state.json
+run.log
+logs/
+.foamtrame-port
 
 # Python cache & build files
 __pycache__/
@@ -24,3 +29,8 @@ __pycache__/
 # OS generated files
 .DS_Store
 Thumbs.db
+foamtrame.db
+foamtrame.db-shm
+foamtrame.db-wal
+.coverage
+.pytest_cache/
