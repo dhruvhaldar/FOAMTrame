@@ -100,6 +100,15 @@ def setup_setup_tab(server):
     tutorial_fetch_lock = threading.Lock()
     server_event_loop = [None]
 
+    docker_state_keys = (
+        "setup_status",
+        "setup_status_color",
+        "docker_checking",
+        "openfoam_runtime_version",
+        "openfoam_runtime_label",
+        "openfoam_runtime_source",
+    )
+
     @ctrl.add("on_server_ready")
     def capture_server_event_loop(**_):
         """Capture the wslink loop used for thread-safe client state pushes."""
@@ -113,6 +122,25 @@ def setup_setup_tab(server):
             "openfoam_runtime_label",
             "openfoam_runtime_source",
         )
+
+    @ctrl.add("on_client_connected")
+    def publish_setup_snapshot(**_):
+        """Give reconnecting clients the latest completed background state."""
+        server.force_state_push(*docker_state_keys)
+        server.force_state_push(
+            "tutorials_list",
+            "filtered_tutorials",
+            "tutorials_loaded",
+            "tutorials_loading",
+        )
+
+    def publish_setup_state(*keys):
+        """Publish worker-thread state changes through wslink's event loop."""
+        state.dirty(*keys)
+        state.flush()
+        loop = server_event_loop[0]
+        if loop is not None and loop.is_running():
+            loop.call_soon_threadsafe(server.force_state_push, *keys)
 
     def publish_tutorial_state(*keys):
         """Flush Python state, then publish it on wslink's running event loop."""
@@ -164,15 +192,7 @@ def setup_setup_tab(server):
         )
         state.setup_status = "Checking Docker executable..."
         state.setup_status_color = "info"
-        state.dirty(
-            "setup_status",
-            "setup_status_color",
-            "docker_checking",
-            "openfoam_runtime_version",
-            "openfoam_runtime_label",
-            "openfoam_runtime_source",
-        )
-        state.flush()
+        publish_setup_state(*docker_state_keys)
 
         if not shutil.which("docker"):
             state.setup_status = "Docker executable not found in PATH."
@@ -182,19 +202,11 @@ def setup_setup_tab(server):
             state.openfoam_runtime_source = (
                 "Docker is unavailable; showing the configured version instead."
             )
-            state.dirty(
-                "setup_status",
-                "setup_status_color",
-                "docker_checking",
-                "openfoam_runtime_label",
-                "openfoam_runtime_source",
-            )
-            state.flush()
+            publish_setup_state(*docker_state_keys)
             return
 
         state.setup_status = "Connecting to Docker daemon..."
-        state.dirty("setup_status")
-        state.flush()
+        publish_setup_state("setup_status")
 
         client = get_docker_client()
         if not client:
@@ -205,19 +217,11 @@ def setup_setup_tab(server):
             state.openfoam_runtime_source = (
                 "Docker is unavailable; showing the configured version instead."
             )
-            state.dirty(
-                "setup_status",
-                "setup_status_color",
-                "docker_checking",
-                "openfoam_runtime_label",
-                "openfoam_runtime_source",
-            )
-            state.flush()
+            publish_setup_state(*docker_state_keys)
             return
 
         state.setup_status = f"Checking Docker image {state.docker_image}..."
-        state.dirty("setup_status")
-        state.flush()
+        publish_setup_state("setup_status")
 
         try:
             import docker.errors
@@ -248,15 +252,7 @@ def setup_setup_tab(server):
             state.setup_status = "Docker integration ready."
             state.setup_status_color = "success"
             state.docker_checking = False
-            state.dirty(
-                "setup_status",
-                "setup_status_color",
-                "docker_checking",
-                "openfoam_runtime_version",
-                "openfoam_runtime_label",
-                "openfoam_runtime_source",
-            )
-            state.flush()
+            publish_setup_state(*docker_state_keys)
             fetch_tutorials()
         except Exception as e:
             err = str(e)
@@ -271,14 +267,7 @@ def setup_setup_tab(server):
             state.openfoam_runtime_source = (
                 "The Docker image could not be inspected; showing the configured version."
             )
-            state.dirty(
-                "setup_status",
-                "setup_status_color",
-                "docker_checking",
-                "openfoam_runtime_label",
-                "openfoam_runtime_source",
-            )
-            state.flush()
+            publish_setup_state(*docker_state_keys)
 
     def fetch_tutorials():
         # Re-publish cached values. The import tab may have been inactive when
