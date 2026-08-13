@@ -90,10 +90,15 @@ Placeholder: [tabs/meshing_tab.py](./tabs/meshing_tab.py)
   `postProcessing`, `VTK`, and `log.*` files. The initial `0` directory and
   `constant/polyMesh` are preserved.
 - Streams console output and supports stopping the active process.
+- Accepts additional validated runs while a simulation is active, executes them
+  one at a time in FIFO order, and allows waiting jobs to be cancelled or cleared.
+  Each submission retains the case and runtime configuration selected when it was
+  queued.
 - Retains up to 100 indexed run-history records in the application database.
 
-Implementation: [tabs/run_log_tab.py](./tabs/run_log_tab.py) and the shared,
-fixed-ID action service in
+Implementation: [tabs/run_log_tab.py](./tabs/run_log_tab.py), the dependency-free
+FIFO worker in [backend/simulation_queue.py](./backend/simulation_queue.py), and
+the shared, fixed-ID action service in
 [backend/case/capabilities.py](./backend/case/capabilities.py). UI controls and
 future chatbot tools should resolve actions through this service rather than
 submitting arbitrary shell strings.
