@@ -13,6 +13,11 @@ from trame.widgets import html, vuetify
 
 from app_state import load_run_history, update_run_history
 from backend.case.capabilities import CaseInspection, case_action_service
+from backend.simulation_queue import (
+    QueueSnapshot,
+    SequentialSimulationQueue,
+    SimulationJob,
+)
 
 logger = logging.getLogger("FOAMTrame")
 
@@ -42,6 +47,20 @@ def _save_run_history(history: list[dict]) -> None:
         logger.error("Failed to save run history to the application database")
 
 
+def _reconcile_interrupted_history(history: list[dict]) -> tuple[list[dict], bool]:
+    """Close jobs which could not survive an application restart."""
+    reconciled = [dict(entry) for entry in history]
+    changed = False
+    for entry in reconciled:
+        if entry.get("status") in {"Queued", "Running"}:
+            entry["status"] = "Interrupted"
+            entry["end_time"] = entry.get("end_time") or datetime.now(
+                timezone.utc
+            ).strftime("%Y-%m-%d %H:%M:%S")
+            changed = True
+    return reconciled, changed
+
+
 def setup_run_log_tab(server):
     state, ctrl = server.state, server.controller
 
@@ -56,7 +75,12 @@ def setup_run_log_tab(server):
     state.setdefault("run_log_text", "Ready for output...")
     state.setdefault("run_status", "Idle")
     state.setdefault("is_running", False)
-    state.setdefault("run_history", _load_run_history())
+    run_history, history_changed = _reconcile_interrupted_history(_load_run_history())
+    state.setdefault("run_history", run_history)
+    if history_changed:
+        _save_run_history(run_history)
+    state.setdefault("simulation_queue", [])
+    state.setdefault("queued_run_count", 0)
     empty_inspection = case_action_service.inspect_case(None)
     state.setdefault("case_action_map", empty_inspection.action_map())
     state.setdefault("case_workflow_items", list(empty_inspection.action_map().values()))
@@ -75,12 +99,13 @@ def setup_run_log_tab(server):
     state.setdefault("pending_action_preview", [])
     state.setdefault("guided_run_dialog", False)
 
-    _running_lock = threading.Lock()
     _active_container = [None]
     _inspection: list[CaseInspection] = [empty_inspection]
     _pending_clean_inspection: list[CaseInspection | None] = [None]
     _inspection_lock = threading.Lock()
+    _history_lock = threading.RLock()
     _server_event_loop = [None]
+    _simulation_queue: list[SequentialSimulationQueue | None] = [None]
     capability_state_keys = (
         "case_action_map",
         "case_workflow_items",
@@ -210,56 +235,58 @@ def setup_run_log_tab(server):
 
     ctrl.check_parallel_config = check_parallel_config
 
-    def append_history_entry(display_command: str, status: str = "Running") -> int:
+    def append_history_entry(
+        case_name: str,
+        display_command: str,
+        queued_at: str,
+    ) -> int:
         run_id = time.time_ns()
         run_entry = {
             "id": run_id,
-            "case_name": getattr(state, "active_case", "") or "",
+            "case_name": case_name,
             "command": display_command,
-            "status": status,
-            "start_time": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+            "status": "Queued",
+            "queued_at": queued_at,
+            "start_time": None,
             "end_time": None,
             "duration": None,
         }
 
-        history = list(state.run_history or [])
-        history.insert(0, run_entry)
-        state.run_history = history
-        _save_run_history(history)
+        with _history_lock:
+            history = list(state.run_history or [])
+            history.insert(0, run_entry)
+            state.run_history = history
+            _save_run_history(history)
         return run_id
 
+    def update_history_entry(run_id: int, **updates) -> None:
+        with _history_lock:
+            history = [dict(entry) for entry in list(state.run_history or [])]
+            for entry in history:
+                if entry.get("id") == run_id:
+                    entry.update(updates)
+                    break
+            state.run_history = history
+            _save_run_history(history)
+
     def finish_history_entry(run_id: int, status: str, duration: float):
-        history = list(state.run_history or [])
-        for entry in history:
-            if entry["id"] == run_id:
-                entry["status"] = status
-                entry["end_time"] = datetime.now(timezone.utc).strftime(
-                    "%Y-%m-%d %H:%M:%S"
-                )
-                entry["duration"] = f"{duration}s"
-                break
-        state.run_history = history
-        _save_run_history(history)
+        update_history_entry(
+            run_id,
+            status=status,
+            end_time=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+            duration=f"{duration}s",
+        )
 
     def run_actions(action_ids: list[str], display_command: str | None = None):
-        if state.is_running or not action_ids:
+        if not action_ids:
             return
-        if not _running_lock.acquire(blocking=False):
-            return
-
-        from tabs.setup_tab import get_docker_client
-
         try:
             inspection = inspect_current_case()
             actions = case_action_service.resolve_actions(inspection, action_ids)
             config, case_path = current_case_context()
             if case_path is None:
                 raise ValueError("No active case selected")
-            client = get_docker_client()
-            if client is None:
-                raise RuntimeError("Docker daemon not available. Please start Docker Desktop.")
         except Exception as exc:
-            _running_lock.release()
             state.run_log_text = f"[FOAMTrame] [Error] {exc}\n"
             state.run_status = "Action unavailable"
             state.flush()
@@ -267,146 +294,179 @@ def setup_run_log_tab(server):
             return
 
         active_case = getattr(state, "active_case", "") or ""
-        docker_image = config.get("DOCKER_IMAGE", "haldardhruv/ubuntu_noble_openfoam:v12")
-        openfoam_version = config.get("OPENFOAM_VERSION", "12")
         command_label = display_command or actions[0].label
-        run_id = append_history_entry(command_label)
-        state.is_running = True
-        state.run_status = f"Running {command_label}..."
-        state.run_log_text = (
-            f"[FOAMTrame] Executing '{command_label}' on case '{active_case}'...\n"
-            + "[FOAMTrame] Validated plan: "
-            + " → ".join(action.label for action in actions)
-            + "\n"
+        queued_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        run_id = append_history_entry(active_case, command_label, queued_at)
+        job = SimulationJob(
+            id=run_id,
+            case_name=active_case,
+            case_path=case_path,
+            command_label=command_label,
+            action_ids=tuple(action_ids),
+            inspection=inspection,
+            docker_image=config.get(
+                "DOCKER_IMAGE", "haldardhruv/ubuntu_noble_openfoam:v12"
+            ),
+            openfoam_version=config.get("OPENFOAM_VERSION", "12"),
+            queued_at=queued_at,
         )
-        state.flush()
+        queue = _simulation_queue[0]
+        if queue is None:
+            finish_history_entry(run_id, "Failed", 0.0)
+            state.run_log_text = "[FOAMTrame] [Error] Simulation queue unavailable.\n"
+            state.flush()
+            return
+        queue.enqueue(job)
+        publish_state("run_history")
 
-        def execute():
-            start_ts = time.time()
-            status = "Completed"
+    def execute_job(job: SimulationJob):
+        from tabs.setup_tab import get_docker_client
+
+        start_ts = time.time()
+        status = "Completed"
+        started_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        update_history_entry(job.id, status="Running", start_time=started_at)
+        state.run_status = f"Running {job.command_label}..."
+        if job.safe_clean:
+            state.run_log_text = (
+                f"[FOAMTrame] Cleaning reviewed outputs for '{job.case_name}'...\n"
+            )
+        else:
+            state.run_log_text = (
+                f"[FOAMTrame] Executing '{job.command_label}' on case "
+                f"'{job.case_name}'...\n[FOAMTrame] Validated plan: "
+                + " → ".join(
+                    job.inspection.actions[action_id].label
+                    for action_id in job.action_ids
+                )
+                + "\n"
+            )
+        publish_state("run_history", "run_status", "run_log_text")
+        try:
+            if job.safe_clean:
+                removed = case_action_service.clean_case(job.inspection)
+                state.run_log_text += (
+                    "".join(f"[FOAMTrame] Removed {path}\n" for path in removed)
+                    if removed
+                    else "[FOAMTrame] Nothing remained to remove.\n"
+                )
+                return
+
+            client = get_docker_client()
+            if client is None:
+                raise RuntimeError(
+                    "Docker daemon not available. Please start Docker Desktop."
+                )
+            container, _ = case_action_service.start_run(
+                job.inspection,
+                job.action_ids,
+                docker_client=client,
+                docker_image=job.docker_image,
+                openfoam_version=job.openfoam_version,
+                environment={
+                    "OMPI_MCA_rmaps_base_oversubscribe": "1",
+                    "OMPI_MCA_btl_vader_single_copy_mechanism": "none",
+                },
+            )
+            _active_container[0] = container
+            log_dir = job.case_path / "logs"
+            log_dir.mkdir(parents=True, exist_ok=True)
+            archive_log_path = log_dir / f"run_{job.id}.log"
+            is_solver_run = any(
+                action_id in {"allrun", "solver"} for action_id in job.action_ids
+            )
+            live_log_path = job.case_path / "log.foamRun" if is_solver_run else None
+            live_log = None
+            archive_log = None
             try:
-                container, _ = case_action_service.start_run(
-                    inspection,
-                    action_ids,
-                    docker_client=client,
-                    docker_image=docker_image,
-                    openfoam_version=openfoam_version,
-                    environment={
-                        "OMPI_MCA_rmaps_base_oversubscribe": "1",
-                        "OMPI_MCA_btl_vader_single_copy_mechanism": "none",
-                    },
-                )
-                _active_container[0] = container
-
-                log_dir = case_path / "logs"
-                log_dir.mkdir(parents=True, exist_ok=True)
-                archive_log_path = log_dir / f"run_{run_id}.log"
-                is_solver_run = any(
-                    action.id in {"allrun", "solver"} for action in actions
-                )
-                live_log_path = case_path / "log.foamRun" if is_solver_run else None
-
-                # Tee solver output to log.foamRun while it is produced. The plots
-                # parser can then consume residuals incrementally rather than waiting
-                # for the container to finish and an archive to be written.
-                live_log = None
-                archive_log = None
                 try:
+                    archive_log = archive_log_path.open(
+                        "w", encoding="utf-8", buffering=1
+                    )
+                except OSError as log_err:
+                    logger.warning("Could not open run archive log: %s", log_err)
+                if live_log_path is not None:
                     try:
-                        archive_log = archive_log_path.open("w", encoding="utf-8", buffering=1)
+                        live_log = live_log_path.open(
+                            "w", encoding="utf-8", buffering=1
+                        )
                     except OSError as log_err:
-                        logger.warning(f"Could not open run archive log: {log_err}")
-                    if live_log_path is not None:
-                        try:
-                            live_log = live_log_path.open("w", encoding="utf-8", buffering=1)
-                        except OSError as log_err:
-                            logger.warning(f"Could not open live residual log: {log_err}")
-
-                    for line in container.logs(stream=True):
-                        decoded = line.decode(errors="ignore")
-                        if archive_log is not None:
-                            archive_log.write(decoded)
-                        if live_log is not None:
-                            live_log.write(decoded)
-
-                        # Limit buffer in UI state for performance
-                        current_text = state.run_log_text
-                        if current_text == "Ready for output...":
-                            state.run_log_text = decoded
-                        else:
-                            new_text = current_text + decoded
-                            if len(new_text) > 60000:
-                                new_text = new_text[-50000:]
-                            state.run_log_text = new_text
-                        state.flush()
-                finally:
+                        logger.warning("Could not open live residual log: %s", log_err)
+                for line in container.logs(stream=True):
+                    decoded = line.decode(errors="ignore")
                     if archive_log is not None:
-                        archive_log.close()
+                        archive_log.write(decoded)
                     if live_log is not None:
-                        live_log.close()
-
-                result = container.wait()
-                if result.get("StatusCode", 0) != 0:
-                    status = "Failed"
-
-            except Exception as exc:
-                status = "Failed"
-                err_msg = f"\n[FOAMTrame] [Error] Command execution failed: {exc}\n"
-                state.run_log_text = state.run_log_text + err_msg
-                logger.error(f"Run command error: {exc}")
+                        live_log.write(decoded)
+                    new_text = state.run_log_text + decoded
+                    state.run_log_text = (
+                        new_text[-50000:] if len(new_text) > 60000 else new_text
+                    )
+                    publish_state("run_log_text")
             finally:
-                duration = round(time.time() - start_ts, 2)
-                if _active_container[0]:
-                    try:
-                        _active_container[0].remove(force=True)
-                    except Exception:
-                        pass
-                    _active_container[0] = None
+                if archive_log is not None:
+                    archive_log.close()
+                if live_log is not None:
+                    live_log.close()
+            if container.wait().get("StatusCode", 0) != 0:
+                status = "Failed"
+        except Exception as exc:
+            status = "Failed"
+            state.run_log_text += (
+                f"\n[FOAMTrame] [Error] Command execution failed: {exc}\n"
+            )
+            logger.exception("Run command failed")
+        finally:
+            duration = round(time.time() - start_ts, 2)
+            if _active_container[0] is not None:
+                try:
+                    _active_container[0].remove(force=True)
+                except Exception:
+                    pass
+                _active_container[0] = None
+            finish_history_entry(job.id, status, duration)
+            state.run_status = f"{job.command_label} {status} ({duration}s)"
+            publish_state("run_history", "run_status", "run_log_text")
+            check_parallel_config()
+            trigger_capability_scan()
 
-                finish_history_entry(run_id, status, duration)
-                state.is_running = False
-                state.run_status = f"{command_label} {status} ({duration}s)"
-                state.flush()
-                check_parallel_config()
-                trigger_capability_scan()
-                _running_lock.release()
+    def publish_queue(snapshot: QueueSnapshot) -> None:
+        items = []
+        if snapshot.active is not None:
+            items.append(snapshot.active.to_state("Running"))
+        items.extend(job.to_state("Queued") for job in snapshot.pending)
+        state.simulation_queue = items
+        state.queued_run_count = len(snapshot.pending)
+        state.is_running = snapshot.active is not None
+        publish_state("simulation_queue", "queued_run_count", "is_running")
 
-        threading.Thread(target=execute, daemon=True).start()
+    _simulation_queue[0] = SequentialSimulationQueue(execute_job, publish_queue)
 
     def run_safe_clean(inspection: CaseInspection | None = None):
-        if state.is_running or not _running_lock.acquire(blocking=False):
-            return
         inspection = inspection or _inspection[0]
-        run_id = append_history_entry("Safe Clean Generated Outputs")
-        state.is_running = True
-        state.run_status = "Cleaning generated outputs..."
-        state.run_log_text = "[FOAMTrame] Removing the reviewed generated outputs...\n"
-        state.flush()
-
-        def execute_clean():
-            start_ts = time.time()
-            status = "Completed"
-            try:
-                removed = case_action_service.clean_case(inspection)
-                if removed:
-                    state.run_log_text += "".join(
-                        f"[FOAMTrame] Removed {path}\n" for path in removed
-                    )
-                else:
-                    state.run_log_text += "[FOAMTrame] Nothing remained to remove.\n"
-            except Exception as exc:
-                status = "Failed"
-                state.run_log_text += f"[FOAMTrame] [Error] Safe clean failed: {exc}\n"
-            finally:
-                duration = round(time.time() - start_ts, 2)
-                finish_history_entry(run_id, status, duration)
-                state.is_running = False
-                state.run_status = f"Safe Clean {status} ({duration}s)"
-                state.flush()
-                trigger_capability_scan()
-                _running_lock.release()
-
-        threading.Thread(target=execute_clean, daemon=True).start()
+        if inspection.case_path is None:
+            state.run_log_text = "[FOAMTrame] [Error] No active case selected.\n"
+            state.flush()
+            return
+        config, _ = current_case_context()
+        queued_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        run_id = append_history_entry(
+            inspection.case_path.name, "Safe Clean Generated Outputs", queued_at
+        )
+        job = SimulationJob(
+            id=run_id,
+            case_name=inspection.case_path.name,
+            case_path=inspection.case_path,
+            command_label="Safe Clean Generated Outputs",
+            action_ids=("safe_clean",),
+            inspection=inspection,
+            docker_image=config.get("DOCKER_IMAGE", ""),
+            openfoam_version=config.get("OPENFOAM_VERSION", ""),
+            queued_at=queued_at,
+            safe_clean=True,
+        )
+        _simulation_queue[0].enqueue(job)
+        publish_state("run_history")
 
     def request_case_action(action_id: str):
         action = _inspection[0].actions.get(action_id)
@@ -474,6 +534,35 @@ def setup_run_log_tab(server):
     ctrl.request_guided_run = request_guided_run
     ctrl.confirm_guided_run = confirm_guided_run
 
+    def cancel_queued_run(run_id: int):
+        queue = _simulation_queue[0]
+        removed = queue.cancel(int(run_id)) if queue is not None else None
+        if removed is not None:
+            update_history_entry(
+                removed.id,
+                status="Cancelled",
+                end_time=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+                duration="0.0s",
+            )
+            publish_state("run_history")
+
+    def clear_simulation_queue():
+        queue = _simulation_queue[0]
+        removed = queue.clear_pending() if queue is not None else ()
+        ended_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        for job in removed:
+            update_history_entry(
+                job.id,
+                status="Cancelled",
+                end_time=ended_at,
+                duration="0.0s",
+            )
+        if removed:
+            publish_state("run_history")
+
+    ctrl.cancel_queued_run = cancel_queued_run
+    ctrl.clear_simulation_queue = clear_simulation_queue
+
     def stop_current_run():
         if _active_container[0]:
             try:
@@ -534,7 +623,7 @@ def build_run_log_drawer():
             color=color,
             classes=classes,
             disabled=(
-                f"is_running || capability_scanning || !case_action_map.{action_id}.available",
+                f"capability_scanning || !case_action_map.{action_id}.available",
             ),
             title=(f"case_action_map.{action_id}.reason",),
         )
@@ -571,7 +660,7 @@ def build_run_log_drawer():
                 icon=True,
                 x_small=True,
                 click=ctrl.scan_case_capabilities,
-                disabled=("capability_scanning || is_running",),
+                disabled=("capability_scanning",),
                 title="Rescan case capabilities",
             ):
                 vuetify.VIcon("mdi-refresh", small=True)
@@ -639,7 +728,7 @@ def build_run_log_drawer():
             small=True,
             classes="theme-btn-primary mb-2",
             v_if="!case_action_map.allrun.available",
-            disabled=("is_running || capability_scanning || guided_action_ids.length === 0",),
+            disabled=("capability_scanning || guided_action_ids.length === 0",),
             title="Review and run the confidently detected case steps",
         )
 
@@ -705,6 +794,15 @@ def build_run_log_content():
                             )
                         with vuetify.VCol(cols="12", sm="4", classes="d-flex justify-sm-end align-center mt-2 mt-sm-0"):
                             vuetify.VChip(
+                                "{{ queued_run_count }} queued",
+                                v_if="queued_run_count > 0",
+                                color="cyan darken-3",
+                                text_color="white",
+                                label=True,
+                                small=True,
+                                classes="font-weight-bold mr-2 my-0",
+                            )
+                            vuetify.VChip(
                                 "{{ run_status }}",
                                 color=("is_running ? 'warning' : 'success'", "info"),
                                 text_color="white",
@@ -712,6 +810,54 @@ def build_run_log_content():
                                 small=True,
                                 classes="font-weight-bold my-0",
                             )
+
+                # FIFO queue. The active job is first; pending jobs can be cancelled.
+                with vuetify.VCard(
+                    v_if="simulation_queue.length > 0",
+                    classes="pa-4 mb-4 glass-card",
+                ):
+                    with vuetify.VCardTitle(
+                        classes="subtitle-1 font-weight-bold d-flex align-center py-1"
+                    ):
+                        vuetify.VIcon("mdi-tray-full", classes="mr-2", color="primary")
+                        html.Span("Simulation Queue")
+                        vuetify.VSpacer()
+                        vuetify.VBtn(
+                            "Clear waiting",
+                            click=ctrl.clear_simulation_queue,
+                            v_if="queued_run_count > 0",
+                            small=True,
+                            text=True,
+                            color="error",
+                        )
+                    with vuetify.VList(dense=True, classes="transparent"):
+                        with vuetify.VListItem(
+                            v_for="item in simulation_queue",
+                            key=("item.id",),
+                        ):
+                            with vuetify.VListItemIcon(classes="mr-3"):
+                                vuetify.VIcon(
+                                    "{{ item.status === 'Running' ? 'mdi-progress-clock' : 'mdi-clock-outline' }}",
+                                    color=(
+                                        "item.status === 'Running' ? 'warning' : 'cyan darken-3'",
+                                    ),
+                                )
+                            with vuetify.VListItemContent():
+                                vuetify.VListItemTitle(
+                                    "{{ item.case_name }} — {{ item.command }}"
+                                )
+                                vuetify.VListItemSubtitle(
+                                    "{{ item.status }} · queued {{ item.queued_at }}"
+                                )
+                            with vuetify.VListItemAction(v_if="item.status === 'Queued'"):
+                                with vuetify.VBtn(
+                                    icon=True,
+                                    small=True,
+                                    color="error",
+                                    title="Cancel queued simulation",
+                                    click=(ctrl.cancel_queued_run, "[item.id]"),
+                                ):
+                                    vuetify.VIcon("mdi-close")
 
                 # Console Output Log Box Card
                 with vuetify.VCard(classes="pa-4 mb-4 glass-card"):
@@ -761,12 +907,12 @@ def build_run_log_content():
                                     with html.Td():
                                         vuetify.VChip(
                                             "{{ item.status }}",
-                                            color=("item.status === 'Completed' ? 'success' : (item.status === 'Running' ? 'warning' : 'error')",),
+                                            color=("item.status === 'Completed' ? 'success' : (item.status === 'Running' ? 'warning' : (item.status === 'Queued' ? 'cyan darken-3' : 'error'))",),
                                             x_small=True,
                                             label=True,
                                             text_color="white",
                                         )
-                                    html.Td("{{ item.start_time }}")
+                                    html.Td("{{ item.start_time || ('Queued ' + (item.queued_at || '')) }}")
                                     html.Td("{{ item.duration || '-' }}")
 
     with vuetify.VDialog(v_model=("action_confirm_dialog", False), max_width="620"):

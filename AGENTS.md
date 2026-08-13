@@ -242,6 +242,10 @@ exist.
   action(s) · solver: **foamRun — fluid**”. Important solver labels should retain
   emphasis.
 - Reset Camera belongs in the Post drawer, not Run/Log.
+- Validated simulation submissions use a single FIFO worker. Users may queue jobs
+  for different cases while one is active, cancel waiting jobs, and stop only the
+  active container. A queued job must retain its case path, action plan, and Docker
+  runtime configuration from submission time.
 
 ## Realtime plots
 
@@ -440,6 +444,7 @@ run.py                         Start-session capture and signal forwarding
 tabs/setup_tab.py              Cases, Docker readiness, tutorial discovery/import
 tabs/run_log_tab.py            Capability UI, execution, logs, history
 backend/case/capabilities.py   Validated OpenFOAM case actions
+backend/simulation_queue.py    Single-worker FIFO simulation scheduling
 tabs/plots_tab.py              Plot state, rendering, styling, export, maximization
 backend/plots/realtime_plots.py OpenFOAM field and residual parsing/cache
 tabs/visualizer_tab.py         Post-processing state and VTK controls
