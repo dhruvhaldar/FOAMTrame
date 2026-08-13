@@ -374,6 +374,11 @@ with SinglePageWithDrawerLayout(server) as layout:
         }
         .v-application .setup-status-alert .v-alert__content {
             font-weight: 600;
+            min-width: 0;
+            max-width: 100%;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            white-space: normal;
         }
         /* Readable tinted notifications for plot synchronization states. */
         .v-application .plots-status-alert {
