@@ -4,11 +4,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-PYTHON_BIN="$SCRIPT_DIR/.venv/bin/python"
-if [[ ! -x "$PYTHON_BIN" ]]; then
-  echo "FOAMTrame is not installed. Run ./install.sh first." >&2
-  exit 1
-fi
-
-exec "$PYTHON_BIN" ./run.py "$@"
-
+PYTHON_BIN="$(bash ./python_bootstrap.sh)"
+UV_BIN="$($PYTHON_BIN ./uv_bootstrap.py)"
+exec "$UV_BIN" run --quiet --locked --no-dev python ./run.py "$@"

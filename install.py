@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import TextIO
 
 from log_paths import dated_log_directory
+from uv_bootstrap import resolve_uv
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 MINIMUM_PYTHON = (3, 10)
@@ -70,10 +71,8 @@ def installer_environment(
         environment.update(
             {
                 "CI": "1",
-                "PIP_DISABLE_PIP_VERSION_CHECK": "1",
-                "PIP_NO_INPUT": "1",
-                "PIP_PROGRESS_BAR": "off",
                 "PYTHONUNBUFFERED": "1",
+                "UV_NO_PROGRESS": "1",
             }
         )
     return environment
@@ -112,11 +111,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Create an isolated FOAMTrame installation on Windows or Linux."
     )
-    parser.add_argument(
-        "--venv",
-        default=".venv",
-        help="Virtual-environment directory relative to the project (default: .venv)",
-    )
     parser.add_argument("--dev", action="store_true", help="Install test dependencies")
     parser.add_argument(
         "--silent",
@@ -127,11 +121,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "Run unattended without console progress; write command output to "
             "logs/YYYYMMDD/install.log"
         ),
-    )
-    parser.add_argument(
-        "--no-upgrade-tools",
-        action="store_true",
-        help="Do not upgrade pip, setuptools, and wheel",
     )
     parser.add_argument(
         "--skip-docker-check",
@@ -187,43 +176,33 @@ def main() -> int:
 
     install_log = open_install_log(selected_port, args) if args.silent else None
     try:
-        venv_dir = (PROJECT_ROOT / args.venv).resolve()
-        python = venv_python(venv_dir)
-        if not python.exists():
-            run(
-                [sys.executable, "-m", "venv", str(venv_dir)],
-                silent=args.silent,
-                log=install_log,
-            )
+        try:
+            uv = resolve_uv()
+        except RuntimeError as exc:
+            raise SystemExit(str(exc)) from exc
 
-        if not python.exists():
-            raise SystemExit(f"Virtual environment was not created correctly: {venv_dir}")
-
-        if not args.no_upgrade_tools:
-            run(
-                [str(python), "-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel"],
-                silent=args.silent,
-                log=install_log,
-            )
-
+        venv_dir = PROJECT_ROOT / ".venv"
+        sync_environment = installer_environment(silent=args.silent)
+        sync_environment["UV_PYTHON_DOWNLOADS"] = "never"
+        sync_command = [
+            str(uv),
+            "sync",
+            "--locked",
+            "--python",
+            sys.executable,
+        ]
+        if not args.dev:
+            sync_command.append("--no-dev")
         run(
-            [str(python), "-m", "pip", "install", "-r", str(PROJECT_ROOT / "requirements.txt")],
+            sync_command,
+            env=sync_environment,
             silent=args.silent,
             log=install_log,
         )
-        if args.dev:
-            run(
-                [
-                    str(python),
-                    "-m",
-                    "pip",
-                    "install",
-                    "-r",
-                    str(PROJECT_ROOT / "requirements-dev.txt"),
-                ],
-                silent=args.silent,
-                log=install_log,
-            )
+
+        python = venv_python(venv_dir)
+        if not python.exists():
+            raise SystemExit(f"Virtual environment was not created correctly: {venv_dir}")
 
         run(
             [str(python), str(PROJECT_ROOT / "manage.py"), "init-db"],

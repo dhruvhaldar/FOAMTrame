@@ -1,11 +1,17 @@
 $ErrorActionPreference = "Stop"
 Set-Location -LiteralPath $PSScriptRoot
 
-$PythonExe = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
-if (-not (Test-Path -LiteralPath $PythonExe)) {
-    throw "FOAMTrame is not installed. Run .\install.ps1 first."
+$PythonOutput = & .\python_bootstrap.ps1
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
 }
+$PythonExe = ([string]$PythonOutput).Trim()
 
-& $PythonExe .\run.py @args
+$UvOutput = & $PythonExe .\uv_bootstrap.py
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+}
+$UvExe = ([string]$UvOutput).Trim()
+
+& $UvExe run --quiet --locked --no-dev python .\run.py @args
 exit $LASTEXITCODE
-

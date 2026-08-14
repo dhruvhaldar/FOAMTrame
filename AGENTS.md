@@ -73,13 +73,18 @@ Useful non-interactive and diagnostic commands:
 
 ```powershell
 .\install.ps1 --silent --auto-port
-.\.venv\Scripts\python.exe manage.py doctor --skip-docker
-.\.venv\Scripts\python.exe -m pytest -q
+uv run --locked python manage.py doctor --skip-docker
+uv run --locked pytest -q
 ```
 
-Do not run a full installer merely to inspect code. Installation creates or
-updates `.venv`, initializes the database, checks the port, and may download large
-packages. Use the existing virtual environment for normal development checks.
+Do not run a full installer merely to inspect code. Installation uses `uv sync` to
+create or update `.venv` from `uv.lock`, initializes the database, checks the port,
+and may download large packages. Platform installers prefer an existing CPython
+3.12, otherwise the platform `python_bootstrap` script verifies and extracts the
+pinned archive from `vendor/python/`. A system `uv` is then preferred;
+`uv_bootstrap.py` verifies and extracts the pinned archive from `vendor/uv/` when
+it is absent. All bundled tooling stays under `.foamtrame-tools/`. Use
+`uv run --locked` for normal development checks.
 
 ## Code style
 
@@ -331,8 +336,19 @@ and UI in `tabs/settings_tab.py`.
   their documented precedence.
 - Windows and Linux wrappers must remain thin and behaviorally equivalent by
   delegating to `install.py`.
+- Keep the bundled `uv` version, archives, official `.sha256` files, upstream
+  licenses, `uv_bootstrap.py` constants, CI version, and README synchronized.
+- Keep the bundled CPython version, release date, Windows/Linux archives,
+  published hashes, platform bootstrap scripts, CI version, and README
+  synchronized.
+- Prefer compatible CPython 3.12 interpreters already available through PATH or
+  the Windows Python launcher. Never modify system PATH, registry entries, or
+  existing Python installations when installing the bundled fallback.
+- Bundled tooling must be checksum-verified before extraction and installed only
+  under the ignored `.foamtrame-tools/` directory. Unsupported platforms should
+  require a system `uv` rather than selecting an incompatible binary.
 - Silent installation flags are `--silent`, `--quiet`, and `-q`.
-- Silent mode is truly unattended: disable child stdin and pip prompts/progress,
+- Silent mode is truly unattended: disable child stdin and uv progress output,
   emit no success chatter, return `0` on success, and return nonzero with the log
   location on failure.
 - Silent mode does not bypass port validation. Combine it with `--auto-port` when
@@ -363,8 +379,8 @@ logs/YYYYMMDD/install.log
 Primary commands from the repository root:
 
 ```powershell
-.\.venv\Scripts\python.exe -m compileall -q app.py app_state.py database.py flask_server.py security.py tabs backend
-.\.venv\Scripts\python.exe -m pytest -q
+uv run --locked python -m compileall -q app.py app_state.py database.py flask_server.py security.py tabs backend
+uv run --locked pytest -q
 ```
 
 On Windows, the system pytest temp root may be inaccessible. In that environment,
@@ -373,7 +389,7 @@ use a unique workspace-local base temp and remove it after the run:
 ```powershell
 $TestTemp = Join-Path (Get-Location) ('.pytest-tmp-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $TestTemp | Out-Null
-.\.venv\Scripts\python.exe -m pytest -q --basetemp $TestTemp
+uv run --locked pytest -q --basetemp $TestTemp
 ```
 
 Do not treat a `PermissionError` under `%TEMP%/pytest-of-*` as an application test
@@ -440,6 +456,10 @@ security.py                    Optional security validation and enforcement
 runtime.py                     Environment settings, preflight, rotating logging
 log_paths.py                   logs/YYYYMMDD path convention
 install.py                     Cross-platform installer implementation
+uv_bootstrap.py                Verified system/bundled uv resolver and extractor
+vendor/uv/                     Pinned offline uv archives, checksums, and licenses
+python_bootstrap.ps1/.sh       System/bundled CPython resolver and extractor
+vendor/python/                 Pinned CPython archives, hashes, and embedded licenses
 run.py                         Start-session capture and signal forwarding
 tabs/setup_tab.py              Cases, Docker readiness, tutorial discovery/import
 tabs/run_log_tab.py            Capability UI, execution, logs, history

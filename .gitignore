@@ -1,6 +1,8 @@
 # Python virtual environment
 venv/
 .venv/
+.uv-cache/
+.foamtrame-tools/
 env/
 ENV/
 tutorial_cases/

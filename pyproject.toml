@@ -1,3 +1,29 @@
+[project]
+name = "foamtrame"
+version = "0.1.0"
+description = "A browser-based OpenFOAM workspace built with Trame, VTK, and Docker"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "docker==7.2.0",
+  "flask==3.1.3",
+  "flask-compress==1.24",
+  "psutil==7.2.2",
+  "requests==2.34.2",
+  "trame==3.13.2",
+  "trame-vtk==2.11.15",
+  "trame-vuetify==3.2.5",
+  "vtk==9.6.2",
+]
+
+[dependency-groups]
+dev = [
+  "pytest==8.4.2",
+]
+
+[tool.uv]
+package = false
+
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests"]
@@ -6,4 +32,3 @@ markers = [
   "integration: persistence and service-boundary integration tests",
   "smoke: launches the complete FOAMTrame server and checks HTTP availability",
 ]
-
