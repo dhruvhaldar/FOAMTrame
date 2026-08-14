@@ -293,6 +293,9 @@ with SinglePageWithDrawerLayout(server) as layout:
             flex-direction: column;
             gap: clamp(14px, 1.8vh, 20px);
             width: 100%;
+            /* Outlined labels rise above their input and would otherwise be
+               clipped by the v-window used for tab content. */
+            padding-top: 8px !important;
         }
         .v-application .setup-tab-form .v-input {
             width: 100%;
