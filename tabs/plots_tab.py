@@ -35,12 +35,18 @@ _POLL_INTERVAL = 1  # seconds between data refreshes (default)
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 _HEROS_FONT_PATH = _PROJECT_ROOT / "static" / "fonts" / "texgyreheros-regular.otf"
 _ROBOTO_FONT_PATH = _PROJECT_ROOT / "static" / "fonts" / "Roboto-Variable.ttf"
+_LIBERATION_SERIF_FONT_PATH = (
+    _PROJECT_ROOT / "static" / "fonts" / "LiberationSerif-Regular.ttf"
+)
 _FOAMFLASK_LOGO_PATH = _PROJECT_ROOT / "static" / "icons" / "foamflask-plot-logo.png"
 
-if _HEROS_FONT_PATH.is_file():
-    font_manager.fontManager.addfont(str(_HEROS_FONT_PATH))
-if _ROBOTO_FONT_PATH.is_file():
-    font_manager.fontManager.addfont(str(_ROBOTO_FONT_PATH))
+for _font_path in (
+    _HEROS_FONT_PATH,
+    _ROBOTO_FONT_PATH,
+    _LIBERATION_SERIF_FONT_PATH,
+):
+    if _font_path.is_file():
+        font_manager.fontManager.addfont(str(_font_path))
 
 # Fields always attempted for residuals
 _RESIDUAL_FIELDS = ["Ux", "Uy", "Uz", "p", "k", "epsilon", "omega", "T", "rho"]
@@ -82,9 +88,11 @@ def _font_properties(font_choice: str) -> font_manager.FontProperties:
     if font_choice == "roboto" and _ROBOTO_FONT_PATH.is_file():
         return font_manager.FontProperties(fname=str(_ROBOTO_FONT_PATH))
     if font_choice == "times_new_roman":
-        return font_manager.FontProperties(
-            family=["Times New Roman", "Liberation Serif", "DejaVu Serif"]
-        )
+        if _LIBERATION_SERIF_FONT_PATH.is_file():
+            return font_manager.FontProperties(
+                fname=str(_LIBERATION_SERIF_FONT_PATH)
+            )
+        return font_manager.FontProperties(family=["DejaVu Serif"])
     return font_manager.FontProperties(
         family=["Arial", "Liberation Sans", "DejaVu Sans"]
     )
@@ -925,7 +933,7 @@ def build_plots_drawer():
             classes="mb-2",
         )
         html.P(
-            "Helvetica uses bundled TeX Gyre Heros when Helvetica Neue is unavailable.",
+            "Helvetica uses bundled TeX Gyre Heros; Times New Roman uses bundled Liberation Serif.",
             classes="text-caption text--secondary mb-3",
         )
         vuetify.VSelect(

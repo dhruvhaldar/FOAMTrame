@@ -13,6 +13,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
+        python-version: ["3.10", "3.12"]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
 
@@ -20,14 +21,16 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-          cache: pip
+          python-version: ${{ matrix.python-version }}
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+          version: "0.10.12"
       - name: Install runtime and test dependencies
-        run: python -m pip install -r requirements.txt -r requirements-dev.txt
+        run: uv sync --locked
       - name: Runtime diagnostics
-        run: python manage.py doctor --skip-docker
+        run: uv run --locked python manage.py doctor --skip-docker
       - name: Compile Python modules
-        run: python -m compileall -q app.py app_state.py database.py runtime.py manage.py run.py tabs backend
+        run: uv run --locked python -m compileall -q app.py app_state.py database.py flask_server.py security.py runtime.py manage.py run.py install.py uv_bootstrap.py tabs backend
       - name: Run integration and smoke tests
-        run: python -m unittest discover -s tests -v
-
+        run: uv run --locked pytest -q

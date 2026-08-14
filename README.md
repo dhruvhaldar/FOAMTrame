@@ -15,6 +15,7 @@
   <a href="https://www.python.org/downloads/"><img alt="Python 3.10+" src="https://img.shields.io/badge/Python-3.10%2B-0c6e87?logo=python&logoColor=white"></a>
   <a href="https://kitware.github.io/trame/"><img alt="Trame 3" src="https://img.shields.io/badge/Trame-3-069ab5"></a>
   <a href="https://www.docker.com/"><img alt="Docker required" src="https://img.shields.io/badge/Docker-required-2496ED?logo=docker&logoColor=white"></a>
+  <a href="#offline-installation"><img alt="Runs offline" src="https://img.shields.io/badge/Runs_offline-supported-069ab5"></a>
   <a href="./LICENSE"><img alt="GNU GPLv3" src="https://img.shields.io/badge/License-GPLv3-0c6e87"></a>
 </p>
 
@@ -90,10 +91,15 @@ Placeholder: [tabs/meshing_tab.py](./tabs/meshing_tab.py)
   `postProcessing`, `VTK`, and `log.*` files. The initial `0` directory and
   `constant/polyMesh` are preserved.
 - Streams console output and supports stopping the active process.
+- Accepts additional validated runs while a simulation is active, executes them
+  one at a time in FIFO order, and allows waiting jobs to be cancelled or cleared.
+  Each submission retains the case and runtime configuration selected when it was
+  queued.
 - Retains up to 100 indexed run-history records in the application database.
 
-Implementation: [tabs/run_log_tab.py](./tabs/run_log_tab.py) and the shared,
-fixed-ID action service in
+Implementation: [tabs/run_log_tab.py](./tabs/run_log_tab.py), the dependency-free
+FIFO worker in [backend/simulation_queue.py](./backend/simulation_queue.py), and
+the shared, fixed-ID action service in
 [backend/case/capabilities.py](./backend/case/capabilities.py). UI controls and
 future chatbot tools should resolve actions through this service rather than
 submitting arbitrary shell strings.
@@ -107,8 +113,8 @@ submitting arbitrary shell strings.
 - Switches between glass, white, black, and grey plot backgrounds with
   contrast-aware palettes.
 - Supports Helvetica Neue-style (bundled TeX Gyre Heros), bundled Roboto, Times
-  New Roman, and Arial typography plus no logo, the FOAMFlask logo, or a custom
-  image.
+  New Roman-style (bundled Liberation Serif), and Arial typography plus no logo,
+  the FOAMFlask logo, or a custom image.
 - Maximizes any plot while keeping the remaining charts available in a responsive
   sidebar.
 - Exports each chart as a publication-friendly PNG with a consistent white paper
@@ -191,13 +197,14 @@ The planned chatbot should not automate browser clicks. Buttons and chatbot tool
 
 ## Requirements
 
-- [Python 3.10 or newer](https://www.python.org/downloads/)
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) or another
   reachable Docker daemon
 - A modern browser with WebSocket support
 - Enough memory for the selected VTK dataset and OpenFOAM container workload
 
-Verified direct dependencies are reproducibly pinned in [requirements.txt](./requirements.txt):
+Direct dependencies are declared in [pyproject.toml](./pyproject.toml), and the
+complete cross-platform environment is reproducibly pinned in
+[uv.lock](./uv.lock):
 
 - Trame 3 and Trame-Vuetify 3
 - VTK 9.3+
@@ -207,7 +214,16 @@ Verified direct dependencies are reproducibly pinned in [requirements.txt](./req
 
 ## Installation
 
-Clone or download the repository. The supported installers create an isolated `.venv`, install pinned-compatible dependencies, initialize SQLite, run machine-readable diagnostics, and preserve any existing database or JSON migration data.
+Clone or download the repository. The supported installers use `uv sync` to create
+the project `.venv` from `uv.lock`, initialize SQLite, run machine-readable
+diagnostics, and preserve any existing database or JSON migration data. A global
+Python and `uv` installations are optional on Windows and Linux x86_64. The
+platform installer first uses an existing CPython 3.12 interpreter when one is
+available through PATH (or the Windows Python launcher). Otherwise, it verifies
+and extracts bundled CPython 3.12.13. It then prefers a system `uv`, falling back
+to the verified bundled `uv 0.10.12`. Both local runtimes live only in the ignored
+`.foamtrame-tools/` directory, require no administrator privileges, and do not
+modify PATH, the Windows registry, or existing Python installations.
 
 ### Windows PowerShell
 
@@ -255,9 +271,8 @@ bash ./install.sh --silent
 bash ./install.sh --silent --auto-port
 ```
 
-Linux requires the distribution's Python venv package, commonly `python3-venv`. Both installers accept `--help`, `--venv`,
-`--no-upgrade-tools`, `--skip-docker-check`, `--port`, `--auto-port`, and
-`--silent` (also `--quiet` or `-q`). The shared implementation is
+Both installers accept `--help`, `--dev`, `--skip-docker-check`, `--port`,
+`--auto-port`, and `--silent` (also `--quiet` or `-q`). The shared implementation is
 [install.py](./install.py), so Windows and Linux follow the same installation
 logic.
 
@@ -268,13 +283,32 @@ installation stops with instructions to use `--port PORT` or `--auto-port`.
 The successful selection is stored locally in `.foamtrame-port` and used by the
 start scripts.
 
-Silent mode is non-interactive: subprocess stdin is disabled, pip prompts and
-progress output are disabled, and detailed command output is appended to
+Silent mode is non-interactive: subprocess stdin and `uv` progress output are
+disabled, and detailed command output is appended to
 `logs/YYYYMMDD/install.log`. A successful silent install exits with code `0`
 without console output. Failures return a nonzero code and print only the log
 location. Silent mode does not weaken port validation: without a port option it
 still requires `8087` to be free; use `--port PORT` or `--auto-port` when that is
 unsuitable.
+
+### Offline installation
+
+The repository includes official compressed CPython and `uv` runtimes, published
+checksums, and licenses for Windows x86_64 and Linux x86_64 (GNU libc). Therefore
+an offline computer does not need Python or `uv` preinstalled. Compatible system
+installations are preferred when available, while verified project-local copies
+are installed automatically otherwise. Windows requires its built-in `tar`
+utility; the standalone Python build also follows the standard CPython requirement
+for the Microsoft Visual C++ runtime. Linux requires GNU libc 2.17 or newer,
+`tar`, and either `sha256sum` or `shasum`.
+
+Bundling Python and `uv` does not bundle VTK or the other packages referenced by
+`uv.lock`. A first-time installation on a completely offline computer must also be
+provided with those platform-specific packages, an already synchronized `.venv`,
+or a populated `uv` cache. Docker-based OpenFOAM operations additionally require
+Docker and the configured image to already be installed locally. Once these assets
+are present, `start.ps1` and `start.sh` are independent of global Python and `uv`
+installations.
 
 ### Automated silent-install examples
 
@@ -395,11 +429,9 @@ Trame's standard server arguments remain supported:
 Run diagnostics or initialize/upgrade the database independently:
 
 ```bash
-.venv/bin/python manage.py doctor
-.venv/bin/python manage.py init-db
+uv run --locked python manage.py doctor
+uv run --locked python manage.py init-db
 ```
-
-On Windows, replace `.venv/bin/python` with `.venv\Scripts\python.exe`.
 
 ### Runtime configuration
 
@@ -588,12 +620,16 @@ CORS policy. The companion API remains loopback-bound by default.
 ├── manage.py                 # Doctor and database administration commands
 ├── install.py                # Shared cross-platform installer implementation
 ├── install.ps1 / install.sh  # Windows and Linux installer entry points
-├── start.ps1 / start.sh      # Installed-environment launchers
+├── start.ps1 / start.sh      # Locked uv-environment launchers
 ├── app_state.json.example    # Portable state schema example
 ├── flask_server.py           # Optional companion HTTP API
 ├── run.py                    # Process wrapper and signal forwarding
-├── requirements.txt          # Python dependencies
-├── requirements-dev.txt      # Test-only dependencies
+├── python_bootstrap.ps1/.sh  # System/bundled CPython selection and extraction
+├── uv_bootstrap.py           # Verified system/bundled uv selection and extraction
+├── pyproject.toml            # Project metadata and direct dependencies
+├── uv.lock                   # Reproducible dependency lockfile
+├── vendor/uv/                # Offline uv archives, checksums, and upstream licenses
+├── vendor/python/            # Offline CPython archives, checksums, and licenses
 ├── tests/
 │   ├── integration/          # Database, migration, rollback, concurrency
 │   └── smoke/                # One complete server availability test
@@ -632,13 +668,14 @@ Follow the links below for the principal implementation surfaces:
 Install the development profile first:
 
 ```bash
-python install.py --dev
+./install.sh --dev
+# Windows: .\install.ps1 --dev
 ```
 
 Compile the main Python modules after making changes:
 
 ```bash
-python -m py_compile \
+uv run --locked python -m py_compile \
   app.py app_state.py database.py flask_server.py \
   tabs/setup_tab.py tabs/run_log_tab.py tabs/settings_tab.py
 ```
@@ -646,23 +683,23 @@ python -m py_compile \
 Validate database initialization and the persisted state schema:
 
 ```bash
-python -c "import app_state; from database import database; state = app_state.load_app_state(); print(database.path, state['version'], state.keys())"
+uv run --locked python -c "import app_state; from database import database; state = app_state.load_app_state(); print(database.path, state['version'], state.keys())"
 ```
 
 Run the integration suite:
 
 ```bash
-python -m unittest discover -s tests/integration -v
+uv run --locked python -m unittest discover -s tests/integration -v
 # or
-python -m pytest -m integration
+uv run --locked pytest -m integration
 ```
 
 Run the single end-to-end server smoke test:
 
 ```bash
-python -m unittest tests.smoke.test_server_starts -v
+uv run --locked python -m unittest tests.smoke.test_server_starts -v
 # or
-python -m pytest -m smoke
+uv run --locked pytest -m smoke
 ```
 
 The smoke test starts the complete application on an ephemeral loopback port, waits for an HTTP 200 HTML response, and always terminates the child process. It skips only when Trame/VTK are absent from the selected interpreter. The [CI workflow](./.github/workflows/ci.yml) installs the full runtime and runs all tests on both Windows and Linux.

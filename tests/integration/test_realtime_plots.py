@@ -11,6 +11,7 @@ from tabs.plots_tab import (
     _add_plot_logo,
     _add_non_overlapping_legend,
     _plot_style,
+    _font_properties,
     _uploaded_logo_data,
 )
 
@@ -82,6 +83,27 @@ def test_plot_appearance_export_and_custom_logo():
         }
     )
     assert uploaded.startswith("data:image/png;base64,")
+
+
+def test_times_font_uses_bundled_liberation_serif_without_warning(caplog):
+    font = _font_properties("times_new_roman")
+    assert font.get_file().endswith("LiberationSerif-Regular.ttf")
+
+    caplog.set_level("WARNING", logger="matplotlib.font_manager")
+    _build_line_chart(
+        [0.0, 1.0],
+        {"time": [0.0, 1.0], "p": [1.0, 0.5]},
+        ["p"],
+        "Pressure",
+        "p",
+        style=_plot_style("glass", "times_new_roman"),
+    )
+
+    assert not [
+        record
+        for record in caplog.records
+        if "Liberation Serif" in record.getMessage()
+    ]
 
 
 def test_plot_legend_is_reserved_outside_data_area():

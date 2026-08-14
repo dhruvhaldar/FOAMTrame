@@ -102,8 +102,7 @@ def test_silent_command_disables_prompts_and_redirects_output(monkeypatch):
     assert captured["stdin"] is install.subprocess.DEVNULL
     assert captured["stdout"] is log
     assert captured["stderr"] is install.subprocess.STDOUT
-    assert captured["env"]["PIP_NO_INPUT"] == "1"
-    assert captured["env"]["PIP_PROGRESS_BAR"] == "off"
+    assert captured["env"]["UV_NO_PROGRESS"] == "1"
     assert "> python -V" in log.getvalue()
 
 
@@ -119,10 +118,8 @@ def test_silent_main_completes_without_console_and_persists_port(
     reservation = Reservation()
     recorded = {"commands": [], "port": None}
     args = argparse.Namespace(
-        venv=".venv",
         dev=False,
         silent=True,
-        no_upgrade_tools=True,
         skip_docker_check=True,
         port=None,
         auto_port=True,
@@ -135,6 +132,7 @@ def test_silent_main_completes_without_console_and_persists_port(
         lambda requested, *, auto_assign: (reservation, 52123),
     )
     monkeypatch.setattr(install, "venv_python", lambda _path: install.Path(sys.executable))
+    monkeypatch.setattr(install, "resolve_uv", lambda: install.Path("uv"))
     monkeypatch.setattr(
         install,
         "run",
@@ -146,11 +144,14 @@ def test_silent_main_completes_without_console_and_persists_port(
         lambda port: recorded.update(port=port),
     )
     monkeypatch.setattr(install, "INSTALL_LOG", tmp_path / "logs" / "install.log")
-    monkeypatch.setattr(install.shutil, "which", lambda _command: None)
 
     assert install.main() == 0
     assert reservation.closed is True
     assert recorded["port"] == 52123
     assert recorded["commands"]
+    sync_command, sync_options = recorded["commands"][0]
+    assert sync_command[:3] == ["uv", "sync", "--locked"]
+    assert "--no-dev" in sync_command
+    assert sync_options["env"]["UV_PYTHON_DOWNLOADS"] == "never"
     assert all(kwargs["silent"] is True for _, kwargs in recorded["commands"])
     assert capsys.readouterr() == ("", "")
