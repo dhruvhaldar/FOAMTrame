@@ -23,6 +23,7 @@ dev = [
 
 [tool.uv]
 package = false
+link-mode = "copy"
 
 [tool.pytest.ini_options]
 minversion = "8.0"
