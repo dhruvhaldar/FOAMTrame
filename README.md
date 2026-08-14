@@ -112,8 +112,8 @@ submitting arbitrary shell strings.
 - Switches between glass, white, black, and grey plot backgrounds with
   contrast-aware palettes.
 - Supports Helvetica Neue-style (bundled TeX Gyre Heros), bundled Roboto, Times
-  New Roman, and Arial typography plus no logo, the FOAMFlask logo, or a custom
-  image.
+  New Roman-style (bundled Liberation Serif), and Arial typography plus no logo,
+  the FOAMFlask logo, or a custom image.
 - Maximizes any plot while keeping the remaining charts available in a responsive
   sidebar.
 - Exports each chart as a publication-friendly PNG with a consistent white paper
