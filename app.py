@@ -310,6 +310,21 @@ with SinglePageWithDrawerLayout(server) as layout:
             min-height: 64px;
             font-size: clamp(1rem, 0.86rem + 0.25vw, 1.15rem) !important;
             line-height: 1.35;
+            transition: none !important;
+        }
+        .v-application .setup-advanced-card {
+            transition: none !important;
+        }
+        .v-application .setup-advanced-card:hover {
+            transform: none;
+        }
+        .v-application .setup-advanced-card .expand-transition-enter-active,
+        .v-application .setup-advanced-card .expand-transition-leave-active,
+        .v-application .setup-advanced-card .v-expansion-panel-content {
+            transition: none !important;
+        }
+        .v-application .setup-advanced-card .v-expansion-panel-header__icon {
+            transition: none !important;
         }
         .v-application .setup-footer-card {
             padding: 14px 20px !important;
@@ -897,7 +912,7 @@ with SinglePageWithDrawerLayout(server) as layout:
             text-align: center !important;
             height: 38px !important;
             color: #334155 !important; /* slate-700 */
-            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            transition: none !important;
             align-self: center !important;
             position: relative;
             z-index: 1;
@@ -924,12 +939,7 @@ with SinglePageWithDrawerLayout(server) as layout:
             bottom: 0 !important;
             border-radius: 9px !important;
             overflow: visible !important;
-            transition:
-                left 320ms cubic-bezier(0.4, 0, 0.2, 1),
-                right 320ms cubic-bezier(0.4, 0, 0.2, 1),
-                transform 320ms cubic-bezier(0.4, 0, 0.2, 1),
-                width 320ms cubic-bezier(0.4, 0, 0.2, 1) !important;
-            will-change: left, right, transform, width;
+            transition: none !important;
         }
         .glass-navbar .v-tabs-slider {
             width: 100% !important;
@@ -1413,17 +1423,16 @@ with SinglePageWithDrawerLayout(server) as layout:
             classes="ml-2 compact-navbar-tabs",
             show_arrows=True,
         ):
-            vuetify.VTab("Setup", click=lambda: ctrl.plots_set_visible(0))
-            vuetify.VTab("Geometry", click=lambda: ctrl.plots_set_visible(1))
-            vuetify.VTab("Meshing", click=lambda: ctrl.plots_set_visible(2))
-            vuetify.VTab("Run/Log", click=lambda: ctrl.plots_set_visible(3))
-            vuetify.VTab("Plots", click=lambda: ctrl.plots_set_visible(4))
-            vuetify.VTab("Post", click=lambda: ctrl.plots_set_visible(5))
+            vuetify.VTab("Setup")
+            vuetify.VTab("Geometry")
+            vuetify.VTab("Meshing")
+            vuetify.VTab("Run/Log")
+            vuetify.VTab("Plots")
+            vuetify.VTab("Post")
             with vuetify.VTab(
                 classes="settings-nav-tab",
                 title="Settings",
                 aria_label="Settings",
-                click=lambda: ctrl.plots_set_visible(6),
             ):
                 vuetify.VIcon("mdi-cog-outline")
     state.setdefault("drawer_open", True)
@@ -1431,7 +1440,6 @@ with SinglePageWithDrawerLayout(server) as layout:
     @state.change("active_tab")
     def _on_tab_change(active_tab, **_):
         state.drawer_open = True
-        state.flush()
         ctrl.plots_set_visible(active_tab)
 
     layout.drawer.classes = "glass-drawer"
