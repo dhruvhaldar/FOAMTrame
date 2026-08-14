@@ -131,6 +131,30 @@ with SinglePageWithDrawerLayout(server) as layout:
         .v-application .v-btn-toggle {
             border-radius: var(--foam-control-radius) !important;
         }
+        /* Keep binary and single-choice controls responsive across the app. */
+        .v-application .v-input--selection-controls__input,
+        .v-application .v-input--selection-controls__input .v-icon,
+        .v-application .v-input--selection-controls__ripple,
+        .v-application .v-input--switch__thumb,
+        .v-application .v-input--switch__track {
+            transition-duration: 120ms !important;
+            transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+        }
+        .v-application .v-input--selection-controls__ripple .v-ripple__animation {
+            animation-duration: 120ms !important;
+            transition-duration: 120ms !important;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .v-application .v-input--selection-controls__input,
+            .v-application .v-input--selection-controls__input .v-icon,
+            .v-application .v-input--selection-controls__ripple,
+            .v-application .v-input--selection-controls__ripple .v-ripple__animation,
+            .v-application .v-input--switch__thumb,
+            .v-application .v-input--switch__track {
+                animation-duration: 1ms !important;
+                transition-duration: 1ms !important;
+            }
+        }
         /* High-end Glassmorphism Cards */
         .v-application .glass-card {
             background: rgba(255, 255, 255, 0.55) !important;
