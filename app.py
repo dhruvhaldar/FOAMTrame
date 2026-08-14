@@ -99,6 +99,8 @@ with SinglePageWithDrawerLayout(server) as layout:
         }
 
         .v-application {
+            --foam-control-radius: 12px;
+            --foam-surface-radius: 16px;
             font-family: 'Inter', sans-serif !important;
         }
         .theme--light.v-application {
@@ -115,7 +117,7 @@ with SinglePageWithDrawerLayout(server) as layout:
         .v-application .v-expansion-panel,
         .v-application .v-menu__content,
         .v-application .v-dialog {
-            border-radius: 16px !important;
+            border-radius: var(--foam-surface-radius) !important;
         }
         /* Consistent Rounded Corners for Form Inputs, Buttons, Chips, and Tabs */
         .v-application .v-input input,
@@ -127,7 +129,7 @@ with SinglePageWithDrawerLayout(server) as layout:
         .v-application .v-btn,
         .v-application .v-chip,
         .v-application .v-btn-toggle {
-            border-radius: 12px !important;
+            border-radius: var(--foam-control-radius) !important;
         }
         /* High-end Glassmorphism Cards */
         .v-application .glass-card {
@@ -135,7 +137,7 @@ with SinglePageWithDrawerLayout(server) as layout:
             backdrop-filter: blur(24px) !important;
             -webkit-backdrop-filter: blur(24px) !important;
             border: 1px solid rgba(255, 255, 255, 0.7) !important;
-            border-radius: 16px !important;
+            border-radius: var(--foam-surface-radius) !important;
             box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05), inset 0 0 16px rgba(255, 255, 255, 0.3) !important;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
         }
@@ -280,9 +282,7 @@ with SinglePageWithDrawerLayout(server) as layout:
             height: 56px !important;
         }
         .v-application .setup-creation-card .v-tabs,
-        .v-application .setup-creation-card .v-tabs-bar,
-        .v-application .setup-creation-card .v-tabs-bar__content,
-        .v-application .setup-creation-card .v-tab {
+        .v-application .setup-creation-card .v-tabs-bar {
             height: 56px !important;
         }
         .v-application .setup-creation-card .v-tabs-items {
@@ -1045,17 +1045,88 @@ with SinglePageWithDrawerLayout(server) as layout:
         .v-application .glass-card .v-tabs-slider-wrapper {
             display: none !important;
         }
-        /* Setup tabs share the same control height as adjacent fields/buttons. */
+        /* Setup mode selector: compact, evenly inset segmented control. */
         .v-application .setup-glass-shell .setup-creation-card .v-tabs,
-        .v-application .setup-glass-shell .setup-creation-card .v-tabs-bar,
-        .v-application .setup-glass-shell .setup-creation-card .v-tabs-bar__content,
-        .v-application .setup-glass-shell .setup-creation-card .v-tab {
+        .v-application .setup-glass-shell .setup-creation-card .v-tabs-bar {
             height: 56px !important;
         }
-        @media (max-width: 1100px) {
-            .v-application .setup-glass-shell .setup-creation-card .v-tabs-bar__content {
-                gap: 8px;
+        .v-application .setup-case-tabs .v-tabs-bar {
+            box-sizing: border-box;
+            padding: 4px;
+            overflow: hidden;
+            background: rgba(226, 232, 240, 0.58) !important;
+            border: 1px solid rgba(255, 255, 255, 0.72);
+            border-radius: var(--foam-control-radius) !important;
+            box-shadow:
+                inset 0 1px 2px rgba(15, 23, 42, 0.08),
+                0 8px 24px rgba(14, 116, 144, 0.08);
+            backdrop-filter: blur(14px) saturate(130%);
+            -webkit-backdrop-filter: blur(14px) saturate(130%);
+        }
+        .v-application .setup-case-tabs .v-tabs-bar__content {
+            gap: 4px !important;
+            height: 100% !important;
+        }
+        .v-application .setup-case-tabs .v-tab {
+            flex: 1 1 0 !important;
+            min-width: 0 !important;
+            height: 100% !important;
+            margin: 0 !important;
+            isolation: isolate;
+            overflow: hidden;
+            color: #475569 !important;
+            background: transparent !important;
+            border-radius: calc(var(--foam-control-radius) - 4px) !important;
+            box-shadow: none !important;
+            transition:
+                color 240ms cubic-bezier(0.4, 0, 0.2, 1),
+                background-color 200ms ease !important;
+        }
+        .v-application .setup-case-tabs .v-tab::after {
+            content: "";
+            position: absolute;
+            z-index: -1;
+            inset: 0;
+            pointer-events: none;
+            opacity: 0;
+            border: 1px solid rgba(255, 255, 255, 0.38);
+            border-radius: inherit;
+            background: linear-gradient(135deg, #0aa6c0 0%, #087f99 52%, #0c6e87 100%);
+            box-shadow:
+                0 5px 14px rgba(6, 154, 181, 0.26),
+                inset 0 1px 0 rgba(255, 255, 255, 0.28);
+            transform: scale(0.975);
+            transition:
+                opacity 240ms cubic-bezier(0.4, 0, 0.2, 1),
+                transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+        }
+        .v-application .setup-case-tabs .v-tab--active {
+            color: #ffffff !important;
+            background: transparent !important;
+            text-shadow: 0 1px 1px rgba(15, 23, 42, 0.16);
+        }
+        .v-application .setup-case-tabs .v-tab--active::after {
+            opacity: 1;
+            transform: scale(1);
+        }
+        .v-application .setup-case-tabs .v-tab:hover:not(.v-tab--active) {
+            color: #0c6e87 !important;
+            background: rgba(255, 255, 255, 0.34) !important;
+        }
+        .v-application .setup-case-tabs .v-tab:focus-visible {
+            outline: 2px solid rgba(6, 154, 181, 0.62);
+            outline-offset: -3px;
+        }
+        .v-application .setup-case-tabs .v-tabs-slider-wrapper {
+            display: none !important;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .v-application .setup-case-tabs .v-tab,
+            .v-application .setup-case-tabs .v-tab::after {
+                transition-duration: 1ms !important;
             }
+        }
+        @media (max-width: 1100px) {
             .v-application .setup-glass-shell .setup-creation-card .v-tab {
                 min-width: 0 !important;
                 margin: 0 !important;
