@@ -5,6 +5,7 @@ import os
 import platform
 import shutil
 import tarfile
+import tempfile
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -105,14 +106,22 @@ def install_bundled_uv(
         )
 
     executable.parent.mkdir(parents=True, exist_ok=True)
-    temporary = executable.with_name(f".{executable.name}.tmp")
+    temporary: Path | None = None
     try:
-        temporary.write_bytes(_archive_executable(archive, bundle))
+        with tempfile.NamedTemporaryFile(
+            dir=executable.parent,
+            prefix=f".{executable.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as stream:
+            temporary = Path(stream.name)
+            stream.write(_archive_executable(archive, bundle))
         if selected_system != "Windows":
             temporary.chmod(0o755)
         os.replace(temporary, executable)
     finally:
-        temporary.unlink(missing_ok=True)
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
     return executable
 
 

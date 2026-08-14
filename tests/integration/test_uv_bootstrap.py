@@ -63,6 +63,37 @@ def test_tampered_bundled_uv_is_rejected(monkeypatch, tmp_path):
         uv_bootstrap.install_bundled_uv(system="Windows", machine="x86_64")
 
 
+def test_bundled_uv_uses_unique_temporary_files(monkeypatch, tmp_path):
+    archive = tmp_path / "uv-test.zip"
+    with zipfile.ZipFile(archive, "w") as package:
+        package.writestr("uv.exe", b"test uv executable")
+
+    bundle = uv_bootstrap.UvBundle(
+        archive=archive.name,
+        sha256=hashlib.sha256(archive.read_bytes()).hexdigest(),
+        member="uv.exe",
+        executable="uv.exe",
+    )
+    monkeypatch.setattr(uv_bootstrap, "VENDOR_ROOT", tmp_path)
+    monkeypatch.setattr(uv_bootstrap, "INSTALL_ROOT", tmp_path / "tools")
+    monkeypatch.setattr(uv_bootstrap, "UV_BUNDLES", {("Windows", "x86_64"): bundle})
+
+    temporary_paths = []
+
+    def reject_replace(source, _destination):
+        temporary_paths.append(Path(source))
+        raise OSError("replacement failed")
+
+    monkeypatch.setattr(uv_bootstrap.os, "replace", reject_replace)
+
+    for _ in range(2):
+        with pytest.raises(OSError, match="replacement failed"):
+            uv_bootstrap.install_bundled_uv(system="Windows", machine="x86_64")
+
+    assert len(set(temporary_paths)) == 2
+    assert all(not path.exists() for path in temporary_paths)
+
+
 def test_unsupported_platform_requires_a_system_uv():
     with pytest.raises(RuntimeError, match="No bundled uv binary is available"):
         uv_bootstrap.bundled_uv_path(system="Linux", machine="aarch64")
