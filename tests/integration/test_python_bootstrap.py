@@ -91,7 +91,16 @@ def test_bundled_python_is_isolated_and_compatible_python_on_path_is_preferred(
     assert bundled_python.is_relative_to(bundled_tools)
 
     unused_tools = tmp_path / "must-remain-absent"
-    preferred_path = str(bundled_python.parent) + os.pathsep + os.environ["PATH"]
+    path_entries = [str(bundled_python.parent)]
+    if platform.system() == "Windows":
+        alias_dir = tmp_path / "later-alias"
+        alias_dir.mkdir()
+        (alias_dir / "python3.cmd").write_text(
+            "@echo C:\\decoy\\python.exe\n", encoding="utf-8"
+        )
+        path_entries.append(str(alias_dir))
+    path_entries.append(os.environ["PATH"])
+    preferred_path = os.pathsep.join(path_entries)
     selected_python = run_bootstrap(
         unused_tools,
         force=False,

@@ -36,9 +36,9 @@ function Test-PythonCandidate {
 
 if (-not $ForceBundled -and $env:FOAMTRAME_FORCE_BUNDLED_PYTHON -ne "1") {
     $Candidates = @(
+        @{ Command = "python"; Arguments = @() },
         @{ Command = "python3.12"; Arguments = @() },
         @{ Command = "python3"; Arguments = @() },
-        @{ Command = "python"; Arguments = @() },
         @{ Command = "py"; Arguments = @("-3.12") }
     )
     foreach ($Candidate in $Candidates) {
