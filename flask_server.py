@@ -2,9 +2,7 @@ import logging
 import os
 import platform
 import posixpath
-import re
 import shutil
-import sys
 import threading
 from pathlib import Path
 from flask import Flask, jsonify, request
@@ -234,7 +232,7 @@ def load_tutorial():
         host_path = Path(CASE_ROOT).resolve()
         host_path_str = host_path.as_posix() if platform.system() == "Windows" else str(host_path)
         
-        shell_cmd = f'source "$1" && mkdir -p "$2" && cp -r $FOAM_TUTORIALS/"$3"/* "$2"'
+        shell_cmd = 'source "$1" && mkdir -p "$2" && cp -r $FOAM_TUTORIALS/"$3"/* "$2"'
         if platform.system() != "Windows":
             shell_cmd += ' && chmod +x "$2"/Allrun'
             

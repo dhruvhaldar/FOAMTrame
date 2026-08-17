@@ -50,6 +50,7 @@ def test_simulation_queue_runs_jobs_one_at_a_time_in_fifo_order():
     queue.enqueue(make_job(3))
 
     snapshot = queue.snapshot()
+    assert snapshot.active is not None
     assert snapshot.active.id == 1
     assert [job.id for job in snapshot.pending] == [2, 3]
 

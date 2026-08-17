@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import Dict, Any, Tuple, List, Union
+from typing import Dict, Any
 from werkzeug.utils import secure_filename
 
 logger = logging.getLogger("FOAMTrame")
@@ -70,10 +70,12 @@ class SnappyHexMeshGenerator:
             for obj in objects:
                 safe_obj = obj.copy()
                 raw_name = obj.get("name", "")
-                if not raw_name: continue
+                if not raw_name:
+                    continue
 
                 safe_name = secure_filename(str(raw_name))
-                if not safe_name: continue
+                if not safe_name:
+                    continue
                 safe_obj["name"] = safe_name
 
                 # Validate numeric fields
@@ -132,7 +134,7 @@ class SnappyHexMeshGenerator:
             
             geometry_str = ""
             for obj in objects:
-                name = obj["name"]
+                name = str(obj["name"])
                 if name.lower().endswith(".stl"):
                     if not is_esi:
                         # OpenFOAM Foundation (e.g. 12) requires 'file' keyword

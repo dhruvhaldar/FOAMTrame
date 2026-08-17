@@ -131,7 +131,9 @@ def _plot_style(
             "legend": "#1e293b", "transparent": False,
         },
     }
-    style = dict(backgrounds.get(effective_background, backgrounds["glass"]))
+    style: Dict[str, Any] = dict(
+        backgrounds.get(effective_background, backgrounds["glass"])
+    )
     style.update(
         {
             "background": effective_background,
@@ -869,7 +871,7 @@ def setup_plots_tab(server):
             state.plots_custom_logo_data = _uploaded_logo_data(plots_logo_upload)
             state.plots_logo_mode = "custom"
             state.plots_logo_status = "Custom logo ready"
-            _logo_array.cache_clear()
+            _logo_array.cache_clear()  # ty: ignore[unresolved-attribute]
         except Exception as exc:
             state.plots_logo_status = str(exc)
         finally:
@@ -901,9 +903,6 @@ def setup_plots_tab(server):
 # ---------------------------------------------------------------------------
 
 def build_plots_drawer():
-    from trame.app import get_server
-    server = get_server()
-
     with html.Div(v_show="active_tab === 4", classes="pa-4"):
         html.Div("Automatic Updates", classes="text-overline text--secondary mb-1")
         with vuetify.VCard(classes="glass-card pa-3 mb-4", outlined=True):
@@ -997,6 +996,7 @@ def build_plots_content():
     from trame.app import get_server
 
     server = get_server()
+    assert server is not None
     state, ctrl = server.state, server.controller
     download_exec = client.JSEval(
         exec="""

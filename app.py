@@ -53,6 +53,7 @@ from tabs.visualizer_tab import (
 )
 
 server = get_server(client_type="vue2")
+assert server is not None
 server.cli.add_argument("--data", help="Optional dataset to load at startup")
 server.serve["static"] = "static"
 state, ctrl = server.state, server.controller
@@ -1522,6 +1523,7 @@ with SinglePageWithDrawerLayout(server) as layout:
 
 
 def main():
+    assert server is not None
     args, _ = server.cli.parse_known_args()
     if args.data:
         try:

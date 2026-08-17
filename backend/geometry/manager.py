@@ -1,8 +1,7 @@
 import logging
 import os
-import shutil
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Union
 from werkzeug.utils import secure_filename
 from backend.utils import sanitize_error
 

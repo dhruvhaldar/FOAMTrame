@@ -3,12 +3,11 @@ import os
 import platform
 import logging
 import uuid
-import time
 import shutil
 import docker
 import docker.errors
 from pathlib import Path
-from typing import Dict, Any, Callable, Tuple, Optional
+from typing import Dict, Any, Callable, Optional
 
 logger = logging.getLogger("FOAMTrame")
 
@@ -130,7 +129,6 @@ def run_initial_setup_checks(
                 if status_callback:
                     status_callback(msg)
 
-                import json
                 # Use the lower-level API to get progress updates
                 logger.info(f"[FOAMTrame] Starting pull for {docker_image}")
                 last_progress_update = 0
@@ -149,7 +147,8 @@ def run_initial_setup_checks(
                             last_progress_update = current_time
                     elif status == 'Pull complete' or status == 'Already exists':
                          msg = f"Docker Image: {status}"
-                         if status_callback: status_callback(msg)
+                         if status_callback:
+                             status_callback(msg)
 
                 logger.info(f"[FOAMTrame] Image {docker_image} pulled successfully.")
 
@@ -217,7 +216,7 @@ def check_docker_permissions(
         # Command to touch a file
         cmd = f"touch {container_run_path}/{test_filename}"
 
-        container = client.containers.run(
+        client.containers.run(
             docker_image,
             f"bash -c '{cmd}'",
             volumes=volumes,

@@ -224,6 +224,7 @@ def setup_geometry_tab(server):
 def build_geometry_drawer():
     from trame.app import get_server
     server = get_server()
+    assert server is not None
     ctrl = server.controller
     with html.Div(v_show="active_tab === 1", classes="pa-4"):
         vuetify.VFileInput(
@@ -256,6 +257,7 @@ def build_geometry_drawer():
 def build_geometry_content():
     from trame.app import get_server
     server = get_server()
+    assert server is not None
     ctrl = server.controller
     with vuetify.VContainer(
         fluid=True,

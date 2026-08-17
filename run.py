@@ -3,6 +3,7 @@ from __future__ import annotations
 import signal
 import subprocess
 import sys
+from collections.abc import Iterable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TextIO
@@ -12,7 +13,7 @@ from runtime import settings
 PROJECT_ROOT = Path(__file__).resolve().parent
 
 
-def tee_stream(source: TextIO, console: TextIO, log_file: TextIO) -> None:
+def tee_stream(source: Iterable[str], console: TextIO, log_file: TextIO) -> None:
     """Copy complete child output to both the terminal and the daily run log."""
     for line in source:
         console.write(line)

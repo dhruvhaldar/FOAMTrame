@@ -465,7 +465,9 @@ def setup_run_log_tab(server):
             queued_at=queued_at,
             safe_clean=True,
         )
-        _simulation_queue[0].enqueue(job)
+        queue = _simulation_queue[0]
+        assert queue is not None
+        queue.enqueue(job)
         publish_state("run_history")
 
     def request_case_action(action_id: str):
@@ -605,6 +607,7 @@ def setup_run_log_tab(server):
 def build_run_log_drawer():
     from trame.app import get_server
     server = get_server()
+    assert server is not None
     ctrl = server.controller
 
     def capability_button(
@@ -772,6 +775,7 @@ def build_run_log_drawer():
 def build_run_log_content():
     from trame.app import get_server
     server = get_server()
+    assert server is not None
     ctrl = server.controller
 
     with vuetify.VContainer(

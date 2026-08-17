@@ -10,7 +10,6 @@ import logging
 import os
 import mmap
 import array
-import itertools
 from pathlib import Path
 from typing import List, Optional, Tuple, Dict, Union, Any
 
@@ -307,7 +306,7 @@ class OpenFOAMFieldParser:
                 _CASE_FIELD_TYPES[case_path_str][filename] = field_type
 
             return field_type
-        except Exception as e:
+        except Exception:
             # print(f"DEBUG: _get_field_type failed for {field_entry}: {e}")
             return None
 
@@ -474,7 +473,7 @@ class OpenFOAMFieldParser:
                     if store_cache:
                         _FILE_CACHE[path_str] = (mtime, val)
                     return val
-                except Exception as e:
+                except Exception:
                     # Fallback to Python if Rust fails (unlikely)
                     pass
 
@@ -528,7 +527,7 @@ class OpenFOAMFieldParser:
                                                         arr = np.frombuffer(mm, dtype='float32', count=size, offset=actual_start)
                                                         if arr.size > 0:
                                                             val = float(np.mean(arr))
-                                                    except:
+                                                    except Exception:
                                                         pass
 
                             # 1. Check for nonuniform list (ASCII)
@@ -601,7 +600,7 @@ class OpenFOAMFieldParser:
                                             except ValueError:
                                                 pass
 
-            except (FileNotFoundError, OSError, ValueError) as e:
+            except (FileNotFoundError, OSError, ValueError):
                 # If mmap fails or file issues, we fall back or return None
                 pass
 
@@ -676,7 +675,7 @@ class OpenFOAMFieldParser:
                     if store_cache:
                         _FILE_CACHE[path_str] = (mtime, val)
                     return val
-                except Exception as e:
+                except Exception:
                     pass
 
             try:
@@ -711,7 +710,7 @@ class OpenFOAMFieldParser:
                                                         mean_vec = np.mean(arr, axis=0)
                                                         val = (float(mean_vec[0]), float(mean_vec[1]), float(mean_vec[2]))
                                                         # Successfully parsed binary, skip to uniform check if val still (0,0,0)
-                                                except:
+                                                except Exception:
                                                     pass
 
                             # 1. Check for nonuniform (ASCII)
@@ -788,7 +787,7 @@ class OpenFOAMFieldParser:
                                                     float(vec_match.group(3)),
                                                 )
 
-            except (FileNotFoundError, OSError, ValueError) as e:
+            except (FileNotFoundError, OSError, ValueError):
                 pass
 
             # Fallback
@@ -1445,7 +1444,7 @@ def get_available_fields(case_dir: str) -> List[str]:
     return sorted(all_files)
 
 
-def clear_cache(case_dir: str = None) -> None:
+def clear_cache(case_dir: str | None = None) -> None:
     """Clear internal caches. If case_dir is provided, clear only for that case."""
     global _FILE_CACHE, _RESIDUALS_CACHE, _FIELD_TYPE_CACHE, _TIME_DIRS_CACHE, _TIME_SERIES_CACHE, _DIR_SCAN_CACHE, _CASE_FIELD_TYPES
 

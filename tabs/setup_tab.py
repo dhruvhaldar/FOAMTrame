@@ -224,7 +224,6 @@ def setup_setup_tab(server):
         publish_setup_state("setup_status")
 
         try:
-            import docker.errors
             client.images.get(state.docker_image)
             try:
                 detected_version = detect_openfoam_version(
@@ -441,7 +440,7 @@ def setup_setup_tab(server):
                     else str(host_path)
                 )
 
-                shell_cmd = f'source "$1" && mkdir -p "$2" && cp -r $FOAM_TUTORIALS/"$3"/* "$2"'
+                shell_cmd = 'source "$1" && mkdir -p "$2" && cp -r $FOAM_TUTORIALS/"$3"/* "$2"'
                 if platform.system() != "Windows":
                     shell_cmd += ' && chmod +x "$2"/Allrun'
 
@@ -488,10 +487,6 @@ def setup_setup_tab(server):
 
 
 def build_setup_drawer():
-    from trame.app import get_server
-    server = get_server()
-    ctrl = server.controller
-
     with html.Div(v_show="active_tab === 0", classes="pa-4"):
         # Header / Status Cards in Sidebar
         html.Div("Health Checkup 💊", classes="text-subtitle-1 font-weight-bold text-slate-800 mb-2", style="color: #0f172a;")
@@ -514,6 +509,7 @@ def build_setup_drawer():
 def build_setup_content():
     from trame.app import get_server
     server = get_server()
+    assert server is not None
     ctrl = server.controller
     with vuetify.VContainer(
         fluid=True,

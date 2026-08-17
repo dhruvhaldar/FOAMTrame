@@ -74,6 +74,8 @@ Useful non-interactive and diagnostic commands:
 ```powershell
 .\install.ps1 --silent --auto-port
 uv run --locked python manage.py doctor --skip-docker
+uv run --locked ruff check .
+uv run --locked ty check
 uv run --locked pytest -q
 ```
 
@@ -382,6 +384,8 @@ Primary commands from the repository root:
 
 ```powershell
 uv run --locked python -m compileall -q app.py app_state.py database.py flask_server.py security.py tabs backend
+uv run --locked ruff check .
+uv run --locked ty check
 uv run --locked pytest -q
 ```
 

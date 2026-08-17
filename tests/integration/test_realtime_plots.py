@@ -87,7 +87,9 @@ def test_plot_appearance_export_and_custom_logo():
 
 def test_times_font_uses_bundled_liberation_serif_without_warning(caplog):
     font = _font_properties("times_new_roman")
-    assert font.get_file().endswith("LiberationSerif-Regular.ttf")
+    font_file = font.get_file()
+    assert isinstance(font_file, str)
+    assert font_file.endswith("LiberationSerif-Regular.ttf")
 
     caplog.set_level("WARNING", logger="matplotlib.font_manager")
     _build_line_chart(

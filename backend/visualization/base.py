@@ -10,7 +10,7 @@ import os
 import tempfile
 import gzip
 from pathlib import Path
-from typing import Optional, Union, Dict, Any, List
+from typing import Optional, Union, List
 import pyvista as pv
 from backend.utils import safe_decompress
 

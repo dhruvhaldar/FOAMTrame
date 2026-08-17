@@ -1,7 +1,6 @@
-import os
 import logging
 from pathlib import Path
-from typing import Dict, Optional, Union
+from typing import Dict, Union
 from backend.utils import sanitize_error
 
 logger = logging.getLogger("FOAMTrame")

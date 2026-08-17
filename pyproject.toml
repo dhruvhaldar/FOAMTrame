@@ -20,11 +20,44 @@ dependencies = [
 [dependency-groups]
 dev = [
   "pytest==8.4.2",
+  "ruff==0.16.1",
+  "ty==0.0.72",
 ]
+
+[tool.ruff]
+target-version = "py310"
+extend-exclude = ["scratch_*.py"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+
+[tool.ruff.lint.per-file-ignores]
+"app.py" = ["E402"]
+"tabs/plots_tab.py" = ["E402"]
 
 [tool.uv]
 package = false
 link-mode = "copy"
+
+[tool.ty.src]
+exclude = [
+  "scratch_*.py",
+]
+
+[tool.ty.analysis]
+allowed-unresolved-imports = ["accelerator", "pyvista"]
+
+[tool.ty.environment]
+python-platform = "all"
+
+[[tool.ty.overrides]]
+include = [
+  "benchmarks/benchmark_cachebox.py",
+  "tests/integration/test_case_capabilities.py",
+]
+
+[tool.ty.overrides.rules]
+unresolved-attribute = "ignore"
 
 [tool.pytest.ini_options]
 minversion = "8.0"

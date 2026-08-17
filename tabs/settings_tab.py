@@ -267,11 +267,6 @@ def setup_settings_tab(server):
 
 
 def build_settings_drawer():
-    from trame.app import get_server
-
-    server = get_server()
-    state = server.state
-
     with html.Div(v_show="active_tab === 6", classes="pa-4"):
         with html.Div(classes="d-flex align-center mb-3"):
             vuetify.VIcon("mdi-cog-outline", color="cyan darken-3", classes="mr-2")
@@ -293,6 +288,7 @@ def build_settings_content():
     from trame.app import get_server
 
     server = get_server()
+    assert server is not None
     state, ctrl = server.state, server.controller
 
     download_exec = client.JSEval(

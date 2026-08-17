@@ -212,6 +212,7 @@ def _run_trame_visualizer_process(
         from trame.widgets import html, vtk as vtk_widgets, vuetify
 
         server = get_server(client_type="vue2")
+        assert server is not None
         state, ctrl = server.state, server.controller
 
         logger.info(f"[FOAMTrame Post] Starting Trame subprocess with initial_file='{initial_file}' on port {port}")

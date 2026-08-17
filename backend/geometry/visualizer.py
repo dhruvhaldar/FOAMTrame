@@ -1,7 +1,7 @@
 import logging
 import pyvista as pv
 from pathlib import Path
-from typing import Optional, Union, Dict, Any, BinaryIO
+from typing import Optional, Union, Dict, Any
 import multiprocessing
 import tempfile
 import os

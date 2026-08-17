@@ -153,7 +153,7 @@ def configure_logging(config: RuntimeSettings = settings) -> None:
     root.setLevel(level)
     root.addHandler(console)
     root.addHandler(rotating_file)
-    root._foamtrame_configured = True  # type: ignore[attr-defined]
+    setattr(root, "_foamtrame_configured", True)
 
     # Trame emits very detailed expression/namespace translation records at
     # INFO. They are useful for framework debugging but obscure application

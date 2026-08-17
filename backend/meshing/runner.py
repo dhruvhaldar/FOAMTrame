@@ -1,8 +1,9 @@
 import logging
 import platform
 from pathlib import Path
-from typing import Dict, Any, Tuple, Optional
+from typing import Dict, Any
 import docker
+from docker.errors import ContainerError
 import posixpath
 
 from .blockmesh import BlockMeshGenerator
@@ -152,9 +153,9 @@ class MeshingRunner:
 
             return {"success": True, "output": output}
 
-        except docker.errors.ContainerError as e:
+        except ContainerError as e:
             # Container exited with non-zero code
-            return {"success": False, "message": f"Command failed", "output": e.stderr.decode('utf-8') if e.stderr else str(e)}
+            return {"success": False, "message": "Command failed", "output": e.stderr.decode('utf-8') if e.stderr else str(e)}
         except Exception as e:
             logger.error(f"Error running meshing command: {e}")
             return {"success": False, "message": str(e)}

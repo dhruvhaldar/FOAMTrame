@@ -111,7 +111,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Create an isolated FOAMTrame installation on Windows or Linux."
     )
-    parser.add_argument("--dev", action="store_true", help="Install test dependencies")
+    parser.add_argument(
+        "--dev",
+        action="store_true",
+        help="Install development and test dependencies",
+    )
     parser.add_argument(
         "--silent",
         "--quiet",

@@ -5,6 +5,7 @@ from datetime import datetime
 from io import StringIO
 import socket
 import sys
+from typing import Any
 
 import pytest
 
@@ -116,7 +117,11 @@ def test_silent_main_completes_without_console_and_persists_port(
             self.closed = True
 
     reservation = Reservation()
-    recorded = {"commands": [], "port": None}
+    commands: list[tuple[list[str], dict[str, Any]]] = []
+    saved_ports: list[int] = []
+
+    def record_run(command: list[str], **kwargs: Any) -> None:
+        commands.append((command, kwargs))
     args = argparse.Namespace(
         dev=False,
         silent=True,
@@ -136,22 +141,22 @@ def test_silent_main_completes_without_console_and_persists_port(
     monkeypatch.setattr(
         install,
         "run",
-        lambda command, **kwargs: recorded["commands"].append((command, kwargs)),
+        record_run,
     )
     monkeypatch.setattr(
         install,
         "save_server_port",
-        lambda port: recorded.update(port=port),
+        saved_ports.append,
     )
     monkeypatch.setattr(install, "INSTALL_LOG", tmp_path / "logs" / "install.log")
 
     assert install.main() == 0
     assert reservation.closed is True
-    assert recorded["port"] == 52123
-    assert recorded["commands"]
-    sync_command, sync_options = recorded["commands"][0]
+    assert saved_ports == [52123]
+    assert commands
+    sync_command, sync_options = commands[0]
     assert sync_command[:3] == ["uv", "sync", "--locked"]
     assert "--no-dev" in sync_command
     assert sync_options["env"]["UV_PYTHON_DOWNLOADS"] == "never"
-    assert all(kwargs["silent"] is True for _, kwargs in recorded["commands"])
+    assert all(kwargs["silent"] is True for _, kwargs in commands)
     assert capsys.readouterr() == ("", "")

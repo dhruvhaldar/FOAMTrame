@@ -4,7 +4,6 @@ import copy
 import json
 import logging
 import threading
-from pathlib import Path
 from typing import Any
 
 from database import SCHEMA_VERSION, database

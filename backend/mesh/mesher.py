@@ -165,10 +165,14 @@ class MeshVisualizer(BaseVisualizer):
             plotter.add_axes()
 
             if camera_position:
-                if camera_position == "xy": plotter.view_xy()
-                elif camera_position == "xz": plotter.view_xz()
-                elif camera_position == "yz": plotter.view_yz()
-                elif camera_position == "iso": plotter.view_isometric()
+                if camera_position == "xy":
+                    plotter.view_xy()
+                elif camera_position == "xz":
+                    plotter.view_xz()
+                elif camera_position == "yz":
+                    plotter.view_yz()
+                elif camera_position == "iso":
+                    plotter.view_isometric()
             else:
                 plotter.reset_camera()
 
@@ -278,19 +282,22 @@ class MeshVisualizer(BaseVisualizer):
                         for entry in entries:
                             if entry.is_dir(follow_symlinks=False):
                                 name = entry.name
-                                if name.startswith("."): continue
+                                if name.startswith("."):
+                                    continue
                                 try:
                                     float(name)
                                     continue
                                 except ValueError:
-                                    if name == "system": continue
+                                    if name == "system":
+                                        continue
                                 subdirs_to_visit.append(entry.path)
 
                             elif entry.is_file(follow_symlinks=True):
                                 name = entry.name
                                 if name.endswith(ext_tuple):
                                     entry_path = entry.path
-                                    if entry_path in seen_paths: continue
+                                    if entry_path in seen_paths:
+                                        continue
                                     seen_paths.add(entry_path)
 
                                     try:
