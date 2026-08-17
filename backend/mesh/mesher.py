@@ -11,8 +11,8 @@ import os
 from io import BytesIO
 from pathlib import Path
 from typing import Dict, List, Optional, Union, Any
-from collections import OrderedDict
 
+from cachebox import LRUCache
 import pyvista as pv
 from pyvista import DataSet, Plotter
 import PIL.Image
@@ -39,11 +39,9 @@ class MeshVisualizer(BaseVisualizer):
         # ⚡ Bolt Optimization: Cache decimated meshes to avoid re-computation
         self._decimated_cache: Dict[int, DataSet] = {}
         # ⚡ Bolt Optimization: Cache screenshots (LRU)
-        self._screenshot_cache: OrderedDict = OrderedDict()
-        self._screenshot_cache_max_size = 32
+        self._screenshot_cache = LRUCache(maxsize=32)
         # ⚡ Bolt Optimization: Cache interactive HTML (LRU)
-        self._html_cache: OrderedDict = OrderedDict()
-        self._html_cache_max_size = 16
+        self._html_cache = LRUCache(maxsize=16)
 
     def __del__(self) -> None:
         """Clean up resources by closing the plotter if it exists."""
@@ -154,7 +152,6 @@ class MeshVisualizer(BaseVisualizer):
 
             if cache_key in self._screenshot_cache:
                 logger.debug(f"[FOAMTrame] Serving cached screenshot for {path}")
-                self._screenshot_cache.move_to_end(cache_key)
                 return self._screenshot_cache[cache_key]
 
             # Load mesh (uses caching)
@@ -185,8 +182,6 @@ class MeshVisualizer(BaseVisualizer):
             img_str = base64.b64encode(buffered.getvalue()).decode()
 
             # Update cache
-            if len(self._screenshot_cache) >= self._screenshot_cache_max_size:
-                self._screenshot_cache.popitem(last=False)
             self._screenshot_cache[cache_key] = img_str
 
             return img_str
@@ -216,7 +211,6 @@ class MeshVisualizer(BaseVisualizer):
 
             if cache_key in self._html_cache:
                 logger.debug(f"[FOAMTrame] Serving cached HTML for {path_str}")
-                self._html_cache.move_to_end(cache_key)
                 return self._html_cache[cache_key]
 
             # Cache miss: Load mesh and generate
@@ -247,8 +241,6 @@ class MeshVisualizer(BaseVisualizer):
 
             # Store in cache
             if html_content:
-                if len(self._html_cache) >= self._html_cache_max_size:
-                    self._html_cache.popitem(last=False)
                 self._html_cache[cache_key] = html_content
 
             return html_content

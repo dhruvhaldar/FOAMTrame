@@ -7,6 +7,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
+from cachebox import LRUCache, TTLCache, cached
+
 
 _SAFE_EXECUTABLE = re.compile(r"^[A-Za-z][A-Za-z0-9_.+-]{0,63}$")
 _TIME_DIRECTORY = re.compile(
@@ -70,17 +72,30 @@ def _dictionary_word(content: str, key: str) -> str:
     return match.group(1) if match else ""
 
 
-def _read_solver(case_path: Path) -> tuple[str, str]:
-    control_dict = case_path / "system" / "controlDict"
-    if not control_dict.is_file():
-        return "", ""
+@cached(LRUCache(maxsize=128))
+def _read_solver_file(
+    control_dict_path: str, mtime_ns: int, size: int
+) -> tuple[str, str]:
+    """Read solver metadata once per immutable file signature."""
+    del mtime_ns, size
     try:
         content = _strip_foam_comments(
-            control_dict.read_text(encoding="utf-8", errors="replace")
+            Path(control_dict_path).read_text(encoding="utf-8", errors="replace")
         )
     except OSError:
         return "", ""
     return _dictionary_word(content, "application"), _dictionary_word(content, "solver")
+
+
+def _read_solver(case_path: Path) -> tuple[str, str]:
+    control_dict = case_path / "system" / "controlDict"
+    try:
+        signature = control_dict.stat()
+    except OSError:
+        return "", ""
+    return _read_solver_file(
+        str(control_dict), signature.st_mtime_ns, signature.st_size
+    )
 
 
 def _is_result_time_directory(path: Path) -> bool:
@@ -92,7 +107,13 @@ def _is_result_time_directory(path: Path) -> bool:
         return False
 
 
-def _safe_clean_targets(case_path: Path) -> tuple[Path, ...]:
+@cached(LRUCache(maxsize=128))
+def _safe_clean_targets_for_signature(
+    case_path_str: str, directory_mtime_ns: int
+) -> tuple[Path, ...]:
+    """Scan clean targets once per case-directory signature."""
+    del directory_mtime_ns
+    case_path = Path(case_path_str)
     targets: list[Path] = []
     try:
         entries = list(case_path.iterdir())
@@ -110,15 +131,21 @@ def _safe_clean_targets(case_path: Path) -> tuple[Path, ...]:
     return tuple(sorted(targets, key=lambda path: path.name.lower()))
 
 
-def _docker_executables(
+def _safe_clean_targets(case_path: Path) -> tuple[Path, ...]:
+    try:
+        directory_mtime_ns = case_path.stat().st_mtime_ns
+    except OSError:
+        return ()
+    return _safe_clean_targets_for_signature(str(case_path), directory_mtime_ns)
+
+
+@cached(TTLCache(maxsize=32, global_ttl=5))
+def _docker_executables_cached(
     client,
     docker_image: str,
     openfoam_version: str,
-    executable_names: Iterable[str],
+    names: tuple[str, ...],
 ) -> tuple[bool, set[str], str]:
-    names = sorted({name for name in executable_names if _SAFE_EXECUTABLE.fullmatch(name)})
-    if client is None:
-        return False, set(), "Docker daemon is unavailable"
     if not names:
         return True, set(), ""
     shell_script = r'''
@@ -160,6 +187,28 @@ done
         return True, found, ""
     except Exception:
         return False, set(), "Docker image commands could not be inspected"
+
+
+def _docker_executables(
+    client,
+    docker_image: str,
+    openfoam_version: str,
+    executable_names: Iterable[str],
+) -> tuple[bool, set[str], str]:
+    if client is None:
+        return False, set(), "Docker daemon is unavailable"
+    names = tuple(
+        sorted(
+            {
+                name
+                for name in executable_names
+                if _SAFE_EXECUTABLE.fullmatch(name)
+            }
+        )
+    )
+    return _docker_executables_cached(
+        client, docker_image, openfoam_version, names
+    )
 
 
 def _unavailable_action(

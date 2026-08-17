@@ -35,6 +35,7 @@ FOAMTrame brings case selection, tutorial import, OpenFOAM command execution, li
 - [Supported datasets](#supported-datasets)
 - [Optional Flask API](#optional-flask-api)
 - [Project structure](#project-structure)
+- [Caching and performance](#caching-and-performance)
 - [Development checks](#development-checks)
 - [Troubleshooting](#troubleshooting)
 - [Security notes](#security-notes)
@@ -663,6 +664,43 @@ Follow the links below for the principal implementation surfaces:
 - [Backend modules](./backend)
 - [Static assets](./static)
 
+## Caching and performance
+
+FOAMTrame uses [Cachebox](https://github.com/awolverp/cachebox) 6.1 for
+thread-safe, bounded in-memory memoization. LRU caches cover repeated
+`controlDict` metadata reads, safe-clean directory scans, OpenFOAM field-header
+lookups, directory scans, compiled variable patterns, plot logos, and generated
+geometry/mesh views. Repeated Docker executable probes use a five-second TTL to
+coalesce rapid rescans without masking runtime changes for long. File-backed
+keys include modification time (and file size where relevant), so a changed
+case or asset naturally produces a cache miss.
+Large live-result caches remain specialized and append-aware: residual logs and
+time series reuse stable parsed history while reading only newly appended data.
+
+Cache capacities are deliberately bounded. High-cardinality field and file
+lookups retain up to 4,096 entries, directory scans up to 1,024, and rendered
+assets use smaller workload-specific limits. Selecting a different case or
+requesting a plot refresh continues to clear the relevant case-scoped entries.
+
+The reproducible microbenchmark compares the uncached implementation with a
+warmed normal cache hit while retaining the same filesystem signature checks:
+
+```bash
+uv run --locked python benchmarks/benchmark_cachebox.py
+```
+
+On Windows with CPython 3.13.7, using the default 2,000 iterations and the
+median of seven rounds, the implementation measured:
+
+| Operation | Uncached (µs/call) | Cached (µs/call) | Speedup |
+|---|---:|---:|---:|
+| `controlDict` solver metadata | 486.36 | 28.90 | 16.8× |
+| Safe-clean scan (200 outputs) | 6,254.79 | 10.62 | 588.7× |
+
+These are local microbenchmarks, not end-to-end UI latency guarantees. Results
+vary with filesystem, antivirus, hardware, case size, and cache warmth; use the
+included script to measure the target machine.
+
 ## Development checks
 
 Install the development profile first:
@@ -692,6 +730,12 @@ Run the integration suite:
 uv run --locked python -m unittest discover -s tests/integration -v
 # or
 uv run --locked pytest -m integration
+```
+
+Run the cache benchmark after changing cache keys, capacities, or invalidation:
+
+```bash
+uv run --locked python benchmarks/benchmark_cachebox.py
 ```
 
 Run the single end-to-end server smoke test:
