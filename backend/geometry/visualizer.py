@@ -9,15 +9,14 @@ import shutil
 import hashlib
 import stat
 import random
-from collections import OrderedDict
+from cachebox import LRUCache
 from backend.visualization.base import BaseVisualizer
 
 logger = logging.getLogger("FOAMTrame")
 
 # ⚡ Bolt Optimization: Cache for mesh info
 # Stores (path, mtime) -> mesh_info_dict
-_MESH_INFO_CACHE = OrderedDict()
-_MESH_INFO_CACHE_SIZE = 100
+_MESH_INFO_CACHE = LRUCache(maxsize=100)
 
 def _get_cache_dir() -> Path:
     """Get the cache directory, creating it if it doesn't exist."""
@@ -263,7 +262,6 @@ class GeometryVisualizer(BaseVisualizer):
             try:
                 cache_key = (str(path), mtime)
                 if cache_key in _MESH_INFO_CACHE:
-                    _MESH_INFO_CACHE.move_to_end(cache_key)
                     return _MESH_INFO_CACHE[cache_key]
             except Exception:
                 pass
@@ -282,8 +280,6 @@ class GeometryVisualizer(BaseVisualizer):
 
             try:
                 _MESH_INFO_CACHE[cache_key] = result
-                if len(_MESH_INFO_CACHE) > _MESH_INFO_CACHE_SIZE:
-                    _MESH_INFO_CACHE.popitem(last=False)
             except Exception:
                 pass
 

@@ -4,7 +4,11 @@ import sys
 
 from runtime import configure_logging, settings
 from app_state import load_security_preferences
-from security import apply_trame_security, trame_bind_host
+from security import (
+    apply_trame_security,
+    trame_bind_host,
+    trame_session_timeout_seconds,
+)
 
 configure_logging()
 
@@ -1542,7 +1546,16 @@ def main():
         if explicit_host
         else trame_bind_host(startup_security_preferences)
     )
-    server.start(port=port, host=host)
+    explicit_timeout = any(
+        token == "--timeout" or token.startswith("--timeout=")
+        for token in sys.argv[1:]
+    )
+    timeout = (
+        None
+        if explicit_timeout
+        else trame_session_timeout_seconds(startup_security_preferences)
+    )
+    server.start(port=port, host=host, timeout=timeout)
 
 
 if __name__ == "__main__":

@@ -2,7 +2,14 @@ from pathlib import Path
 
 import pytest
 
-from backend.case.capabilities import CaseActionService
+from backend.case.capabilities import (
+    CaseActionService,
+    _read_solver,
+    _read_solver_file,
+    _docker_executables_cached,
+    _safe_clean_targets,
+    _safe_clean_targets_for_signature,
+)
 
 
 class FakeContainers:
@@ -201,3 +208,45 @@ def test_shared_runner_launches_only_resolved_fixed_id_actions(tmp_path):
             docker_image="openfoam:test",
             openfoam_version="12",
         )
+
+
+def test_cachebox_case_metadata_caches_and_invalidates(tmp_path):
+    case = build_case(tmp_path)
+    control_dict = case / "system" / "controlDict"
+
+    _read_solver_file.cache_clear()
+    assert _read_solver(case) == ("foamRun", "incompressibleFluid")
+    assert _read_solver_file.cache_info().hits == 0
+    assert _read_solver(case) == ("foamRun", "incompressibleFluid")
+    assert _read_solver_file.cache_info().hits == 1
+
+    control_dict.write_text("application simpleFoam;\n", encoding="utf-8")
+    assert _read_solver(case) == ("simpleFoam", "")
+
+    _safe_clean_targets_for_signature.cache_clear()
+    assert _safe_clean_targets(case) == ()
+    assert _safe_clean_targets_for_signature.cache_info().hits == 0
+    assert _safe_clean_targets(case) == ()
+    assert _safe_clean_targets_for_signature.cache_info().hits == 1
+
+    result_dir = case / "1"
+    result_dir.mkdir()
+    assert _safe_clean_targets(case) == (result_dir,)
+
+
+def test_docker_executable_probe_is_briefly_memoized(tmp_path):
+    case = build_case(tmp_path)
+    client = FakeDockerClient({"foamRun", "blockMesh", "setFields"})
+    service = CaseActionService()
+    _docker_executables_cached.cache_clear()
+
+    for _ in range(2):
+        service.inspect_case(
+            case,
+            docker_client=client,
+            docker_image="openfoam:test",
+            openfoam_version="12",
+        )
+
+    assert len(client.containers.calls) == 1
+    assert _docker_executables_cached.cache_info().hits == 1

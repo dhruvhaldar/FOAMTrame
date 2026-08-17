@@ -87,6 +87,14 @@ def setup_settings_tab(server):
         security_preferences["websocket_max_message_mb"],
     )
     state.setdefault(
+        "security_session_timeout_enabled",
+        security_preferences["session_timeout_enabled"],
+    )
+    state.setdefault(
+        "security_session_timeout_minutes",
+        security_preferences["session_timeout_minutes"],
+    )
+    state.setdefault(
         "security_settings_status",
         (
             "Optional security is enabled. Restart after changing startup policies."
@@ -116,6 +124,12 @@ def setup_settings_tab(server):
         state.security_max_request_mb = preferences["max_request_mb"]
         state.security_websocket_max_message_mb = preferences[
             "websocket_max_message_mb"
+        ]
+        state.security_session_timeout_enabled = preferences[
+            "session_timeout_enabled"
+        ]
+        state.security_session_timeout_minutes = preferences[
+            "session_timeout_minutes"
         ]
 
     @state.change("active_tab")
@@ -222,6 +236,12 @@ def setup_settings_tab(server):
                     "websocket_max_message_mb": (
                         state.security_websocket_max_message_mb
                     ),
+                    "session_timeout_enabled": (
+                        state.security_session_timeout_enabled
+                    ),
+                    "session_timeout_minutes": (
+                        state.security_session_timeout_minutes
+                    ),
                 }
             )
             if not update_security_preferences(preferences):
@@ -230,7 +250,7 @@ def setup_settings_tab(server):
             if preferences["security_enabled"]:
                 state.security_settings_status = (
                     "Optional security enabled. Restart FOAMTrame to apply server "
-                    "binding, CORS headers, and WebSocket limits."
+                    "binding, CORS headers, WebSocket limits, and session timeout."
                 )
             else:
                 state.security_settings_status = (
@@ -487,6 +507,35 @@ def build_settings_content():
                                     dense=True,
                                     hide_details=True,
                                 )
+
+                    with vuetify.VCard(
+                        classes="settings-action-card pa-5 mb-4",
+                        disabled=("!security_enabled",),
+                    ):
+                        html.H3("Session Timeout", classes="settings-action-title")
+                        html.P(
+                            "After the last browser disconnects, stop FOAMTrame once the grace period expires. Active browser sessions are never interrupted.",
+                            classes="settings-action-description mb-3",
+                        )
+                        vuetify.VSwitch(
+                            v_model=("security_session_timeout_enabled", False),
+                            label="Enable no-client session timeout",
+                            color="cyan darken-2",
+                            inset=True,
+                            hide_details=True,
+                            classes="security-setting-switch mb-4",
+                        )
+                        vuetify.VTextField(
+                            v_model=("security_session_timeout_minutes", 30),
+                            label="Grace period (minutes)",
+                            type="number",
+                            min="1",
+                            max="1440",
+                            outlined=True,
+                            dense=True,
+                            hide_details=True,
+                            disabled=("!security_session_timeout_enabled",),
+                        )
 
                     with vuetify.VCard(
                         classes="settings-action-card pa-5 mb-5",

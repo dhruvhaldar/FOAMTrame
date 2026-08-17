@@ -9,11 +9,12 @@ import numpy as np
 import logging
 import os
 import mmap
-import functools
 import array
 import itertools
 from pathlib import Path
 from typing import List, Optional, Tuple, Dict, Union, Any
+
+from cachebox import LRUCache, cached
 
 # ⚡ Bolt Optimization: Import Rust accelerator if available
 try:
@@ -28,19 +29,19 @@ logger = logging.getLogger("FOAMTrame")
 
 # --- Global Cache ---
 # Structure: { "file_path_str": (mtime, parsed_value) }
-_FILE_CACHE: Dict[str, Tuple[float, Any]] = {}
+_FILE_CACHE = LRUCache(maxsize=4096)
 
 # Structure: { "log_path_str": (mtime, size, offset, residuals_data) }
 # ⚡ Bolt Optimization: Added offset to support incremental reading
 # ⚡ Bolt Optimization: Use array.array for compact storage (saves ~3x memory vs lists)
-_RESIDUALS_CACHE: Dict[str, Tuple[float, int, int, Dict[str, Any]]] = {}
+_RESIDUALS_CACHE = LRUCache(maxsize=32)
 
 # Structure: { "file_path_str": (mtime, field_type) }
-_FIELD_TYPE_CACHE: Dict[str, Tuple[float, Optional[str]]] = {}
+_FIELD_TYPE_CACHE = LRUCache(maxsize=4096)
 
 # Structure: { "case_dir_str": (mtime, list_of_time_dirs) }
 # ⚡ Bolt Optimization: Cache time directories based on case dir mtime
-_TIME_DIRS_CACHE: Dict[str, Tuple[float, List[str]]] = {}
+_TIME_DIRS_CACHE = LRUCache(maxsize=32)
 
 # Structure: { "case_dir_str": (list_of_time_dirs, full_data_dict) }
 # ⚡ Bolt Optimization: Cache accumulated time series data to avoid rebuilding lists
@@ -52,17 +53,15 @@ MAX_CACHE_CASES = int(os.environ.get("FOAMTrame_MAX_CACHE_CASES", 5))
 
 # Structure: { "dir_path_str": (mtime, scalar_fields, has_U, all_files, file_mtimes) }
 # ⚡ Bolt Optimization: Cache directory contents to avoid redundant scandir/field_type checks
-_DIR_SCAN_CACHE: Dict[
-    str, Tuple[float, List[str], bool, List[str], Dict[str, float]]
-] = {}
+_DIR_SCAN_CACHE = LRUCache(maxsize=1024)
 
 # Structure: { "case_dir_str": { "filename": "type" } }
 # ⚡ Bolt Optimization: Cache field types by filename per case to avoid re-reading headers
 # OpenFOAM field types (scalar vs vector) are consistent by filename (e.g., 'p' is always scalar).
-_CASE_FIELD_TYPES: Dict[str, Dict[str, str]] = {}
+_CASE_FIELD_TYPES = LRUCache(maxsize=32)
 
 # ⚡ Bolt Optimization: Cache for decoded field names to avoid repeated decoding in tight loops
-_FIELD_NAME_CACHE: Dict[bytes, str] = {}
+_FIELD_NAME_CACHE = LRUCache(maxsize=256)
 
 # ⚡ Bolt Optimization: Standard OpenFOAM field types to avoid reading headers
 # This avoids sys calls (open/read) for common fields.
@@ -136,7 +135,7 @@ _RE_VECTOR_COMPONENTS = re.compile(
 
 
 # ⚡ Bolt Optimization: Cache variable resolution patterns to avoid recompilation
-@functools.lru_cache(maxsize=128)
+@cached(LRUCache(maxsize=128), postprocess=None)
 def _get_variable_pattern(clean_var: Union[str, bytes]) -> re.Pattern:
     if isinstance(clean_var, bytes):
         return re.compile(rb"(?:^|\s)" + re.escape(clean_var) + rb"\s+([^;]+);")

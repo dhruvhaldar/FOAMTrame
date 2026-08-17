@@ -22,6 +22,8 @@
     "api_key_enabled": false,
     "api_key_hash": "",
     "max_request_mb": 2,
-    "websocket_max_message_mb": 4
+    "websocket_max_message_mb": 4,
+    "session_timeout_enabled": false,
+    "session_timeout_minutes": 30
   }
 }

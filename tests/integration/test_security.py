@@ -10,6 +10,7 @@ from security import (
     default_security_preferences,
     hash_api_key,
     normalise_security_preferences,
+    trame_session_timeout_seconds,
     verify_api_key,
 )
 
@@ -38,6 +39,8 @@ def enabled_preferences(**updates):
 def test_optional_security_is_disabled_by_default():
     preferences = default_security_preferences()
     assert preferences["security_enabled"] is False
+    assert preferences["session_timeout_enabled"] is False
+    assert trame_session_timeout_seconds(preferences) == 0
 
     response = make_app(preferences).test_client().get(
         "/probe", headers={"Origin": "https://untrusted.example"}
@@ -117,6 +120,8 @@ def test_security_preferences_validate_origins_and_limits():
         )
     with pytest.raises(ValueError, match="between 1 and 64"):
         normalise_security_preferences({"websocket_max_message_mb": 65})
+    with pytest.raises(ValueError, match="between 1 and 1440"):
+        normalise_security_preferences({"session_timeout_minutes": 0})
     with pytest.raises(ValueError, match="API-key hash is invalid"):
         normalise_security_preferences(
             {
@@ -127,6 +132,17 @@ def test_security_preferences_validate_origins_and_limits():
     assert not verify_api_key(
         "irrelevant", "pbkdf2_sha256$999999999$00$00"
     )
+
+
+def test_session_timeout_requires_both_security_and_its_own_switch():
+    preferences = default_security_preferences()
+    preferences.update(
+        {"session_timeout_enabled": True, "session_timeout_minutes": 45}
+    )
+    assert trame_session_timeout_seconds(preferences) == 0
+
+    preferences["security_enabled"] = True
+    assert trame_session_timeout_seconds(preferences) == 45 * 60
 
 
 def test_trame_headers_and_bind_mode_are_applied(monkeypatch):

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import base64
 import asyncio
-import functools
 import io
 import logging
 import os
@@ -12,6 +11,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import numpy as np
+from cachebox import LRUCache, cached
 from PIL import Image
 from trame.widgets import client, html, vuetify
 
@@ -162,7 +162,7 @@ def _plot_style(
     return style
 
 
-@functools.lru_cache(maxsize=4)
+@cached(LRUCache(maxsize=4))
 def _logo_array(logo_mode: str, custom_logo_data: str = "") -> Optional[np.ndarray]:
     try:
         if logo_mode == "foamflask" and _FOAMFLASK_LOGO_PATH.is_file():
