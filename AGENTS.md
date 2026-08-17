@@ -312,6 +312,8 @@ Security features are explicitly optional and **disabled by default**.
 - Validate hash algorithm, iteration count, salt length, and digest length before
   verification so restored state cannot trigger excessive PBKDF2 work.
 - Security, CORS, request, and WebSocket sizes remain bounded by validation.
+- The optional no-client session timeout is disabled by default, remains gated by
+  the master security switch, and must never interrupt a connected browser.
 - Startup-time binding/CORS/WebSocket changes require restart; communicate this in
   the UI.
 - CORS is not authentication. Do not document these controls as sufficient for an

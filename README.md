@@ -523,7 +523,9 @@ JSON is now an interchange format only. A portable backup schema example remains
     "api_key_enabled": false,
     "api_key_hash": "",
     "max_request_mb": 2,
-    "websocket_max_message_mb": 4
+    "websocket_max_message_mb": 4,
+    "session_timeout_enabled": false,
+    "session_timeout_minutes": 30
   }
 }
 ```
@@ -538,7 +540,7 @@ The initial schema contains:
 | `app_config` | Typed JSON values for case root, active case, Docker image, and OpenFOAM version |
 | `simulation_runs` | Indexed command, case, status, timestamps, duration, and complete compatible run record |
 | `plot_preferences` | Plot typography, background, and logo preferences |
-| `security_preferences` | Validated network, CORS, header, size-limit, and API-key policy |
+| `security_preferences` | Validated network, CORS, header, size-limit, session-timeout, and API-key policy |
 | `cases` | Relational case catalogue ready for workspace synchronization |
 | `automation_actions` | Future chatbot/automation command queue and audit trail |
 
@@ -826,8 +828,11 @@ optional security controls** is switched on and saved:
   new key before saving because it cannot be displayed again.
 - **Request and WebSocket limits** cap companion-API request bodies and wslink
   messages between 1 and 64 MiB.
+- **Session timeout** is disabled by default. When enabled, FOAMTrame stops after
+  the configured 1–1440 minute grace period with no browser connected. It does not
+  interrupt an active browser session.
 
-Listener, CORS, and WebSocket-limit changes require an application restart. The
+Listener, CORS, WebSocket-limit, and session-timeout changes require an application restart. The
 companion API evaluates its CORS, header, request-size, and API-key policy on each
 request. CORS is a browser policy—not authentication—and TLS should still terminate
 at a trusted reverse proxy for any network deployment.

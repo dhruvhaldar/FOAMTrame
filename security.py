@@ -21,6 +21,8 @@ def default_security_preferences() -> dict[str, Any]:
         "api_key_hash": "",
         "max_request_mb": 2,
         "websocket_max_message_mb": 4,
+        "session_timeout_enabled": False,
+        "session_timeout_minutes": 30,
     }
 
 
@@ -81,6 +83,15 @@ def normalise_security_preferences(data: Any) -> dict[str, Any]:
         "Maximum WebSocket message size",
         1,
         64,
+    )
+    preferences["session_timeout_enabled"] = _as_bool(
+        preferences["session_timeout_enabled"]
+    )
+    preferences["session_timeout_minutes"] = _bounded_int(
+        preferences["session_timeout_minutes"],
+        "Session timeout",
+        1,
+        1440,
     )
 
     if preferences["cors_mode"] == "trusted_origin":
@@ -205,6 +216,15 @@ def trame_bind_host(preferences: Mapping[str, Any]) -> str:
     if not preferences.get("security_enabled", False):
         return "127.0.0.1"
     return "0.0.0.0" if preferences.get("bind_mode") == "network" else "127.0.0.1"
+
+
+def trame_session_timeout_seconds(preferences: Mapping[str, Any]) -> int:
+    """Return Trame's no-client shutdown delay, or zero when disabled."""
+    if not preferences.get("security_enabled", False):
+        return 0
+    if not preferences.get("session_timeout_enabled", False):
+        return 0
+    return int(preferences.get("session_timeout_minutes", 30)) * 60
 
 
 def configure_flask_security(app, preferences_loader) -> None:
