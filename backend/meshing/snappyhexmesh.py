@@ -5,14 +5,13 @@ from werkzeug.utils import secure_filename
 
 logger = logging.getLogger("FOAMTrame")
 
+
 class SnappyHexMeshGenerator:
     """Generates system/snappyHexMeshDict based on configuration."""
 
     @staticmethod
     def generate_dict(
-        case_path: Path,
-        config: Dict[str, Any],
-        openfoam_version: str = "12"
+        case_path: Path, config: Dict[str, Any], openfoam_version: str = "12"
     ) -> bool:
         """
         Generates the snappyHexMeshDict file.
@@ -52,17 +51,19 @@ class SnappyHexMeshGenerator:
 
             # If objects is empty but 'stl_filename' exists (legacy), construct objects
             if not objects and "stl_filename" in config:
-                objects = [{
-                    "name": config["stl_filename"],
-                    "refinement_level_min": int(config.get("refinement_level", 2)),
-                    "refinement_level_max": int(config.get("refinement_level", 2)),
-                    "layers": 0
-                }]
+                objects = [
+                    {
+                        "name": config["stl_filename"],
+                        "refinement_level_min": int(config.get("refinement_level", 2)),
+                        "refinement_level_max": int(config.get("refinement_level", 2)),
+                        "layers": 0,
+                    }
+                ]
                 # Assume basic global settings
                 global_settings = {
                     "castellated_mesh": True,
                     "snap": True,
-                    "add_layers": False
+                    "add_layers": False,
                 }
 
             # Security: Sanitize objects list
@@ -80,8 +81,12 @@ class SnappyHexMeshGenerator:
 
                 # Validate numeric fields
                 try:
-                    safe_obj["refinement_level_min"] = int(obj.get("refinement_level_min", 2))
-                    safe_obj["refinement_level_max"] = int(obj.get("refinement_level_max", 2))
+                    safe_obj["refinement_level_min"] = int(
+                        obj.get("refinement_level_min", 2)
+                    )
+                    safe_obj["refinement_level_max"] = int(
+                        obj.get("refinement_level_max", 2)
+                    )
                     safe_obj["layers"] = int(obj.get("layers", 0))
                 except (ValueError, TypeError):
                     safe_obj["refinement_level_min"] = 2
@@ -98,13 +103,19 @@ class SnappyHexMeshGenerator:
                     return default
 
             # Extract Global Settings with Defaults
-            castellated = "true" if global_settings.get("castellated_mesh", True) else "false"
+            castellated = (
+                "true" if global_settings.get("castellated_mesh", True) else "false"
+            )
             snap = "true" if global_settings.get("snap", True) else "false"
             add_layers = "true" if global_settings.get("add_layers", False) else "false"
 
             # Castellated Controls
-            max_global_cells = get_safe(global_settings, "max_global_cells", int, 2000000)
-            resolve_feature_angle = get_safe(global_settings, "resolve_feature_angle", int, 30)
+            max_global_cells = get_safe(
+                global_settings, "max_global_cells", int, 2000000
+            )
+            resolve_feature_angle = get_safe(
+                global_settings, "resolve_feature_angle", int, 30
+            )
 
             # Snap Controls
             n_smooth_patch = get_safe(global_settings, "n_smooth_patch", int, 3)
@@ -118,20 +129,34 @@ class SnappyHexMeshGenerator:
 
             # Add Layers Controls
             expansion_ratio = get_safe(global_settings, "expansion_ratio", float, 1.0)
-            final_layer_thickness = get_safe(global_settings, "final_thickness", float, 0.3)
+            final_layer_thickness = get_safe(
+                global_settings, "final_thickness", float, 0.3
+            )
             min_thickness = get_safe(global_settings, "min_thickness", float, 0.1)
             layer_feature_angle = get_safe(global_settings, "feature_angle", int, 60)
 
             # Mesh Quality Controls
             max_non_ortho = get_safe(global_settings, "max_non_ortho", int, 65)
-            max_boundary_skewness = get_safe(global_settings, "max_boundary_skewness", int, 20)
-            max_internal_skewness = get_safe(global_settings, "max_internal_skewness", int, 4)
-            min_triangle_twist = get_safe(global_settings, "min_triangle_twist", float, -1)
-            relaxed_max_non_ortho = get_safe(global_settings, "relaxed_max_non_ortho", int, 75)
+            max_boundary_skewness = get_safe(
+                global_settings, "max_boundary_skewness", int, 20
+            )
+            max_internal_skewness = get_safe(
+                global_settings, "max_internal_skewness", int, 4
+            )
+            min_triangle_twist = get_safe(
+                global_settings, "min_triangle_twist", float, -1
+            )
+            relaxed_max_non_ortho = get_safe(
+                global_settings, "relaxed_max_non_ortho", int, 75
+            )
 
             # Construct Geometry Section
-            is_esi = openfoam_version.startswith('v') and len(openfoam_version) >= 5 and openfoam_version[1:5].isdigit()
-            
+            is_esi = (
+                openfoam_version.startswith("v")
+                and len(openfoam_version) >= 5
+                and openfoam_version[1:5].isdigit()
+            )
+
             geometry_str = ""
             for obj in objects:
                 name = str(obj["name"])
@@ -195,10 +220,14 @@ class SnappyHexMeshGenerator:
 """
 
             # Build the file content
-            header_version = f"v{openfoam_version}" if not openfoam_version.startswith('v') else openfoam_version
+            header_version = (
+                f"v{openfoam_version}"
+                if not openfoam_version.startswith("v")
+                else openfoam_version
+            )
             header_website = "www.openfoam.com" if is_esi else "www.openfoam.org"
             header_org = "OpenCFD" if is_esi else "The Open Source CFD Toolbox"
-            
+
             content = f"""/*--------------------------------*- C++ -*----------------------------------*\\
 | =========                 |                                                 |
 | \\\\      /  F ield         | OpenFOAM: {header_org}           |

@@ -11,9 +11,7 @@ from cachebox import LRUCache, TTLCache, cached
 
 
 _SAFE_EXECUTABLE = re.compile(r"^[A-Za-z][A-Za-z0-9_.+-]{0,63}$")
-_TIME_DIRECTORY = re.compile(
-    r"^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$"
-)
+_TIME_DIRECTORY = re.compile(r"^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$")
 _PROCESSOR_DIRECTORY = re.compile(r"^processor\d+$")
 
 
@@ -148,7 +146,7 @@ def _docker_executables_cached(
 ) -> tuple[bool, set[str], str]:
     if not names:
         return True, set(), ""
-    shell_script = r'''
+    shell_script = r"""
 requested="$1"
 shift
 bashrc="/opt/openfoam${requested}/etc/bashrc"
@@ -162,7 +160,7 @@ for executable in "$@"; do
         printf '%s\n' "$executable"
     fi
 done
-'''
+"""
     try:
         output = client.containers.run(
             docker_image,
@@ -198,17 +196,9 @@ def _docker_executables(
     if client is None:
         return False, set(), "Docker daemon is unavailable"
     names = tuple(
-        sorted(
-            {
-                name
-                for name in executable_names
-                if _SAFE_EXECUTABLE.fullmatch(name)
-            }
-        )
+        sorted({name for name in executable_names if _SAFE_EXECUTABLE.fullmatch(name)})
     )
-    return _docker_executables_cached(
-        client, docker_image, openfoam_version, names
-    )
+    return _docker_executables_cached(client, docker_image, openfoam_version, names)
 
 
 def _unavailable_action(
@@ -307,7 +297,9 @@ class CaseActionService:
                 entry.is_dir() and _PROCESSOR_DIRECTORY.fullmatch(entry.name)
                 for entry in path.iterdir()
             ),
-            "foamToVTK": any(_is_result_time_directory(entry) for entry in path.iterdir()),
+            "foamToVTK": any(
+                _is_result_time_directory(entry) for entry in path.iterdir()
+            ),
         }
         executable_names = {
             action_id for action_id, required in requirements.items() if required
@@ -458,14 +450,13 @@ class CaseActionService:
             )
 
         guided_actions = tuple(
-            action_id
-            for action_id in self.GUIDED_ORDER
-            if actions[action_id].available
+            action_id for action_id in self.GUIDED_ORDER if actions[action_id].available
         )
         available_count = sum(action.available for action in actions.values())
-        summary = (
-            f"Detected {available_count} available action(s)"
-            + (f" · solver: {actions['solver'].label}" if actions["solver"].available else "")
+        summary = f"Detected {available_count} available action(s)" + (
+            f" · solver: {actions['solver'].label}"
+            if actions["solver"].available
+            else ""
         )
         return CaseInspection(
             path,
@@ -523,7 +514,7 @@ class CaseActionService:
         )
         container_case_path = "/tmp/FOAM_Run"
         bashrc = f"/opt/openfoam{openfoam_version}/etc/bashrc"
-        shell_script = r'''
+        shell_script = r"""
 source "$1" && cd "$2" || exit $?
 shift 2
 for command in "$@"; do
@@ -533,7 +524,7 @@ for command in "$@"; do
         *) "$command" || exit $? ;;
     esac
 done
-'''
+"""
         container = docker_client.containers.run(
             docker_image,
             [

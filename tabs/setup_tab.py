@@ -23,6 +23,7 @@ save_config = update_case_config
 def get_docker_client():
     try:
         import docker
+
         client = docker.from_env(timeout=5)
         client.ping()
         return client
@@ -36,7 +37,7 @@ def detect_openfoam_version(client, docker_image: str, configured_version: str) 
     Sourcing the image's bashrc and reading WM_PROJECT_VERSION avoids inferring
     a version from an image tag, which may be renamed or locally rebuilt.
     """
-    shell_script = r'''
+    shell_script = r"""
 requested="$1"
 bashrc="/opt/openfoam${requested}/etc/bashrc"
 if [ ! -f "$bashrc" ]; then
@@ -45,10 +46,16 @@ fi
 [ -n "$bashrc" ] && [ -f "$bashrc" ] || exit 2
 source "$bashrc" >/dev/null 2>&1 || exit 3
 printf '%s' "${WM_PROJECT_VERSION:-}"
-'''
+"""
     output = client.containers.run(
         docker_image,
-        ["bash", "-c", shell_script, "detect_openfoam_version", str(configured_version)],
+        [
+            "bash",
+            "-c",
+            shell_script,
+            "detect_openfoam_version",
+            str(configured_version),
+        ],
         remove=True,
         stdout=True,
         stderr=False,
@@ -165,9 +172,7 @@ def setup_setup_tab(server):
 
         try:
             cases = [
-                entry.name
-                for entry in os.scandir(str(root_path))
-                if entry.is_dir()
+                entry.name for entry in os.scandir(str(root_path)) if entry.is_dir()
             ]
             state.cases_list = sorted(cases)
             if state.active_case not in state.cases_list:
@@ -198,7 +203,9 @@ def setup_setup_tab(server):
             state.setup_status = "Docker executable not found in PATH."
             state.setup_status_color = "error"
             state.docker_checking = False
-            state.openfoam_runtime_label = f"OpenFOAM {state.openfoam_version} (configured)"
+            state.openfoam_runtime_label = (
+                f"OpenFOAM {state.openfoam_version} (configured)"
+            )
             state.openfoam_runtime_source = (
                 "Docker is unavailable; showing the configured version instead."
             )
@@ -210,10 +217,14 @@ def setup_setup_tab(server):
 
         client = get_docker_client()
         if not client:
-            state.setup_status = "Cannot connect to Docker daemon. Make sure Docker Desktop is running."
+            state.setup_status = (
+                "Cannot connect to Docker daemon. Make sure Docker Desktop is running."
+            )
             state.setup_status_color = "error"
             state.docker_checking = False
-            state.openfoam_runtime_label = f"OpenFOAM {state.openfoam_version} (configured)"
+            state.openfoam_runtime_label = (
+                f"OpenFOAM {state.openfoam_version} (configured)"
+            )
             state.openfoam_runtime_source = (
                 "Docker is unavailable; showing the configured version instead."
             )
@@ -262,10 +273,10 @@ def setup_setup_tab(server):
                 state.setup_status = f"Error checking image: {e}"
                 state.setup_status_color = "error"
             state.docker_checking = False
-            state.openfoam_runtime_label = f"OpenFOAM {state.openfoam_version} (configured)"
-            state.openfoam_runtime_source = (
-                "The Docker image could not be inspected; showing the configured version."
+            state.openfoam_runtime_label = (
+                f"OpenFOAM {state.openfoam_version} (configured)"
             )
+            state.openfoam_runtime_source = "The Docker image could not be inspected; showing the configured version."
             publish_setup_state(*docker_state_keys)
 
     def fetch_tutorials():
@@ -314,7 +325,9 @@ def setup_setup_tab(server):
                 lines = output.splitlines()
                 tutorial_root = lines[0].strip()
                 cases = lines[1:]
-                tutorials = [posixpath.relpath(c, tutorial_root) for c in cases if c.strip()]
+                tutorials = [
+                    posixpath.relpath(c, tutorial_root) for c in cases if c.strip()
+                ]
             state.tutorials_list = sorted(tutorials)
             state.filtered_tutorials = sorted(tutorials)
             state.tutorials_loaded = True
@@ -352,7 +365,9 @@ def setup_setup_tab(server):
     def on_docker_config_change(docker_image, openfoam_version, **_):
         if not docker_image or not openfoam_version:
             return
-        save_config({"DOCKER_IMAGE": docker_image, "OPENFOAM_VERSION": openfoam_version})
+        save_config(
+            {"DOCKER_IMAGE": docker_image, "OPENFOAM_VERSION": openfoam_version}
+        )
         state.tutorials_loaded = False
         state.flush()
         threading.Thread(target=run_docker_checks, daemon=True).start()
@@ -365,9 +380,7 @@ def setup_setup_tab(server):
         if not query:
             state.filtered_tutorials = t_list
         else:
-            state.filtered_tutorials = [
-                t for t in t_list if query in t.lower()
-            ]
+            state.filtered_tutorials = [t for t in t_list if query in t.lower()]
         state.flush()
 
     @state.change("case_creation_tab")
@@ -377,10 +390,12 @@ def setup_setup_tab(server):
 
     def trigger_checks():
         threading.Thread(target=run_docker_checks, daemon=True).start()
+
     ctrl.trigger_checks = trigger_checks
 
     def trigger_fetch_tutorials():
         threading.Thread(target=fetch_tutorials, daemon=True).start()
+
     ctrl.trigger_fetch_tutorials = trigger_fetch_tutorials
 
     def create_blank_case():
@@ -408,6 +423,7 @@ def setup_setup_tab(server):
             state.flush()
         except Exception as e:
             logger.error(f"Error creating case: {e}")
+
     ctrl.create_blank_case = create_blank_case
 
     def import_tutorial_case():
@@ -440,12 +456,16 @@ def setup_setup_tab(server):
                     else str(host_path)
                 )
 
-                shell_cmd = 'source "$1" && mkdir -p "$2" && cp -r $FOAM_TUTORIALS/"$3"/* "$2"'
+                shell_cmd = (
+                    'source "$1" && mkdir -p "$2" && cp -r $FOAM_TUTORIALS/"$3"/* "$2"'
+                )
                 if platform.system() != "Windows":
                     shell_cmd += ' && chmod +x "$2"/Allrun'
 
                 docker_cmd = [
-                    "bash", "-c", shell_cmd,
+                    "bash",
+                    "-c",
+                    shell_cmd,
                     "load_tutorial",
                     bashrc,
                     container_case_path,
@@ -473,6 +493,7 @@ def setup_setup_tab(server):
                 state.flush()
 
         threading.Thread(target=run_import, daemon=True).start()
+
     ctrl.import_tutorial_case = import_tutorial_case
 
     # Initialize scans/checks on startup
@@ -489,7 +510,11 @@ def setup_setup_tab(server):
 def build_setup_drawer():
     with html.Div(v_show="active_tab === 0", classes="pa-4"):
         # Header / Status Cards in Sidebar
-        html.Div("Health Checkup 💊", classes="text-subtitle-1 font-weight-bold text-slate-800 mb-2", style="color: #0f172a;")
+        html.Div(
+            "Health Checkup 💊",
+            classes="text-subtitle-1 font-weight-bold text-slate-800 mb-2",
+            style="color: #0f172a;",
+        )
         vuetify.VAlert(
             "{{ trame_status }}",
             type=("trame_status_color", "success"),
@@ -508,6 +533,7 @@ def build_setup_drawer():
 
 def build_setup_content():
     from trame.app import get_server
+
     server = get_server()
     assert server is not None
     ctrl = server.controller
@@ -517,7 +543,9 @@ def build_setup_content():
         v_if="active_tab === 0",
     ):
         with vuetify.VRow(justify="center", classes="setup-page-row"):
-            with vuetify.VCol(cols="12", md="10", lg="8", xl="7", classes="setup-card-stack"):
+            with vuetify.VCol(
+                cols="12", md="10", lg="8", xl="7", classes="setup-card-stack"
+            ):
                 # Clear glass shell with matte glass panels, inspired by FOAMFlask.
                 with html.Div(classes="setup-glass-shell"):
                     # Active Case Card
@@ -541,14 +569,22 @@ def build_setup_content():
                                 classes="setup-empty-state d-flex align-center",
                                 v_if="!cases_list || cases_list.length === 0",
                             ):
-                                vuetify.VIcon("mdi-folder-open-outline", classes="mr-3 setup-empty-state-icon")
+                                vuetify.VIcon(
+                                    "mdi-folder-open-outline",
+                                    classes="mr-3 setup-empty-state-icon",
+                                )
                                 with html.Div():
-                                    html.Div("No active cases found", classes="setup-empty-state-title")
+                                    html.Div(
+                                        "No active cases found",
+                                        classes="setup-empty-state-title",
+                                    )
                                     html.Div(
                                         "Create or import a case below, then refresh the list.",
                                         classes="setup-empty-state-copy",
                                     )
-                            with vuetify.VRow(align="center", classes="setup-control-row"):
+                            with vuetify.VRow(
+                                align="center", classes="setup-control-row"
+                            ):
                                 with vuetify.VCol(cols="8"):
                                     vuetify.VSelect(
                                         v_model=("active_case",),
@@ -556,7 +592,9 @@ def build_setup_content():
                                         label="Choose Case",
                                         outlined=True,
                                         hide_details=True,
-                                        disabled=("!cases_list || cases_list.length === 0",),
+                                        disabled=(
+                                            "!cases_list || cases_list.length === 0",
+                                        ),
                                     )
                                 with vuetify.VCol(cols="4"):
                                     vuetify.VBtn(
@@ -589,12 +627,17 @@ def build_setup_content():
                                 classes="setup-case-tabs",
                             ):
                                 vuetify.VTab("Create Blank Case")
-                                vuetify.VTab("Import Tutorial", click=ctrl.trigger_fetch_tutorials)
+                                vuetify.VTab(
+                                    "Import Tutorial",
+                                    click=ctrl.trigger_fetch_tutorials,
+                                )
 
                             with vuetify.VTabsItems(v_model=("case_creation_tab",)):
                                 # Create Case Panel
                                 with vuetify.VTabItem():
-                                    with vuetify.VContainer(classes="pa-0 setup-tab-form"):
+                                    with vuetify.VContainer(
+                                        classes="pa-0 setup-tab-form"
+                                    ):
                                         vuetify.VTextField(
                                             v_model=("new_case_name",),
                                             label="New Case Name",
@@ -611,7 +654,9 @@ def build_setup_content():
                                         )
                                 # Import Tutorial Panel
                                 with vuetify.VTabItem():
-                                    with vuetify.VContainer(classes="pa-0 setup-tab-form"):
+                                    with vuetify.VContainer(
+                                        classes="pa-0 setup-tab-form"
+                                    ):
                                         html.Div(
                                             "Select Tutorial Source",
                                             classes="tutorial-source-label",
@@ -624,9 +669,17 @@ def build_setup_content():
                                             hide_details=True,
                                             classes="setup-tutorial-field",
                                         )
-                                        with vuetify.VRow(classes="tutorial-picker-row"):
-                                            with vuetify.VCol(cols="12", md="8", classes="tutorial-list-column"):
-                                                with vuetify.VList(classes="tutorial-list pa-0"):
+                                        with vuetify.VRow(
+                                            classes="tutorial-picker-row"
+                                        ):
+                                            with vuetify.VCol(
+                                                cols="12",
+                                                md="8",
+                                                classes="tutorial-list-column",
+                                            ):
+                                                with vuetify.VList(
+                                                    classes="tutorial-list pa-0"
+                                                ):
                                                     with vuetify.VListItemGroup(
                                                         v_model=("selected_tutorial",),
                                                         color="cyan darken-3",
@@ -637,7 +690,9 @@ def build_setup_content():
                                                             value=("tutorial",),
                                                             classes="tutorial-list-item",
                                                         ):
-                                                            vuetify.VListItemTitle("{{ tutorial }}")
+                                                            vuetify.VListItemTitle(
+                                                                "{{ tutorial }}"
+                                                            )
                                                     with html.Div(
                                                         classes="tutorial-list-message",
                                                         v_if="tutorials_loading",
@@ -655,20 +710,30 @@ def build_setup_content():
                                                         classes="tutorial-list-message",
                                                         v_if="!tutorials_loading && filtered_tutorials.length === 0",
                                                     )
-                                            with vuetify.VCol(cols="12", md="4", classes="tutorial-action-column"):
+                                            with vuetify.VCol(
+                                                cols="12",
+                                                md="4",
+                                                classes="tutorial-action-column",
+                                            ):
                                                 with vuetify.VBtn(
                                                     click=ctrl.import_tutorial_case,
                                                     block=True,
                                                     classes="theme-btn-info tutorial-import-button",
-                                                    disabled=("!selected_tutorial || tutorials_loading",),
+                                                    disabled=(
+                                                        "!selected_tutorial || tutorials_loading",
+                                                    ),
                                                 ):
-                                                    vuetify.VIcon("mdi-download", classes="mr-2")
+                                                    vuetify.VIcon(
+                                                        "mdi-download", classes="mr-2"
+                                                    )
                                                     html.Span("Import Tutorial")
 
                 # Advanced Settings Expansion Panel
                 with vuetify.VExpansionPanels(classes="glass-card setup-advanced-card"):
                     with vuetify.VExpansionPanel():
-                        with vuetify.VExpansionPanelHeader(classes="subtitle-2 font-weight-bold"):
+                        with vuetify.VExpansionPanelHeader(
+                            classes="subtitle-2 font-weight-bold"
+                        ):
                             html.Span("Advanced Settings (Docker, Case Path)")
                         with vuetify.VExpansionPanelContent():
                             vuetify.VTextField(

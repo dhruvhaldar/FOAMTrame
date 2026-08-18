@@ -115,10 +115,7 @@ def hash_api_key(api_key: str, *, salt: bytes | None = None) -> str:
     digest = hashlib.pbkdf2_hmac(
         "sha256", secret.encode("utf-8"), actual_salt, PBKDF2_ITERATIONS
     )
-    return (
-        f"pbkdf2_sha256${PBKDF2_ITERATIONS}$"
-        f"{actual_salt.hex()}${digest.hex()}"
-    )
+    return f"pbkdf2_sha256${PBKDF2_ITERATIONS}${actual_salt.hex()}${digest.hex()}"
 
 
 def valid_api_key_hash(encoded: str) -> bool:
@@ -171,7 +168,9 @@ def cors_response_origin(
     host_origin: str,
     preferences: Mapping[str, Any],
 ) -> str | None:
-    if not request_origin or not origin_allowed(request_origin, host_origin, preferences):
+    if not request_origin or not origin_allowed(
+        request_origin, host_origin, preferences
+    ):
         return None
     return "*" if preferences.get("cors_mode") == "any" else request_origin
 

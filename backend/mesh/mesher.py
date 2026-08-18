@@ -21,6 +21,7 @@ from backend.visualization.base import BaseVisualizer
 
 logger = logging.getLogger("FOAMTrame")
 
+
 class MeshVisualizer(BaseVisualizer):
     """Handles mesh visualization using PyVista with in-memory caching.
 
@@ -31,7 +32,7 @@ class MeshVisualizer(BaseVisualizer):
 
     def __init__(self) -> None:
         """Initialize the mesh visualizer."""
-        super().__init__() # Initialize base with default extensions
+        super().__init__()  # Initialize base with default extensions
         self.mesh: Optional[DataSet] = None
         self.plotter: Optional[Plotter] = None
         self.current_mesh_path: Optional[str] = None
@@ -85,7 +86,7 @@ class MeshVisualizer(BaseVisualizer):
                 # Use BaseVisualizer's safe loader
                 self.mesh = self.load_mesh_safe(path)
                 if self.mesh is None:
-                     raise RuntimeError("Failed to load mesh data")
+                    raise RuntimeError("Failed to load mesh data")
 
                 self.current_mesh_path = path_str
                 self.current_mesh_mtime = mtime
@@ -132,7 +133,9 @@ class MeshVisualizer(BaseVisualizer):
             # Security: Limit dimensions
             MAX_DIMENSION = 4096
             if width > MAX_DIMENSION or height > MAX_DIMENSION:
-                logger.error(f"Screenshot dimensions exceed limit ({MAX_DIMENSION}px): {width}x{height}")
+                logger.error(
+                    f"Screenshot dimensions exceed limit ({MAX_DIMENSION}px): {width}x{height}"
+                )
                 return None
 
             path = self.validate_file(file_path)
@@ -146,7 +149,11 @@ class MeshVisualizer(BaseVisualizer):
 
             # ⚡ Bolt Optimization: Check screenshot cache
             h_color = tuple(color) if isinstance(color, list) else color
-            h_cam = tuple(camera_position) if isinstance(camera_position, list) else camera_position
+            h_cam = (
+                tuple(camera_position)
+                if isinstance(camera_position, list)
+                else camera_position
+            )
 
             cache_key = (str(path), mtime, width, height, show_edges, h_color, h_cam)
 
@@ -177,7 +184,9 @@ class MeshVisualizer(BaseVisualizer):
                 plotter.reset_camera()
 
             # Render
-            img_bytes = plotter.screenshot(return_img=True, transparent_background=False)
+            img_bytes = plotter.screenshot(
+                return_img=True, transparent_background=False
+            )
             plotter.close()
 
             # Convert to base64
@@ -195,7 +204,10 @@ class MeshVisualizer(BaseVisualizer):
             return None
 
     def get_interactive_viewer_html(
-        self, file_path: Union[str, Path], show_edges: bool = True, color: str = "lightblue"
+        self,
+        file_path: Union[str, Path],
+        show_edges: bool = True,
+        color: str = "lightblue",
     ) -> Optional[str]:
         """Generate a fully interactive HTML viewer with enhanced controls."""
         try:
@@ -240,7 +252,7 @@ class MeshVisualizer(BaseVisualizer):
                 color=color,
                 opacity=1.0,
                 show_edges=show_edges,
-                window_size=[1200, 800]
+                window_size=[1200, 800],
             )
 
             # Store in cache
@@ -302,16 +314,24 @@ class MeshVisualizer(BaseVisualizer):
 
                                     try:
                                         if entry_path.startswith(tutorial_path_str):
-                                            rel_path_str = entry_path[tutorial_path_len:]
+                                            rel_path_str = entry_path[
+                                                tutorial_path_len:
+                                            ]
                                         else:
-                                            rel_path_str = str(Path(entry_path).relative_to(tutorial_path))
+                                            rel_path_str = str(
+                                                Path(entry_path).relative_to(
+                                                    tutorial_path
+                                                )
+                                            )
 
-                                        mesh_files.append({
-                                            "name": name,
-                                            "path": entry_path,
-                                            "relative_path": rel_path_str,
-                                            # "size": entry.stat().st_size,
-                                        })
+                                        mesh_files.append(
+                                            {
+                                                "name": name,
+                                                "path": entry_path,
+                                                "relative_path": rel_path_str,
+                                                # "size": entry.stat().st_size,
+                                            }
+                                        )
                                     except (ValueError, OSError):
                                         continue
                     for subdir in subdirs_to_visit:
@@ -325,6 +345,7 @@ class MeshVisualizer(BaseVisualizer):
         except Exception as e:
             logger.error(f"Error getting available meshes: {e}")
             return []
+
 
 # Global instance for use as a singleton
 mesh_visualizer = MeshVisualizer()

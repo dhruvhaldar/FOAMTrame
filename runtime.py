@@ -31,13 +31,17 @@ def installed_server_port(
     except FileNotFoundError:
         return fallback
     except OSError as exc:
-        raise ValueError(f"Could not read installed server port from {path}: {exc}") from exc
+        raise ValueError(
+            f"Could not read installed server port from {path}: {exc}"
+        ) from exc
     try:
         port = int(value)
     except ValueError as exc:
         raise ValueError(f"Installed server port in {path} is not an integer.") from exc
     if not 1 <= port <= 65535:
-        raise ValueError(f"Installed server port in {path} must be between 1 and 65535.")
+        raise ValueError(
+            f"Installed server port in {path} must be between 1 and 65535."
+        )
     return port
 
 
@@ -85,9 +89,9 @@ def load_runtime_settings(env: Mapping[str, str] | None = None) -> RuntimeSettin
     log_level = values.get("FOAMTRAME_LOG_LEVEL", "INFO").strip().upper()
     if log_level not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
         raise ValueError("FOAMTRAME_LOG_LEVEL is not a valid Python logging level.")
-    framework_log_level = values.get(
-        "FOAMTRAME_FRAMEWORK_LOG_LEVEL", "WARNING"
-    ).strip().upper()
+    framework_log_level = (
+        values.get("FOAMTRAME_FRAMEWORK_LOG_LEVEL", "WARNING").strip().upper()
+    )
     if framework_log_level not in {
         "DEBUG",
         "INFO",
@@ -211,7 +215,9 @@ def run_preflight(
             if result.returncode == 0:
                 add("docker_daemon", "pass", result.stdout.strip() or "reachable")
             else:
-                detail = result.stderr.strip() or result.stdout.strip() or "not reachable"
+                detail = (
+                    result.stderr.strip() or result.stdout.strip() or "not reachable"
+                )
                 add("docker_daemon", "warn", detail)
         except (OSError, subprocess.SubprocessError) as exc:
             add("docker_daemon", "warn", str(exc))

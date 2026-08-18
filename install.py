@@ -206,7 +206,9 @@ def main() -> int:
 
         python = venv_python(venv_dir)
         if not python.exists():
-            raise SystemExit(f"Virtual environment was not created correctly: {venv_dir}")
+            raise SystemExit(
+                f"Virtual environment was not created correctly: {venv_dir}"
+            )
 
         run(
             [str(python), str(PROJECT_ROOT / "manage.py"), "init-db"],
@@ -253,7 +255,9 @@ def main() -> int:
     print("\nFOAMTrame installation completed successfully.")
     print(f"Server URL: http://127.0.0.1:{selected_port}/")
     if not docker and not args.skip_docker_check:
-        print("Docker was not found. Install/start Docker before running OpenFOAM operations.")
+        print(
+            "Docker was not found. Install/start Docker before running OpenFOAM operations."
+        )
     if platform.system() == "Windows":
         print(r"Start with: .\start.ps1")
     else:

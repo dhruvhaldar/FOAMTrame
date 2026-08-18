@@ -5,11 +5,14 @@ from backend.utils import sanitize_error
 
 logger = logging.getLogger("FOAMTrame")
 
+
 class CaseManager:
     """Manages OpenFOAM case creation and directory structures."""
 
     @staticmethod
-    def create_case_structure(case_path: Union[str, Path]) -> Dict[str, Union[bool, str]]:
+    def create_case_structure(
+        case_path: Union[str, Path],
+    ) -> Dict[str, Union[bool, str]]:
         """
         Creates a minimal OpenFOAM case structure (0, constant, system).
 
@@ -23,13 +26,17 @@ class CaseManager:
             path = Path(case_path).resolve()
 
             if path.exists() and any(path.iterdir()):
-                 # Check if it looks like a case (has 0, constant, system)
-                 if (path / "system").exists() and (path / "constant").exists():
-                     return {"success": True, "message": "Case directory already exists and appears valid.", "path": str(path)}
-                 else:
-                     # It exists but might not be a valid case, or is just a random folder.
-                     # We will try to add missing folders.
-                     pass
+                # Check if it looks like a case (has 0, constant, system)
+                if (path / "system").exists() and (path / "constant").exists():
+                    return {
+                        "success": True,
+                        "message": "Case directory already exists and appears valid.",
+                        "path": str(path),
+                    }
+                else:
+                    # It exists but might not be a valid case, or is just a random folder.
+                    # We will try to add missing folders.
+                    pass
 
             # Create directories
             (path / "0").mkdir(parents=True, exist_ok=True)
@@ -43,9 +50,15 @@ class CaseManager:
             CaseManager._create_default_fv_solution(path / "system" / "fvSolution")
 
             # Create empty transportProperties in constant
-            CaseManager._create_default_transport_properties(path / "constant" / "transportProperties")
+            CaseManager._create_default_transport_properties(
+                path / "constant" / "transportProperties"
+            )
 
-            return {"success": True, "message": f"Case created at {path}", "path": str(path)}
+            return {
+                "success": True,
+                "message": f"Case created at {path}",
+                "path": str(path),
+            }
 
         except Exception as e:
             logger.error(f"Error creating case structure: {e}")
@@ -272,8 +285,11 @@ nu              [0 2 -1 0 0 0 0] 1e-05;
                 f.write(content)
         except FileExistsError:
             pass
+
     @staticmethod
-    def update_decomposition(case_path: Union[str, Path], num_processes: int) -> Dict[str, Union[bool, str]]:
+    def update_decomposition(
+        case_path: Union[str, Path], num_processes: int
+    ) -> Dict[str, Union[bool, str]]:
         """
         Updates the decomposeParDict in the case directory.
 
@@ -289,30 +305,47 @@ nu              [0 2 -1 0 0 0 0] 1e-05;
             dict_path = path / "system" / "decomposeParDict"
 
             if not dict_path.exists():
-                return {"success": False, "message": "decomposeParDict not found in system directory."}
+                return {
+                    "success": False,
+                    "message": "decomposeParDict not found in system directory.",
+                }
 
             with dict_path.open("r", encoding="utf-8") as f:
                 content = f.read()
 
             # Update numberOfSubdomains
             import re
-            content = re.sub(r"(numberOfSubdomains\s+)\d+;", rf"\g<1>{num_processes};", content)
 
-            # Change method/decomposer to scotch if it's hierarchical or simple, 
+            content = re.sub(
+                r"(numberOfSubdomains\s+)\d+;", rf"\g<1>{num_processes};", content
+            )
+
+            # Change method/decomposer to scotch if it's hierarchical or simple,
             # as scotch is more robust for arbitrary process counts.
             # Handle both 'method' and 'decomposer' (OpenFOAM versions vary)
             if re.search(r"(method|decomposer)\s+\w+;", content):
-                content = re.sub(r"((?:method|decomposer)\s+)\w+;", r"\g<1>scotch;", content)
+                content = re.sub(
+                    r"((?:method|decomposer)\s+)\w+;", r"\g<1>scotch;", content
+                )
             else:
                 # If no method/decomposer line, add it
                 if "numberOfSubdomains" in content:
-                    content = re.sub(r"(numberOfSubdomains\s+\d+;)", r"\1\n\nmethod          scotch;", content)
+                    content = re.sub(
+                        r"(numberOfSubdomains\s+\d+;)",
+                        r"\1\n\nmethod          scotch;",
+                        content,
+                    )
 
             with dict_path.open("w", encoding="utf-8") as f:
                 f.write(content)
 
-            logger.info(f"[FOAMTrame] Updated decomposition to {num_processes} processes (scotch) in {dict_path}")
-            return {"success": True, "message": f"Decomposition updated to {num_processes} processes."}
+            logger.info(
+                f"[FOAMTrame] Updated decomposition to {num_processes} processes (scotch) in {dict_path}"
+            )
+            return {
+                "success": True,
+                "message": f"Decomposition updated to {num_processes} processes.",
+            }
 
         except Exception as e:
             logger.error(f"Error updating decomposition: {e}")

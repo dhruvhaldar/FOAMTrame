@@ -58,7 +58,9 @@ def _normalise_app_state(data: Any) -> dict[str, Any]:
     history = data.get("run_history", [])
     if not isinstance(config, dict):
         raise ValueError("case_config must be a JSON object.")
-    if not isinstance(history, list) or not all(isinstance(item, dict) for item in history):
+    if not isinstance(history, list) or not all(
+        isinstance(item, dict) for item in history
+    ):
         raise ValueError("run_history must be a JSON array of objects.")
     if not isinstance(plot_preferences, dict):
         raise ValueError("plot_preferences must be a JSON object.")
@@ -96,9 +98,7 @@ def _normalise_app_state(data: Any) -> dict[str, Any]:
         "version": APP_STATE_VERSION,
         "case_config": normalised_config,
         "plot_preferences": normalised_plots,
-        "security_preferences": normalise_security_preferences(
-            security_preferences
-        ),
+        "security_preferences": normalise_security_preferences(security_preferences),
         "run_history": copy.deepcopy(history[:100]),
     }
 

@@ -73,7 +73,7 @@ class TrameVisualizer:
         self,
         case_or_file_path: str,
         params: Optional[Dict[str, Any]] = None,
-        host: str = "127.0.0.1"
+        host: str = "127.0.0.1",
     ) -> Dict[str, Any]:
         """
         Starts a Trame process for interactive post-processing.
@@ -86,7 +86,10 @@ class TrameVisualizer:
         try:
             target_file = self._resolve_target_file(case_or_file_path)
             if not target_file:
-                return {"status": "error", "message": "No suitable VTK or mesh file found"}
+                return {
+                    "status": "error",
+                    "message": "No suitable VTK or mesh file found",
+                }
 
             if params is None:
                 params = {}
@@ -99,7 +102,7 @@ class TrameVisualizer:
             p = multiprocessing.Process(
                 target=_run_trame_visualizer_process,
                 args=(target_file, params, port_queue, host),
-                daemon=True
+                daemon=True,
             )
             p.start()
             TrameVisualizer._process = p
@@ -108,7 +111,10 @@ class TrameVisualizer:
                 result = port_queue.get(timeout=60)
             except Exception:
                 p.terminate()
-                return {"status": "error", "message": "Trame process timed out during startup"}
+                return {
+                    "status": "error",
+                    "message": "Trame process timed out during startup",
+                }
 
             if "error" in result:
                 return {"status": "error", "message": result["error"]}
@@ -118,13 +124,16 @@ class TrameVisualizer:
 
             if not _wait_for_port(host, port, timeout=60.0):
                 p.terminate()
-                return {"status": "error", "message": "Trame server failed to start listening on port"}
+                return {
+                    "status": "error",
+                    "message": "Trame server failed to start listening on port",
+                }
 
             return {
                 "status": "success",
                 "mode": "iframe",
                 "src": f"http://{host}:{port}/index.html",
-                "port": port
+                "port": port,
             }
 
         except Exception as e:
@@ -135,7 +144,9 @@ class TrameVisualizer:
         """Stop running visualization process."""
         if TrameVisualizer._process:
             if TrameVisualizer._process.is_alive():
-                logger.info(f"[FOAMTrame] Terminating Trame visualizer process {TrameVisualizer._process.pid}")
+                logger.info(
+                    f"[FOAMTrame] Terminating Trame visualizer process {TrameVisualizer._process.pid}"
+                )
                 TrameVisualizer._process.terminate()
                 TrameVisualizer._process.join(timeout=2)
                 if TrameVisualizer._process.is_alive():
@@ -162,7 +173,17 @@ class TrameVisualizer:
         vtk_files = []
         for cdir in candidate_dirs:
             if cdir.exists():
-                for ext in ("*.vtk", "*.vtu", "*.vtp", "*.vti", "*.vtr", "*.vts", "*.ply", "*.stl", "*.obj"):
+                for ext in (
+                    "*.vtk",
+                    "*.vtu",
+                    "*.vtp",
+                    "*.vti",
+                    "*.vtr",
+                    "*.vts",
+                    "*.ply",
+                    "*.stl",
+                    "*.obj",
+                ):
                     vtk_files.extend(cdir.rglob(ext))
 
         if vtk_files:
@@ -189,7 +210,7 @@ def _run_trame_visualizer_process(
     initial_file: str,
     params: Dict[str, Any],
     port_queue: multiprocessing.Queue,
-    host: str = "127.0.0.1"
+    host: str = "127.0.0.1",
 ) -> None:
     """
     Subprocess entry point running the full trame_vtk_slicer app engine.
@@ -215,7 +236,9 @@ def _run_trame_visualizer_process(
         assert server is not None
         state, ctrl = server.state, server.controller
 
-        logger.info(f"[FOAMTrame Post] Starting Trame subprocess with initial_file='{initial_file}' on port {port}")
+        logger.info(
+            f"[FOAMTrame Post] Starting Trame subprocess with initial_file='{initial_file}' on port {port}"
+        )
 
         # VTK setup
         renderer = vtk.vtkRenderer()
@@ -320,7 +343,10 @@ def _run_trame_visualizer_process(
 
         def _array_catalog(data_obj):
             cat = {}
-            for assoc, attr in (("Point", data_obj.GetPointData()), ("Cell", data_obj.GetCellData())):
+            for assoc, attr in (
+                ("Point", data_obj.GetPointData()),
+                ("Cell", data_obj.GetCellData()),
+            ):
                 for idx in range(attr.GetNumberOfArrays()):
                     arr = attr.GetArray(idx)
                     name = arr.GetName() if arr else None
@@ -342,10 +368,18 @@ def _run_trame_visualizer_process(
             return cat
 
         def _normal_from_axis(ax: str):
-            return {"X": (1.0, 0.0, 0.0), "Y": (0.0, 1.0, 0.0), "Z": (0.0, 0.0, 1.0)}.get(ax, (1.0, 0.0, 0.0))
+            return {
+                "X": (1.0, 0.0, 0.0),
+                "Y": (0.0, 1.0, 0.0),
+                "Z": (0.0, 0.0, 1.0),
+            }.get(ax, (1.0, 0.0, 0.0))
 
         def _set_mapper_coloring(mapper, selection: str):
-            if not selection or selection == "Solid colour" or selection not in data_arrays:
+            if (
+                not selection
+                or selection == "Solid colour"
+                or selection not in data_arrays
+            ):
                 mapper.ScalarVisibilityOff()
                 return
 
@@ -364,9 +398,21 @@ def _run_trame_visualizer_process(
                 return
 
             try:
-                tx, ty, tz = float(state.trans_x or 0), float(state.trans_y or 0), float(state.trans_z or 0)
-                rx, ry, rz = float(state.rot_x or 0), float(state.rot_y or 0), float(state.rot_z or 0)
-                sx, sy, sz = float(state.scale_x or 1), float(state.scale_y or 1), float(state.scale_z or 1)
+                tx, ty, tz = (
+                    float(state.trans_x or 0),
+                    float(state.trans_y or 0),
+                    float(state.trans_z or 0),
+                )
+                rx, ry, rz = (
+                    float(state.rot_x or 0),
+                    float(state.rot_y or 0),
+                    float(state.rot_z or 0),
+                )
+                sx, sy, sz = (
+                    float(state.scale_x or 1),
+                    float(state.scale_y or 1),
+                    float(state.scale_z or 1),
+                )
             except (ValueError, TypeError):
                 tx, ty, tz = 0.0, 0.0, 0.0
                 rx, ry, rz = 0.0, 0.0, 0.0
@@ -403,7 +449,7 @@ def _run_trame_visualizer_process(
             bounds = transformed_output.GetBounds()
             axis = state.slice_axis or "X"
             axis_index = {"X": 0, "Y": 1, "Z": 2}[axis]
-            low, high = bounds[2 * axis_index: 2 * axis_index + 2]
+            low, high = bounds[2 * axis_index : 2 * axis_index + 2]
             position = low + float(state.slice_fraction or 0.5) * (high - low)
             center = list(transformed_output.GetCenter())
             center[axis_index] = position
@@ -425,7 +471,9 @@ def _run_trame_visualizer_process(
 
             elif operation == "Clip":
                 surface_actor.SetVisibility(bool(state.show_context))
-                surface_actor.GetProperty().SetOpacity(float(state.context_opacity or 0.45))
+                surface_actor.GetProperty().SetOpacity(
+                    float(state.context_opacity or 0.45)
+                )
                 surface_mapper.SetInputData(transformed_output)
                 clipper.SetInputData(transformed_output)
                 clipper.SetInsideOut(bool(state.invert_clip))
@@ -436,7 +484,9 @@ def _run_trame_visualizer_process(
 
             elif operation == "Slice":
                 surface_actor.SetVisibility(bool(state.show_context))
-                surface_actor.GetProperty().SetOpacity(float(state.context_opacity or 0.45))
+                surface_actor.GetProperty().SetOpacity(
+                    float(state.context_opacity or 0.45)
+                )
                 surface_mapper.SetInputData(transformed_output)
                 cutter.SetInputData(transformed_output)
                 cutter.Update()
@@ -447,7 +497,9 @@ def _run_trame_visualizer_process(
             elif operation == "Streamlines":
                 _update_streamlines(transformed_output)
                 surface_actor.SetVisibility(bool(state.show_context))
-                surface_actor.GetProperty().SetOpacity(float(state.context_opacity or 0.25))
+                surface_actor.GetProperty().SetOpacity(
+                    float(state.context_opacity or 0.25)
+                )
                 surface_mapper.SetInputData(transformed_output)
 
             outline.SetInputData(transformed_output)
@@ -492,7 +544,9 @@ def _run_trame_visualizer_process(
                 "Forward": vtk.vtkStreamTracer.FORWARD,
                 "Backward": vtk.vtkStreamTracer.BACKWARD,
             }
-            direction = direction_map.get(state.stream_direction or "Both", vtk.vtkStreamTracer.BOTH)
+            direction = direction_map.get(
+                state.stream_direction or "Both", vtk.vtkStreamTracer.BOTH
+            )
             stream_tracer.SetIntegrationDirection(direction)
             stream_tracer.SetMaximumPropagation(float(state.stream_max_prop or 100.0))
             stream_tracer.SetInitialIntegrationStep(float(state.stream_step or 0.1))
@@ -506,7 +560,9 @@ def _run_trame_visualizer_process(
 
             speed_arr = stream_tracer.GetOutput().GetPointData().GetArray("Velocity")
             if speed_arr is None:
-                speed_arr = stream_tracer.GetOutput().GetPointData().GetArray(array_name)
+                speed_arr = (
+                    stream_tracer.GetOutput().GetPointData().GetArray(array_name)
+                )
 
             if bool(state.stream_color_by_speed) and speed_arr is not None:
                 stream_mapper.ScalarVisibilityOn()
@@ -546,7 +602,9 @@ def _run_trame_visualizer_process(
 
             state.file_name = display_name or Path(path).name
             state.dataset_type = ds.GetClassName().replace("vtk", "")
-            state.dataset_info = f"{ds.GetNumberOfPoints():,} pts · {ds.GetNumberOfCells():,} cells"
+            state.dataset_info = (
+                f"{ds.GetNumberOfPoints():,} pts · {ds.GetNumberOfCells():,} cells"
+            )
             state.error_message = ""
             state.slice_fraction = 0.5
 
@@ -567,7 +625,11 @@ def _run_trame_visualizer_process(
                 name = item.get("name") or item.get("filename") or name
                 content = item.get("content")
             elif hasattr(item, "name") or hasattr(item, "content"):
-                name = getattr(item, "name", None) or getattr(item, "filename", None) or name
+                name = (
+                    getattr(item, "name", None)
+                    or getattr(item, "filename", None)
+                    or name
+                )
                 content = getattr(item, "content", None)
             elif isinstance(item, (bytes, str)):
                 content = item
@@ -578,7 +640,11 @@ def _run_trame_visualizer_process(
             if isinstance(content, bytes):
                 return name, content
             if isinstance(content, str):
-                encoded = content.split(",", 1)[-1] if content.startswith("data:") else content
+                encoded = (
+                    content.split(",", 1)[-1]
+                    if content.startswith("data:")
+                    else content
+                )
                 try:
                     return name, base64.b64decode(encoded)
                 except Exception:
@@ -718,9 +784,17 @@ def _run_trame_visualizer_process(
                         hide_details=True,
                         classes="mb-3",
                     )
-                    html.Div("{{ file_name }}", classes="text-subtitle-1 font-weight-bold text-cyan-900")
-                    html.Div("{{ dataset_type }}", classes="text-caption text--secondary")
-                    html.Div("{{ dataset_info }}", classes="text-caption text--secondary mb-3")
+                    html.Div(
+                        "{{ file_name }}",
+                        classes="text-subtitle-1 font-weight-bold text-cyan-900",
+                    )
+                    html.Div(
+                        "{{ dataset_type }}", classes="text-caption text--secondary"
+                    )
+                    html.Div(
+                        "{{ dataset_info }}",
+                        classes="text-caption text--secondary mb-3",
+                    )
                     vuetify.VAlert(
                         "{{ error_message }}",
                         v_if="error_message",
@@ -836,26 +910,116 @@ def _run_trame_visualizer_process(
                             classes="mb-3",
                         )
 
-                        html.Div("Translate X", classes="text-caption font-weight-bold mt-2 mb-n2")
-                        vuetify.VSlider(v_model=("trans_x", 0.0), min=-50.0, max=50.0, step=0.1, dense=True, hide_details=True)
-                        html.Div("Translate Y", classes="text-caption font-weight-bold mt-2 mb-n2")
-                        vuetify.VSlider(v_model=("trans_y", 0.0), min=-50.0, max=50.0, step=0.1, dense=True, hide_details=True)
-                        html.Div("Translate Z", classes="text-caption font-weight-bold mt-2 mb-n2")
-                        vuetify.VSlider(v_model=("trans_z", 0.0), min=-50.0, max=50.0, step=0.1, dense=True, hide_details=True)
+                        html.Div(
+                            "Translate X",
+                            classes="text-caption font-weight-bold mt-2 mb-n2",
+                        )
+                        vuetify.VSlider(
+                            v_model=("trans_x", 0.0),
+                            min=-50.0,
+                            max=50.0,
+                            step=0.1,
+                            dense=True,
+                            hide_details=True,
+                        )
+                        html.Div(
+                            "Translate Y",
+                            classes="text-caption font-weight-bold mt-2 mb-n2",
+                        )
+                        vuetify.VSlider(
+                            v_model=("trans_y", 0.0),
+                            min=-50.0,
+                            max=50.0,
+                            step=0.1,
+                            dense=True,
+                            hide_details=True,
+                        )
+                        html.Div(
+                            "Translate Z",
+                            classes="text-caption font-weight-bold mt-2 mb-n2",
+                        )
+                        vuetify.VSlider(
+                            v_model=("trans_z", 0.0),
+                            min=-50.0,
+                            max=50.0,
+                            step=0.1,
+                            dense=True,
+                            hide_details=True,
+                        )
 
-                        html.Div("Rotate X (°)", classes="text-caption font-weight-bold mt-3 mb-n2")
-                        vuetify.VSlider(v_model=("rot_x", 0.0), min=-180.0, max=180.0, step=1.0, dense=True, hide_details=True)
-                        html.Div("Rotate Y (°)", classes="text-caption font-weight-bold mt-2 mb-n2")
-                        vuetify.VSlider(v_model=("rot_y", 0.0), min=-180.0, max=180.0, step=1.0, dense=True, hide_details=True)
-                        html.Div("Rotate Z (°)", classes="text-caption font-weight-bold mt-2 mb-n2")
-                        vuetify.VSlider(v_model=("rot_z", 0.0), min=-180.0, max=180.0, step=1.0, dense=True, hide_details=True)
+                        html.Div(
+                            "Rotate X (°)",
+                            classes="text-caption font-weight-bold mt-3 mb-n2",
+                        )
+                        vuetify.VSlider(
+                            v_model=("rot_x", 0.0),
+                            min=-180.0,
+                            max=180.0,
+                            step=1.0,
+                            dense=True,
+                            hide_details=True,
+                        )
+                        html.Div(
+                            "Rotate Y (°)",
+                            classes="text-caption font-weight-bold mt-2 mb-n2",
+                        )
+                        vuetify.VSlider(
+                            v_model=("rot_y", 0.0),
+                            min=-180.0,
+                            max=180.0,
+                            step=1.0,
+                            dense=True,
+                            hide_details=True,
+                        )
+                        html.Div(
+                            "Rotate Z (°)",
+                            classes="text-caption font-weight-bold mt-2 mb-n2",
+                        )
+                        vuetify.VSlider(
+                            v_model=("rot_z", 0.0),
+                            min=-180.0,
+                            max=180.0,
+                            step=1.0,
+                            dense=True,
+                            hide_details=True,
+                        )
 
-                        html.Div("Scale X", classes="text-caption font-weight-bold mt-3 mb-n2")
-                        vuetify.VSlider(v_model=("scale_x", 1.0), min=0.1, max=5.0, step=0.05, dense=True, hide_details=True)
-                        html.Div("Scale Y", classes="text-caption font-weight-bold mt-2 mb-n2")
-                        vuetify.VSlider(v_model=("scale_y", 1.0), min=0.1, max=5.0, step=0.05, dense=True, hide_details=True)
-                        html.Div("Scale Z", classes="text-caption font-weight-bold mt-2 mb-n2")
-                        vuetify.VSlider(v_model=("scale_z", 1.0), min=0.1, max=5.0, step=0.05, dense=True, hide_details=True)
+                        html.Div(
+                            "Scale X",
+                            classes="text-caption font-weight-bold mt-3 mb-n2",
+                        )
+                        vuetify.VSlider(
+                            v_model=("scale_x", 1.0),
+                            min=0.1,
+                            max=5.0,
+                            step=0.05,
+                            dense=True,
+                            hide_details=True,
+                        )
+                        html.Div(
+                            "Scale Y",
+                            classes="text-caption font-weight-bold mt-2 mb-n2",
+                        )
+                        vuetify.VSlider(
+                            v_model=("scale_y", 1.0),
+                            min=0.1,
+                            max=5.0,
+                            step=0.05,
+                            dense=True,
+                            hide_details=True,
+                        )
+                        html.Div(
+                            "Scale Z",
+                            classes="text-caption font-weight-bold mt-2 mb-n2",
+                        )
+                        vuetify.VSlider(
+                            v_model=("scale_z", 1.0),
+                            min=0.1,
+                            max=5.0,
+                            step=0.05,
+                            dense=True,
+                            hide_details=True,
+                        )
 
                         vuetify.VBtn(
                             "Reset Transform",
@@ -995,12 +1159,19 @@ def _run_trame_visualizer_process(
                 load_dataset(initial_file)
                 render_window.Render()
                 ctrl.view_update()
-                logger.info(f"[FOAMTrame Post] Initial dataset loaded successfully: {state.file_name}, {state.dataset_info}")
+                logger.info(
+                    f"[FOAMTrame Post] Initial dataset loaded successfully: {state.file_name}, {state.dataset_info}"
+                )
             except Exception as exc:
-                logger.error(f"[FOAMTrame Post] Initial dataset loading error: {exc}", exc_info=True)
+                logger.error(
+                    f"[FOAMTrame Post] Initial dataset loading error: {exc}",
+                    exc_info=True,
+                )
                 state.error_message = str(exc)
         else:
-            logger.warning(f"[FOAMTrame Post] Initial file does not exist or not provided: {initial_file}")
+            logger.warning(
+                f"[FOAMTrame Post] Initial file does not exist or not provided: {initial_file}"
+            )
 
         @ctrl.add("on_server_ready")
         def _on_ready(**_):

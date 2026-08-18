@@ -81,6 +81,7 @@ def setup_geometry_tab(server):
     def reset_geometry_camera():
         if hasattr(ctrl, "geometry_view_reset_camera"):
             ctrl.geometry_view_reset_camera()
+
     ctrl.reset_geometry_camera = reset_geometry_camera
 
     def load_geometry_dataset(path: str, display_name: str | None = None):
@@ -112,7 +113,9 @@ def setup_geometry_tab(server):
 
             state.geometry_file_name = display_name or Path(path).name
             state.geometry_dataset_type = ds.GetClassName().replace("vtk", "")
-            state.geometry_dataset_info = f"{ds.GetNumberOfPoints():,} pts · {ds.GetNumberOfCells():,} cells"
+            state.geometry_dataset_info = (
+                f"{ds.GetNumberOfPoints():,} pts · {ds.GetNumberOfCells():,} cells"
+            )
             state.geometry_error_message = ""
             state.flush()
 
@@ -148,7 +151,17 @@ def setup_geometry_tab(server):
                 case_root = config.get("CASE_ROOT", "")
                 path = Path(case_root) / active_case
                 vtk_files = []
-                for ext in ("*.vtk", "*.vtu", "*.vtp", "*.vti", "*.vtr", "*.vts", "*.ply", "*.stl", "*.obj"):
+                for ext in (
+                    "*.vtk",
+                    "*.vtu",
+                    "*.vtp",
+                    "*.vti",
+                    "*.vtr",
+                    "*.vts",
+                    "*.ply",
+                    "*.stl",
+                    "*.obj",
+                ):
                     vtk_files.extend(path.rglob(ext))
 
                 if vtk_files:
@@ -157,7 +170,9 @@ def setup_geometry_tab(server):
                 else:
                     state.geometry_file_name = "No dataset loaded"
                     state.geometry_dataset_type = "—"
-                    state.geometry_dataset_info = "No VTK mesh file found in case directory."
+                    state.geometry_dataset_info = (
+                        "No VTK mesh file found in case directory."
+                    )
                     state.geometry_error_message = ""
                     if active_actor[0]:
                         renderer.RemoveActor(active_actor[0])
@@ -182,7 +197,9 @@ def setup_geometry_tab(server):
             name = item.get("name") or item.get("filename") or name
             content = item.get("content")
         elif hasattr(item, "name") or hasattr(item, "content"):
-            name = getattr(item, "name", None) or getattr(item, "filename", None) or name
+            name = (
+                getattr(item, "name", None) or getattr(item, "filename", None) or name
+            )
             content = getattr(item, "content", None)
         elif isinstance(item, (bytes, str)):
             content = item
@@ -191,7 +208,9 @@ def setup_geometry_tab(server):
         if isinstance(content, bytes):
             return name, content
         if isinstance(content, str):
-            encoded = content.split(",", 1)[-1] if content.startswith("data:") else content
+            encoded = (
+                content.split(",", 1)[-1] if content.startswith("data:") else content
+            )
             try:
                 return name, base64.b64decode(encoded)
             except Exception:
@@ -223,6 +242,7 @@ def setup_geometry_tab(server):
 
 def build_geometry_drawer():
     from trame.app import get_server
+
     server = get_server()
     assert server is not None
     ctrl = server.controller
@@ -235,9 +255,14 @@ def build_geometry_drawer():
             hide_details=True,
             classes="mb-3",
         )
-        html.Div("{{ geometry_file_name }}", classes="text-subtitle-1 font-weight-bold text-cyan-900")
+        html.Div(
+            "{{ geometry_file_name }}",
+            classes="text-subtitle-1 font-weight-bold text-cyan-900",
+        )
         html.Div("{{ geometry_dataset_type }}", classes="text-caption text--secondary")
-        html.Div("{{ geometry_dataset_info }}", classes="text-caption text--secondary mb-3")
+        html.Div(
+            "{{ geometry_dataset_info }}", classes="text-caption text--secondary mb-3"
+        )
         vuetify.VAlert(
             "{{ geometry_error_message }}",
             v_if="geometry_error_message",
@@ -256,6 +281,7 @@ def build_geometry_drawer():
 
 def build_geometry_content():
     from trame.app import get_server
+
     server = get_server()
     assert server is not None
     ctrl = server.controller

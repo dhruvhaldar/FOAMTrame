@@ -142,7 +142,10 @@ def test_missing_docker_executable_disables_command_with_reason(tmp_path):
 
     assert result.actions["blockMesh"].available is True
     assert result.actions["solver"].available is False
-    assert "not available in the configured Docker image" in result.actions["solver"].reason
+    assert (
+        "not available in the configured Docker image"
+        in result.actions["solver"].reason
+    )
     with pytest.raises(ValueError, match="unavailable"):
         service.resolve_actions(result, ["solver"])
 

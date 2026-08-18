@@ -34,6 +34,8 @@ jobs:
         run: uv run --locked python -m compileall -q app.py app_state.py database.py flask_server.py security.py runtime.py manage.py run.py install.py uv_bootstrap.py tabs backend
       - name: Lint Python modules
         run: uv run --locked ruff check .
+      - name: Check Python formatting
+        run: uv run --locked ruff format --check .
       - name: Type check Python modules
         run: uv run --locked ty check
       - name: Run integration and smoke tests

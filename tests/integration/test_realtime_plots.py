@@ -71,9 +71,7 @@ def test_plot_appearance_export_and_custom_logo():
         assert rendered.size[0] > 500
 
     logo_buffer = io.BytesIO()
-    Image.new("RGBA", (20, 10), (6, 154, 181, 255)).save(
-        logo_buffer, format="PNG"
-    )
+    Image.new("RGBA", (20, 10), (6, 154, 181, 255)).save(logo_buffer, format="PNG")
     uploaded = _uploaded_logo_data(
         {
             "name": "logo.png",
@@ -102,9 +100,7 @@ def test_times_font_uses_bundled_liberation_serif_without_warning(caplog):
     )
 
     assert not [
-        record
-        for record in caplog.records
-        if "Liberation Serif" in record.getMessage()
+        record for record in caplog.records if "Liberation Serif" in record.getMessage()
     ]
 
 

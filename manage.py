@@ -15,7 +15,9 @@ def build_parser() -> argparse.ArgumentParser:
     doctor.add_argument(
         "--skip-docker", action="store_true", help="Do not check for the Docker CLI"
     )
-    subparsers.add_parser("init-db", help="Initialize or upgrade the application database")
+    subparsers.add_parser(
+        "init-db", help="Initialize or upgrade the application database"
+    )
     return parser
 
 
@@ -38,4 +40,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-

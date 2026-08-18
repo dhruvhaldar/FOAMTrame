@@ -89,7 +89,7 @@ with SinglePageWithDrawerLayout(server) as layout:
             html.H1("FOAMTrame", classes="foamtrame-brand")
     layout.title.style = "min-width: 206px; overflow: visible;"
     layout.icon.hide()
-    
+
     # Inject CSS style sheet into the HTML head using client.Style
     client.Style("""
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
@@ -1540,17 +1540,11 @@ def main():
     )
     port = None if explicit_port else settings.default_port
     explicit_host = any(
-        token == "--host" or token.startswith("--host=")
-        for token in sys.argv[1:]
+        token == "--host" or token.startswith("--host=") for token in sys.argv[1:]
     )
-    host = (
-        None
-        if explicit_host
-        else trame_bind_host(startup_security_preferences)
-    )
+    host = None if explicit_host else trame_bind_host(startup_security_preferences)
     explicit_timeout = any(
-        token == "--timeout" or token.startswith("--timeout=")
-        for token in sys.argv[1:]
+        token == "--timeout" or token.startswith("--timeout=") for token in sys.argv[1:]
     )
     timeout = (
         None

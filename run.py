@@ -30,7 +30,9 @@ def main(argv: list[str] | None = None) -> int:
     run_log_path.parent.mkdir(parents=True, exist_ok=True)
 
     with run_log_path.open("a", encoding="utf-8", buffering=1) as log_file:
-        started_at = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+        started_at = (
+            datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+        )
         header = f"\n{'=' * 80}\nFOAMTrame start {started_at}\nCommand: {' '.join(command)}\n"
         sys.stdout.write(header)
         sys.stdout.flush()

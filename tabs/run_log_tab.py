@@ -21,18 +21,23 @@ from backend.simulation_queue import (
 
 logger = logging.getLogger("FOAMTrame")
 
+
 def _get_cpu_info() -> dict[str, int]:
     logical = os.cpu_count() or 1
     physical = logical
     try:
         import psutil
+
         physical = psutil.cpu_count(logical=False) or logical
     except Exception:
         if platform.system() == "Windows":
             try:
                 import subprocess
+
                 cmd = "Get-CimInstance Win32_Processor | Select-Object -ExpandProperty NumberOfCores"
-                out = subprocess.check_output(["powershell", "-Command", cmd], text=True)
+                out = subprocess.check_output(
+                    ["powershell", "-Command", cmd], text=True
+                )
                 physical = int(out.strip())
             except Exception:
                 pass
@@ -83,7 +88,9 @@ def setup_run_log_tab(server):
     state.setdefault("queued_run_count", 0)
     empty_inspection = case_action_service.inspect_case(None)
     state.setdefault("case_action_map", empty_inspection.action_map())
-    state.setdefault("case_workflow_items", list(empty_inspection.action_map().values()))
+    state.setdefault(
+        "case_workflow_items", list(empty_inspection.action_map().values())
+    )
     state.setdefault("guided_action_ids", [])
     state.setdefault("guided_action_labels", [])
     state.setdefault("clean_preview", [])
@@ -199,6 +206,7 @@ def setup_run_log_tab(server):
 
     def check_parallel_config():
         from tabs.setup_tab import load_config
+
         config = load_config()
         case_root = config.get("CASE_ROOT", "")
         active_case = state.active_case or ""
@@ -224,7 +232,9 @@ def setup_run_log_tab(server):
 
             if num_match:
                 state.detected_num_processes = num_match.group(1)
-                state.detected_method = method_match.group(1) if method_match else "unknown"
+                state.detected_method = (
+                    method_match.group(1) if method_match else "unknown"
+                )
                 state.has_parallel_config = True
             else:
                 state.has_parallel_config = False
@@ -488,7 +498,9 @@ def setup_run_log_tab(server):
             state.pending_action_preview = (
                 list(state.clean_preview)
                 if action_id == "safe_clean"
-                else ["Review the case's Allclean script if its cleanup policy is uncertain."]
+                else [
+                    "Review the case's Allclean script if its cleanup policy is uncertain."
+                ]
             )
             _pending_clean_inspection[0] = (
                 _inspection[0] if action_id == "safe_clean" else None
@@ -519,7 +531,9 @@ def setup_run_log_tab(server):
             state.flush()
             return
         if not inspection.guided_actions:
-            state.run_log_text = "[FOAMTrame] No confident guided-run steps were detected.\n"
+            state.run_log_text = (
+                "[FOAMTrame] No confident guided-run steps were detected.\n"
+            )
             state.flush()
             return
         state.guided_run_dialog = True
@@ -569,7 +583,9 @@ def setup_run_log_tab(server):
         if _active_container[0]:
             try:
                 _active_container[0].kill()
-                state.run_log_text = state.run_log_text + "\n[FOAMTrame] Process terminated by user.\n"
+                state.run_log_text = (
+                    state.run_log_text + "\n[FOAMTrame] Process terminated by user.\n"
+                )
                 state.flush()
             except Exception as e:
                 logger.error(f"Error stopping container: {e}")
@@ -606,6 +622,7 @@ def setup_run_log_tab(server):
 
 def build_run_log_drawer():
     from trame.app import get_server
+
     server = get_server()
     assert server is not None
     ctrl = server.controller
@@ -714,8 +731,12 @@ def build_run_log_drawer():
                         color=("action.available ? 'teal darken-2' : 'grey'",),
                     )
                 with vuetify.VListItemContent(classes="py-1"):
-                    vuetify.VListItemTitle("{{ action.label }}", classes="text-caption font-weight-bold")
-                    vuetify.VListItemSubtitle("{{ action.reason }}", classes="case-action-reason")
+                    vuetify.VListItemTitle(
+                        "{{ action.label }}", classes="text-caption font-weight-bold"
+                    )
+                    vuetify.VListItemSubtitle(
+                        "{{ action.reason }}", classes="case-action-reason"
+                    )
 
         html.Div("Workflow", classes="text-overline text--secondary mb-1")
         capability_button(
@@ -774,6 +795,7 @@ def build_run_log_drawer():
 
 def build_run_log_content():
     from trame.app import get_server
+
     server = get_server()
     assert server is not None
     ctrl = server.controller
@@ -788,15 +810,23 @@ def build_run_log_content():
             with vuetify.VCol(cols="12", lg="10"):
                 # Header & Status Card
                 with vuetify.VCard(classes="pa-4 mb-4 glass-card"):
-                    with vuetify.VRow(align="center", justify="space-between", no_gutters=True):
+                    with vuetify.VRow(
+                        align="center", justify="space-between", no_gutters=True
+                    ):
                         with vuetify.VCol(cols="12", sm="8"):
-                            with vuetify.VCardTitle(classes="headline font-weight-bold pa-0"):
+                            with vuetify.VCardTitle(
+                                classes="headline font-weight-bold pa-0"
+                            ):
                                 html.Span("Run & Console Logs")
                             html.P(
                                 "Execute OpenFOAM simulation commands and view output logs in real-time.",
                                 classes="text-caption text-secondary mb-0",
                             )
-                        with vuetify.VCol(cols="12", sm="4", classes="d-flex justify-sm-end align-center mt-2 mt-sm-0"):
+                        with vuetify.VCol(
+                            cols="12",
+                            sm="4",
+                            classes="d-flex justify-sm-end align-center mt-2 mt-sm-0",
+                        ):
                             vuetify.VChip(
                                 "{{ queued_run_count }} queued",
                                 v_if="queued_run_count > 0",
@@ -853,7 +883,9 @@ def build_run_log_content():
                                 vuetify.VListItemSubtitle(
                                     "{{ item.status }} · queued {{ item.queued_at }}"
                                 )
-                            with vuetify.VListItemAction(v_if="item.status === 'Queued'"):
+                            with vuetify.VListItemAction(
+                                v_if="item.status === 'Queued'"
+                            ):
                                 with vuetify.VBtn(
                                     icon=True,
                                     small=True,
@@ -865,9 +897,13 @@ def build_run_log_content():
 
                 # Console Output Log Box Card
                 with vuetify.VCard(classes="pa-4 mb-4 glass-card"):
-                    with vuetify.VCardTitle(classes="subtitle-1 font-weight-bold d-flex align-center justify-space-between py-1"):
+                    with vuetify.VCardTitle(
+                        classes="subtitle-1 font-weight-bold d-flex align-center justify-space-between py-1"
+                    ):
                         with html.Div(classes="d-flex align-center"):
-                            vuetify.VIcon("mdi-console", classes="mr-2", color="primary")
+                            vuetify.VIcon(
+                                "mdi-console", classes="mr-2", color="primary"
+                            )
                             html.Span("Console Log Output")
                         vuetify.VBtn(
                             "Clear",
@@ -904,24 +940,32 @@ def build_run_log_content():
                                     html.Th("Start Time", classes="text-left")
                                     html.Th("Duration", classes="text-left")
                             with html.Tbody():
-                                with html.Tr(v_for="item in run_history", key="item.id"):
+                                with html.Tr(
+                                    v_for="item in run_history", key="item.id"
+                                ):
                                     html.Td("{{ item.id }}")
                                     html.Td("{{ item.case_name }}")
                                     html.Td("{{ item.command }}")
                                     with html.Td():
                                         vuetify.VChip(
                                             "{{ item.status }}",
-                                            color=("item.status === 'Completed' ? 'success' : (item.status === 'Running' ? 'warning' : (item.status === 'Queued' ? 'cyan darken-3' : 'error'))",),
+                                            color=(
+                                                "item.status === 'Completed' ? 'success' : (item.status === 'Running' ? 'warning' : (item.status === 'Queued' ? 'cyan darken-3' : 'error'))",
+                                            ),
                                             x_small=True,
                                             label=True,
                                             text_color="white",
                                         )
-                                    html.Td("{{ item.start_time || ('Queued ' + (item.queued_at || '')) }}")
+                                    html.Td(
+                                        "{{ item.start_time || ('Queued ' + (item.queued_at || '')) }}"
+                                    )
                                     html.Td("{{ item.duration || '-' }}")
 
     with vuetify.VDialog(v_model=("action_confirm_dialog", False), max_width="620"):
         with vuetify.VCard(classes="glass-card pa-2"):
-            vuetify.VCardTitle("{{ pending_action_title }}", classes="headline font-weight-bold")
+            vuetify.VCardTitle(
+                "{{ pending_action_title }}", classes="headline font-weight-bold"
+            )
             with vuetify.VCardText():
                 html.P("{{ pending_action_message }}", classes="mb-3")
                 with vuetify.VAlert(
@@ -930,7 +974,9 @@ def build_run_log_content():
                     dense=True,
                     classes="mb-3",
                 ):
-                    html.Span("This operation changes or removes case data and cannot be undone by FOAMTrame.")
+                    html.Span(
+                        "This operation changes or removes case data and cannot be undone by FOAMTrame."
+                    )
                 with vuetify.VList(
                     dense=True,
                     outlined=True,
@@ -942,7 +988,9 @@ def build_run_log_content():
                         key=("target",),
                     ):
                         with vuetify.VListItemIcon(classes="mr-2"):
-                            vuetify.VIcon("mdi-file-remove-outline", small=True, color="warning")
+                            vuetify.VIcon(
+                                "mdi-file-remove-outline", small=True, color="warning"
+                            )
                         vuetify.VListItemTitle("{{ target }}", classes="text-body-2")
             with vuetify.VCardActions():
                 vuetify.VSpacer()
@@ -962,7 +1010,9 @@ def build_run_log_content():
                     "No Allrun script was supplied. FOAMTrame detected the following suggested sequence. Review it before execution because case-specific ordering may differ.",
                     classes="mb-3",
                 )
-                with vuetify.VList(dense=True, outlined=True, classes="guided-run-list"):
+                with vuetify.VList(
+                    dense=True, outlined=True, classes="guided-run-list"
+                ):
                     with vuetify.VListItem(
                         v_for="(label, index) in guided_action_labels",
                         key=("label",),
@@ -971,7 +1021,9 @@ def build_run_log_content():
                             color="cyan darken-3",
                             size="28",
                         ):
-                            html.Span("{{ index + 1 }}", classes="white--text text-caption")
+                            html.Span(
+                                "{{ index + 1 }}", classes="white--text text-caption"
+                            )
                         vuetify.VListItemTitle("{{ label }}")
             with vuetify.VCardActions():
                 vuetify.VSpacer()

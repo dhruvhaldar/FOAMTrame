@@ -4,17 +4,20 @@ from typing import Any, Tuple
 
 logger = logging.getLogger("FOAMTrame")
 
+
 class BlockMeshGenerator:
     """Generates system/blockMeshDict based on configuration."""
 
     @staticmethod
-    def _validate_numeric_tuple(values: Any, length: int, expected_type: type, name: str) -> Tuple[Any, ...]:
+    def _validate_numeric_tuple(
+        values: Any, length: int, expected_type: type, name: str
+    ) -> Tuple[Any, ...]:
         """Validates that values is a tuple of correct length and type."""
         if not isinstance(values, (list, tuple)):
-             # Try to convert single items or strings that might look like lists if reasonable,
-             # but here we expect structured input.
-             # Fail safe.
-             raise ValueError(f"{name} must be a list or tuple")
+            # Try to convert single items or strings that might look like lists if reasonable,
+            # but here we expect structured input.
+            # Fail safe.
+            raise ValueError(f"{name} must be a list or tuple")
 
         if len(values) != length:
             raise ValueError(f"{name} must have {length} elements")
@@ -25,7 +28,9 @@ class BlockMeshGenerator:
                 # Enforce type conversion (this strips strings/malicious payloads)
                 safe_values.append(expected_type(v))
             except (ValueError, TypeError):
-                raise ValueError(f"Invalid value in {name}: {v} is not of type {expected_type.__name__}")
+                raise ValueError(
+                    f"Invalid value in {name}: {v} is not of type {expected_type.__name__}"
+                )
 
         return tuple(safe_values)
 
@@ -35,7 +40,7 @@ class BlockMeshGenerator:
         min_point: Tuple[float, float, float],
         max_point: Tuple[float, float, float],
         cells: Tuple[int, int, int],
-        grading: Tuple[float, float, float] = (1, 1, 1)
+        grading: Tuple[float, float, float] = (1, 1, 1),
     ) -> bool:
         """
         Generates the blockMeshDict file.
@@ -60,10 +65,18 @@ class BlockMeshGenerator:
 
             # Security: Validate inputs are numeric
             # This prevents injection of arbitrary OpenFOAM syntax like #codeStream
-            safe_min = BlockMeshGenerator._validate_numeric_tuple(min_point, 3, float, "min_point")
-            safe_max = BlockMeshGenerator._validate_numeric_tuple(max_point, 3, float, "max_point")
-            safe_cells = BlockMeshGenerator._validate_numeric_tuple(cells, 3, int, "cells")
-            safe_grading = BlockMeshGenerator._validate_numeric_tuple(grading, 3, float, "grading")
+            safe_min = BlockMeshGenerator._validate_numeric_tuple(
+                min_point, 3, float, "min_point"
+            )
+            safe_max = BlockMeshGenerator._validate_numeric_tuple(
+                max_point, 3, float, "max_point"
+            )
+            safe_cells = BlockMeshGenerator._validate_numeric_tuple(
+                cells, 3, int, "cells"
+            )
+            safe_grading = BlockMeshGenerator._validate_numeric_tuple(
+                grading, 3, float, "grading"
+            )
 
             # Unpack values
             min_x, min_y, min_z = safe_min

@@ -50,7 +50,9 @@ def test_missing_installer_selection_uses_8087(tmp_path):
 
 def test_environment_port_overrides_installer_selection(monkeypatch):
     def unexpected_installer_read():
-        raise AssertionError("installer port should not be read when env override exists")
+        raise AssertionError(
+            "installer port should not be read when env override exists"
+        )
 
     monkeypatch.setattr(runtime, "installed_server_port", unexpected_installer_read)
     settings = runtime.load_runtime_settings({"FOAMTRAME_PORT": "5087"})
@@ -122,6 +124,7 @@ def test_silent_main_completes_without_console_and_persists_port(
 
     def record_run(command: list[str], **kwargs: Any) -> None:
         commands.append((command, kwargs))
+
     args = argparse.Namespace(
         dev=False,
         silent=True,
@@ -136,7 +139,9 @@ def test_silent_main_completes_without_console_and_persists_port(
         "reserve_server_port",
         lambda requested, *, auto_assign: (reservation, 52123),
     )
-    monkeypatch.setattr(install, "venv_python", lambda _path: install.Path(sys.executable))
+    monkeypatch.setattr(
+        install, "venv_python", lambda _path: install.Path(sys.executable)
+    )
     monkeypatch.setattr(install, "resolve_uv", lambda: install.Path("uv"))
     monkeypatch.setattr(
         install,

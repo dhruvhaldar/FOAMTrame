@@ -71,7 +71,9 @@ class ApplicationSmokeTest(unittest.TestCase):
                             with urllib.request.urlopen(
                                 f"http://127.0.0.1:{port}/", timeout=2
                             ) as response:
-                                response_body = response.read().decode("utf-8", "replace")
+                                response_body = response.read().decode(
+                                    "utf-8", "replace"
+                                )
                                 self.assertEqual(200, response.status)
                                 break
                         except (urllib.error.URLError, TimeoutError):

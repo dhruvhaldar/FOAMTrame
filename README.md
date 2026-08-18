@@ -724,15 +724,16 @@ Lint and type-check the Python code with the locked Ruff and `ty` versions:
 
 ```bash
 uv run --locked ruff check .
+uv run --locked ruff format --check .
 uv run --locked ty check
 ```
 
-Ruff enforces the core Pyflakes and critical pycodestyle lint rules without forcing
-a repository-wide formatting migration. `ty` targets every supported platform and
-checks application code, tests, and benchmarks while excluding scratch diagnostics.
-A narrow `ty` override covers cachebox decorator-generated methods, and optional
-PyVista and native accelerator imports remain valid when those components are not
-installed.
+Ruff enforces the core Pyflakes and critical pycodestyle lint rules plus its
+deterministic formatter. Run `uv run --locked ruff format .` to apply formatting
+before committing. `ty` targets every supported platform and checks application
+code, tests, and benchmarks while excluding scratch diagnostics. A narrow `ty`
+override covers cachebox decorator-generated methods, and optional PyVista and
+native accelerator imports remain valid when those components are not installed.
 
 Validate database initialization and the persisted state schema:
 

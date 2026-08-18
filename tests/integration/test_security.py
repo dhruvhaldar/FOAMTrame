@@ -42,8 +42,10 @@ def test_optional_security_is_disabled_by_default():
     assert preferences["session_timeout_enabled"] is False
     assert trame_session_timeout_seconds(preferences) == 0
 
-    response = make_app(preferences).test_client().get(
-        "/probe", headers={"Origin": "https://untrusted.example"}
+    response = (
+        make_app(preferences)
+        .test_client()
+        .get("/probe", headers={"Origin": "https://untrusted.example"})
     )
     assert response.status_code == 200
     assert "Access-Control-Allow-Origin" not in response.headers
@@ -67,14 +69,18 @@ def test_trusted_origin_and_any_origin_cors_headers():
     trusted_preferences = enabled_preferences(
         cors_mode="trusted_origin", cors_origin="https://ui.example"
     )
-    trusted = make_app(trusted_preferences).test_client().get(
-        "/probe", headers={"Origin": "https://ui.example"}
+    trusted = (
+        make_app(trusted_preferences)
+        .test_client()
+        .get("/probe", headers={"Origin": "https://ui.example"})
     )
     assert trusted.headers["Access-Control-Allow-Origin"] == "https://ui.example"
 
     any_preferences = enabled_preferences(cors_mode="any")
-    public = make_app(any_preferences).test_client().get(
-        "/probe", headers={"Origin": "https://any.example"}
+    public = (
+        make_app(any_preferences)
+        .test_client()
+        .get("/probe", headers={"Origin": "https://any.example"})
     )
     assert public.headers["Access-Control-Allow-Origin"] == "*"
 
@@ -92,9 +98,7 @@ def test_api_key_protects_mutating_companion_api_requests():
     client = make_app(preferences).test_client()
 
     assert client.post("/mutate").status_code == 401
-    assert client.post(
-        "/mutate", headers={API_KEY_HEADER: secret}
-    ).status_code == 200
+    assert client.post("/mutate", headers={API_KEY_HEADER: secret}).status_code == 200
     assert verify_api_key(secret, preferences["api_key_hash"])
     assert not verify_api_key("incorrect", preferences["api_key_hash"])
 
@@ -129,16 +133,12 @@ def test_security_preferences_validate_origins_and_limits():
                 "api_key_hash": "pbkdf2_sha256$999999999$00$00",
             }
         )
-    assert not verify_api_key(
-        "irrelevant", "pbkdf2_sha256$999999999$00$00"
-    )
+    assert not verify_api_key("irrelevant", "pbkdf2_sha256$999999999$00$00")
 
 
 def test_session_timeout_requires_both_security_and_its_own_switch():
     preferences = default_security_preferences()
-    preferences.update(
-        {"session_timeout_enabled": True, "session_timeout_minutes": 45}
-    )
+    preferences.update({"session_timeout_enabled": True, "session_timeout_minutes": 45})
     assert trame_session_timeout_seconds(preferences) == 0
 
     preferences["security_enabled"] = True

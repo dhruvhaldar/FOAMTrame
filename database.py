@@ -174,12 +174,10 @@ class AppDatabase:
 
         config = {row["key"]: json.loads(row["value_json"]) for row in config_rows}
         preferences = {
-            row["key"]: json.loads(row["value_json"])
-            for row in preference_rows
+            row["key"]: json.loads(row["value_json"]) for row in preference_rows
         }
         security_preferences = {
-            row["key"]: json.loads(row["value_json"])
-            for row in security_rows
+            row["key"]: json.loads(row["value_json"]) for row in security_rows
         }
         history = [json.loads(row["record_json"]) for row in run_rows]
         return {

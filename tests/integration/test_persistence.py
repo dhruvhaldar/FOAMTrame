@@ -108,7 +108,9 @@ class DatabaseIntegrationTests(unittest.TestCase):
 
         self.assertFalse(errors)
         loaded = self.database.load_app_state()
-        self.assertIn(loaded["case_config"]["ACTIVE_CASE"], {f"case-{i}" for i in range(8)})
+        self.assertIn(
+            loaded["case_config"]["ACTIVE_CASE"], {f"case-{i}" for i in range(8)}
+        )
         self.assertEqual(1, len(loaded["run_history"]))
 
 
@@ -145,17 +147,13 @@ class AppStateMigrationIntegrationTest(unittest.TestCase):
         self.assertEqual(legacy, backup)
 
         backup["case_config"]["ACTIVE_CASE"] = "motorBike"
-        backup["plot_preferences"].update(
-            {"font": "roboto", "background": "black"}
-        )
+        backup["plot_preferences"].update({"font": "roboto", "background": "black"})
         restored = app_state.restore_app_state_json(json.dumps(backup))
         self.assertEqual("motorBike", restored["case_config"]["ACTIVE_CASE"])
         self.assertEqual("motorBike", app_state.load_case_config()["ACTIVE_CASE"])
         self.assertEqual("roboto", app_state.load_plot_preferences()["font"])
         self.assertEqual("black", app_state.load_plot_preferences()["background"])
-        self.assertEqual(
-            "loopback", app_state.load_security_preferences()["bind_mode"]
-        )
+        self.assertEqual("loopback", app_state.load_security_preferences()["bind_mode"])
         self.assertTrue(app_state.LEGACY_APP_STATE_FILE.exists())
 
 
