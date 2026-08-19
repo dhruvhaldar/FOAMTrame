@@ -45,7 +45,8 @@ def _uploaded_bytes(file_value: Any) -> tuple[str, bytes]:
     if isinstance(content, str):
         encoded = content.split(",", 1)[-1] if content.startswith("data:") else content
         try:
-            return name, base64.b64decode(encoded, validate=True)
+            # Trame transports uploads as Base64; this is not encryption.
+            return name, base64.b64decode(encoded, validate=True)  # nosec
         except Exception:
             return name, content.encode("utf-8")
     if isinstance(content, (list, tuple)):

@@ -19,6 +19,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+  "codeaudit==1.8.1 ; python_full_version >= '3.11'",
   "pytest==8.4.2",
   "ruff==0.16.1",
   "ty==0.0.72",

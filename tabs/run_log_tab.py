@@ -35,7 +35,7 @@ def _get_cpu_info() -> dict[str, int]:
                 import subprocess
 
                 cmd = "Get-CimInstance Win32_Processor | Select-Object -ExpandProperty NumberOfCores"
-                out = subprocess.check_output(
+                out = subprocess.check_output(  # nosec: fixed local diagnostic command
                     ["powershell", "-Command", cmd], text=True
                 )
                 physical = int(out.strip())

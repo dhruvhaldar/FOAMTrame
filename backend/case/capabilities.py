@@ -554,16 +554,19 @@ done
         for target in inspection.clean_targets:
             target_path = Path(target)
             try:
-                target_path.absolute().relative_to(case_root)
+                resolved_target = target_path.resolve(strict=False)
+                resolved_target.relative_to(case_root)
             except ValueError as exc:
                 raise ValueError("Clean target escaped the active case") from exc
+            if resolved_target == case_root:
+                raise ValueError("Clean target cannot be the active case root")
             if not target_path.exists() and not target_path.is_symlink():
                 continue
             relative = target_path.relative_to(case_root).as_posix()
             if target_path.is_symlink() or target_path.is_file():
                 target_path.unlink()
             elif target_path.is_dir():
-                shutil.rmtree(target_path)
+                shutil.rmtree(target_path)  # nosec: resolved inside the active case
             removed.append(relative)
         return removed
 

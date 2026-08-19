@@ -205,7 +205,7 @@ def run_preflight(
     elif docker_executable:
         add("docker_cli", "pass", docker_executable)
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # nosec: fixed Docker diagnostic argv
                 [docker_executable, "info", "--format", "{{.ServerVersion}}"],
                 capture_output=True,
                 text=True,

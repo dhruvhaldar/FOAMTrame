@@ -72,7 +72,8 @@ def sha256_file(path: Path) -> str:
 
 def _archive_executable(archive: Path, bundle: UvBundle) -> bytes:
     if archive.suffix == ".zip":
-        with zipfile.ZipFile(archive) as package:
+        # Read one checksum-verified member; the archive is never extracted.
+        with zipfile.ZipFile(archive) as package:  # nosec
             return package.read(bundle.member)
 
     with tarfile.open(archive, mode="r:gz") as package:

@@ -77,6 +77,7 @@ uv run --locked python manage.py doctor --skip-docker
 uv run --locked ruff check .
 uv run --locked ruff format --check .
 uv run --locked ty check
+uv run --locked python scripts/codeaudit_gate.py .  # Python 3.11+
 uv run --locked pytest -q
 ```
 
@@ -434,6 +435,8 @@ settings merely to test conditional UI.
 - Prefer `rg` / `rg --files` for discovery.
 - Use `apply_patch` for targeted source edits.
 - Keep documentation, schema examples, runtime behavior, and tests synchronized.
+- Keep the CodeAudit CI gate clean at medium severity and above. Use inline
+  `# nosec` only for reviewed false positives and include the reason.
 - Do not claim a fix is complete solely because code compiles. Run proportionate
   tests and visually verify layout changes.
 - If Docker is unavailable, keep the UI functional and report the limitation

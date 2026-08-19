@@ -91,7 +91,7 @@ def run(
             raise ValueError("Silent installer commands require an installation log.")
         log.write(f"\n> {command_line}\n")
         log.flush()
-        subprocess.run(
+        subprocess.run(  # nosec: argv list is assembled from trusted installer paths
             command,
             cwd=PROJECT_ROOT,
             env=installer_environment(silent=True, base=env),
@@ -104,7 +104,9 @@ def run(
         return
 
     print(f"\n> {command_line}", flush=True)
-    subprocess.run(command, cwd=PROJECT_ROOT, env=env, check=True)
+    subprocess.run(  # nosec: argv list is assembled from trusted installer paths
+        command, cwd=PROJECT_ROOT, env=env, check=True
+    )
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

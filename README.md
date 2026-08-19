@@ -13,6 +13,9 @@
 
 <p align="center">
   <a href="https://www.python.org/downloads/"><img alt="Python 3.10+" src="https://img.shields.io/badge/Python-3.10%2B-0c6e87?logo=python&logoColor=white"></a>
+  <a href="https://github.com/dhruvhaldar/FOAMTrame/actions/workflows/ci.yml"><img alt="CodeAudit status" src="https://img.shields.io/github/actions/workflow/status/dhruvhaldar/FOAMTrame/ci.yml?branch=main&label=CodeAudit&logo=githubactions&logoColor=white"></a>
+  <a href="https://github.com/dhruvhaldar/FOAMTrame/actions/workflows/ci.yml"><img alt="Ruff status" src="https://img.shields.io/github/actions/workflow/status/dhruvhaldar/FOAMTrame/ci.yml?branch=main&label=Ruff&logo=ruff&logoColor=white"></a>
+  <a href="https://docs.astral.sh/uv/"><img alt="uv locked" src="https://img.shields.io/badge/uv-locked-DE5FE9?logo=uv&logoColor=white"></a>
   <a href="https://kitware.github.io/trame/"><img alt="Trame 3" src="https://img.shields.io/badge/Trame-3-069ab5"></a>
   <a href="https://www.docker.com/"><img alt="Docker required" src="https://img.shields.io/badge/Docker-required-2496ED?logo=docker&logoColor=white"></a>
   <a href="#offline-installation"><img alt="Runs offline" src="https://img.shields.io/badge/Runs_offline-supported-069ab5"></a>
@@ -734,6 +737,14 @@ before committing. `ty` targets every supported platform and checks application
 code, tests, and benchmarks while excluding scratch diagnostics. A narrow `ty`
 override covers cachebox decorator-generated methods, and optional PyVista and
 native accelerator imports remain valid when those components are not installed.
+
+On Python 3.11 or newer, run the CodeAudit SAST gate as well. Reviewed false
+positives use inline `# nosec` comments with a reason; new medium, high, or
+critical findings fail the command and CI:
+
+```bash
+uv run --locked python scripts/codeaudit_gate.py .
+```
 
 Validate database initialization and the persisted state schema:
 

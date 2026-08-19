@@ -212,7 +212,8 @@ def setup_geometry_tab(server):
                 content.split(",", 1)[-1] if content.startswith("data:") else content
             )
             try:
-                return name, base64.b64decode(encoded)
+                # Trame transports uploads as Base64; this is not encryption.
+                return name, base64.b64decode(encoded)  # nosec
             except Exception:
                 return name, content.encode("utf-8")
         if isinstance(content, (list, tuple)):

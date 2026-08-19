@@ -103,7 +103,8 @@ class BaseVisualizer:
 
                 with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
                     temp_read_path = tmp.name
-                    with gzip.open(read_path_str, "rb") as f_in:
+                    # safe_decompress enforces the decompressed-size ceiling.
+                    with gzip.open(read_path_str, "rb") as f_in:  # nosec
                         safe_decompress(f_in, tmp)
                     read_path_str = temp_read_path
 

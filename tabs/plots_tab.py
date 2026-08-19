@@ -200,7 +200,8 @@ def _logo_array(logo_mode: str, custom_logo_data: str = "") -> Optional[np.ndarr
                 return np.asarray(image.convert("RGBA").copy())
         if logo_mode == "custom" and custom_logo_data:
             encoded = custom_logo_data.split(",", 1)[-1]
-            raw = base64.b64decode(encoded, validate=True)
+            # Trame transports uploads as Base64; this is not encryption.
+            raw = base64.b64decode(encoded, validate=True)  # nosec
             with Image.open(io.BytesIO(raw)) as image:
                 image = image.convert("RGBA")
                 image.thumbnail((240, 120), Image.Resampling.LANCZOS)
@@ -501,7 +502,10 @@ def _uploaded_logo_data(file_value) -> str:
     if isinstance(content, bytes):
         raw = content
     elif isinstance(content, str):
-        raw = base64.b64decode(content.split(",", 1)[-1], validate=True)
+        # Trame transports uploads as Base64; this is not encryption.
+        raw = base64.b64decode(  # nosec
+            content.split(",", 1)[-1], validate=True
+        )
     elif isinstance(content, (list, tuple)):
         raw = bytes(content)
     else:

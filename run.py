@@ -38,7 +38,7 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.flush()
         log_file.write(header)
 
-        process = subprocess.Popen(
+        process = subprocess.Popen(  # nosec: shell is disabled and argv is explicit
             command,
             cwd=PROJECT_ROOT,
             stdout=subprocess.PIPE,

@@ -219,7 +219,7 @@ def _run_trame_visualizer_process(
         # Pre-claim socket port
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            s.bind((host, 0))
+            s.bind((host, 0))  # nosec: caller uses the loopback-only default
             port = s.getsockname()[1]
         port_queue.put({"port": port})
 
@@ -646,7 +646,8 @@ def _run_trame_visualizer_process(
                     else content
                 )
                 try:
-                    return name, base64.b64decode(encoded)
+                    # Trame transports uploads as Base64; this is not encryption.
+                    return name, base64.b64decode(encoded)  # nosec
                 except Exception:
                     return name, content.encode("utf-8")
             if isinstance(content, (list, tuple)):

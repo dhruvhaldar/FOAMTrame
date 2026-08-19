@@ -34,7 +34,7 @@ def _get_cache_dir() -> Path:
     # Ensure permissions are set (mkdir mode might be ignored or modified by umask)
     # We do this always to ensure security even if directory already existed
     try:
-        os.chmod(cache_dir, 0o700)
+        os.chmod(cache_dir, 0o700)  # nosec: restricts access to the current user
     except OSError as e:
         # If we can't chmod (e.g. not owner), we'll catch it in the ownership check below
         logger.debug(f"Security: Failed to set permissions on cache dir: {e}")
@@ -60,7 +60,9 @@ def _get_cache_dir() -> Path:
                     "Attempting to fix."
                 )
                 try:
-                    os.chmod(cache_dir, 0o700)
+                    os.chmod(  # nosec: repairs overly broad cache permissions
+                        cache_dir, 0o700
+                    )
                 except OSError as e:
                     logger.warning(f"Security: Failed to fix permissions: {e}")
                     return Path(tempfile.mkdtemp(prefix="FOAMTrame_geo_"))
