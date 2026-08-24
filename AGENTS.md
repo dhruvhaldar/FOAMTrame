@@ -128,7 +128,8 @@ The top-level tabs are:
 4. Run/Log
 5. Plots
 6. Post
-7. Settings (gear icon)
+7. Documentation (book icon, rendered from `README.md`)
+8. Settings (gear icon)
 
 `app.py` composes the tabs and owns the shared layout/CSS. Tab-specific state,
 controllers, drawer content, and main content live under `tabs/`. Backend services
@@ -479,6 +480,7 @@ backend/simulation_queue.py    Single-worker FIFO simulation scheduling
 tabs/plots_tab.py              Plot state, rendering, styling, export, maximization
 backend/plots/realtime_plots.py OpenFOAM field and residual parsing/cache
 tabs/visualizer_tab.py         Post-processing state and VTK controls
+tabs/documentation_tab.py      README-backed in-app documentation
 tabs/settings_tab.py           Backup/restore and optional security UI
 static/icons/                  Product/vendor/OpenFOAM version assets
 tests/integration/             Focused behavior and regression tests

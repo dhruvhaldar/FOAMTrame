@@ -129,7 +129,7 @@ def setup_settings_tab(server):
 
     @state.change("active_tab")
     def refresh_backup_preview(active_tab, **_):
-        if int(active_tab) == 6:
+        if int(active_tab) == 7:
             state.app_state_backup_json = export_app_state_json()
             state.dirty("app_state_backup_json")
             state.flush()
@@ -256,7 +256,7 @@ def setup_settings_tab(server):
 
 
 def build_settings_drawer():
-    with html.Div(v_show="active_tab === 6", classes="pa-4"):
+    with html.Div(v_show="active_tab === 7", classes="pa-4"):
         with html.Div(classes="d-flex align-center mb-3"):
             vuetify.VIcon("mdi-cog-outline", color="cyan darken-3", classes="mr-2")
             html.Div("Settings", classes="text-subtitle-1 font-weight-bold")
@@ -311,7 +311,7 @@ def build_settings_content():
     with vuetify.VContainer(
         fluid=True,
         classes="fill-height pa-6 settings-page",
-        v_if="active_tab === 6",
+        v_if="active_tab === 7",
     ):
         with vuetify.VRow(justify="center", classes="settings-page-row"):
             with vuetify.VCol(cols="12", md="10", lg="8", xl="7"):

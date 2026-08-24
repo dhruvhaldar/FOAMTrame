@@ -21,6 +21,11 @@ from tabs.geometry_tab import (
     build_geometry_drawer,
     setup_geometry_tab,
 )
+from tabs.documentation_tab import (
+    build_documentation_content,
+    build_documentation_drawer,
+    setup_documentation_tab,
+)
 from tabs.meshing_tab import (
     build_meshing_content,
     build_meshing_drawer,
@@ -72,6 +77,7 @@ setup_run_log_tab(server)
 setup_plots_tab(server)
 load_dataset = setup_visualizer_tab(server)
 setup_settings_tab(server)
+setup_documentation_tab(server)
 
 state.setdefault("active_tab", 0)
 
@@ -1416,6 +1422,89 @@ with SinglePageWithDrawerLayout(server) as layout:
             }
         }
         /* Premium Scrollbar */
+        .v-application .documentation-page {
+            max-width: 1180px;
+            margin: 0 auto;
+        }
+        .v-application .documentation-card {
+            min-height: calc(100vh - 112px);
+        }
+        .v-application .documentation-content {
+            color: #1e293b;
+            font-size: 1rem;
+            line-height: 1.75;
+            overflow-wrap: anywhere;
+        }
+        .v-application .documentation-content h1,
+        .v-application .documentation-content h2,
+        .v-application .documentation-content h3,
+        .v-application .documentation-content h4 {
+            color: #0c6e87;
+            line-height: 1.25;
+            margin: 1.6em 0 0.65em;
+            scroll-margin-top: 72px;
+        }
+        .v-application .documentation-content h1:first-child,
+        .v-application .documentation-content h2:first-child {
+            margin-top: 0;
+        }
+        .v-application .documentation-content h2 {
+            border-bottom: 1px solid rgba(6, 154, 181, 0.22);
+            font-size: 1.75rem;
+            padding-bottom: 0.4em;
+        }
+        .v-application .documentation-content h3 { font-size: 1.3rem; }
+        .v-application .documentation-content p,
+        .v-application .documentation-content ul,
+        .v-application .documentation-content ol { margin-bottom: 1em; }
+        .v-application .documentation-content a {
+            color: #067f99;
+            font-weight: 600;
+        }
+        .v-application .documentation-content pre {
+            background: #0f172a;
+            border-radius: 12px;
+            color: #e2e8f0;
+            overflow-x: auto;
+            padding: 16px;
+        }
+        .v-application .documentation-content code {
+            background: rgba(6, 154, 181, 0.1);
+            border-radius: 5px;
+            color: #075d71;
+            font-size: 0.9em;
+            padding: 0.15em 0.35em;
+        }
+        .v-application .documentation-content pre code {
+            background: transparent;
+            color: inherit;
+            padding: 0;
+        }
+        .v-application .documentation-content blockquote {
+            border-left: 4px solid #069ab5;
+            color: #475569;
+            margin: 1em 0;
+            padding: 0.65em 1em;
+        }
+        .v-application .documentation-table-wrap {
+            margin: 1em 0;
+            overflow-x: auto;
+        }
+        .v-application .documentation-content table {
+            border-collapse: collapse;
+            min-width: 100%;
+        }
+        .v-application .documentation-content th,
+        .v-application .documentation-content td {
+            border: 1px solid rgba(12, 110, 135, 0.2);
+            padding: 10px 12px;
+            text-align: left;
+            vertical-align: top;
+        }
+        .v-application .documentation-content th {
+            background: rgba(6, 154, 181, 0.09);
+            color: #075d71;
+        }
         ::-webkit-scrollbar {
             width: 8px;
             height: 8px;
@@ -1460,6 +1549,12 @@ with SinglePageWithDrawerLayout(server) as layout:
             vuetify.VTab("Post")
             with vuetify.VTab(
                 classes="settings-nav-tab",
+                title="Documentation",
+                aria_label="Documentation",
+            ):
+                vuetify.VIcon("mdi-book-open-page-variant-outline")
+            with vuetify.VTab(
+                classes="settings-nav-tab",
                 title="Settings",
                 aria_label="Settings",
             ):
@@ -1486,6 +1581,7 @@ with SinglePageWithDrawerLayout(server) as layout:
         build_run_log_drawer()
         build_plots_drawer()
         build_visualizer_drawer(ctrl)
+        build_documentation_drawer(ctrl)
         build_settings_drawer()
 
     with layout.content:
@@ -1519,6 +1615,7 @@ with SinglePageWithDrawerLayout(server) as layout:
         build_run_log_content()
         build_plots_content()
         build_visualizer_content(ctrl)
+        build_documentation_content()
         build_settings_content()
 
 

@@ -26,6 +26,7 @@ FOAMTrame brings case selection, tutorial import, OpenFOAM command execution, li
 
 ## Table of contents
 
+- [Start here](#start-here)
 - [Features](#features)
 - [Application workflow](#application-workflow)
 - [Architecture](#architecture)
@@ -40,9 +41,44 @@ FOAMTrame brings case selection, tutorial import, OpenFOAM command execution, li
 - [Project structure](#project-structure)
 - [Caching and performance](#caching-and-performance)
 - [Development checks](#development-checks)
+- [Documentation maintenance](#documentation-maintenance)
+- [Extension roadmap](#extension-roadmap)
+- [Contributing](#contributing)
 - [Troubleshooting](#troubleshooting)
 - [Security notes](#security-notes)
 - [License](#license)
+
+## Start here
+
+Choose the shortest route for what you want to do. Every command in this README
+is intended to be run from the repository root.
+
+| I want to… | Start with | Then read |
+| --- | --- | --- |
+| Use FOAMTrame on Windows | [Windows installation](#windows-powershell) | [Running FOAMTrame](#running-foamtrame) |
+| Use FOAMTrame on Linux | [Linux installation](#linux) | [Using the application](#using-the-application) |
+| Run an unattended installation | [Automated silent-install examples](#automated-silent-install-examples) | [Runtime configuration](#runtime-configuration) |
+| Develop or review a change | [Project structure](#project-structure) | [Development checks](#development-checks) |
+| Diagnose a problem | [Troubleshooting](#troubleshooting) | [Security notes](#security-notes) |
+| Extend the product | [Extension roadmap](#extension-roadmap) | [Contributing](#contributing) |
+
+Quick start on Windows:
+
+```powershell
+.\install.ps1
+.\start.ps1
+```
+
+Quick start on Linux:
+
+```bash
+./install.sh
+./start.sh
+```
+
+The default URL is [http://localhost:8087](http://localhost:8087). Docker may be
+unavailable while the UI starts, but tutorial import and OpenFOAM execution need
+a reachable Docker daemon and configured image.
 
 ## Features
 
@@ -153,6 +189,18 @@ Implementation: [tabs/visualizer_tab.py](./tabs/visualizer_tab.py) and
 
 Implementation: [tabs/settings_tab.py](./tabs/settings_tab.py) and [app_state.py](./app_state.py). Database schema and transactions are implemented in [database.py](./database.py).
 
+### Documentation
+
+- Reads this `README.md` directly from the repository; there is no second copy to
+  become stale.
+- Splits level-two headings into manageable, selectable sections in the drawer.
+- Renders headings, lists, tables, links, quotes, and fenced code blocks locally,
+  without a CDN or browser-side Markdown dependency.
+- Sanitizes README content before it reaches Vue and provides **Reload README** for
+  reviewing edits without restarting FOAMTrame.
+
+Implementation: [tabs/documentation_tab.py](./tabs/documentation_tab.py)
+
 ## Application workflow
 
 1. Open **Setup** and wait for both health checks.
@@ -161,7 +209,9 @@ Implementation: [tabs/settings_tab.py](./tabs/settings_tab.py) and [app_state.py
 4. Run meshing, solver, conversion, or case scripts from **Run/Log**.
 5. Monitor solver data under **Plots**.
 6. Inspect VTK results under **Post**.
-7. Download periodic state backups from the gear-shaped **Settings** tab.
+7. Consult the in-app **Documentation** page for setup, operating, and development
+   guidance sourced from this README.
+8. Download periodic state backups from the gear-shaped **Settings** tab.
 
 ## Architecture
 
@@ -657,6 +707,7 @@ CORS policy. The companion API remains loopback-bound by default.
     ├── run_log_tab.py
     ├── plots_tab.py
     ├── visualizer_tab.py
+    ├── documentation_tab.py
     └── settings_tab.py
 ```
 
@@ -777,6 +828,74 @@ uv run --locked pytest -m smoke
 The smoke test starts the complete application on an ephemeral loopback port, waits for an HTTP 200 HTML response, and always terminates the child process. It skips only when Trame/VTK are absent from the selected interpreter. The [CI workflow](./.github/workflows/ci.yml) installs the full runtime and runs all tests on both Windows and Linux.
 
 For UI changes, check at least one desktop and one constrained viewport. Confirm that navigation remains reachable, cards do not overflow, and controls retain visible focus states.
+
+## Documentation maintenance
+
+This README is both the repository landing page and the source for FOAMTrame's
+in-app **Documentation** page. Keep it useful to both audiences:
+
+1. Add major topics as level-two (`##`) sections. Each one automatically becomes
+   a selectable in-app section.
+2. Use level-three headings for tasks within a topic and keep heading names unique
+   so anchor links remain predictable.
+3. Put the outcome and common command first, followed by constraints, alternatives,
+   and implementation detail.
+4. Prefer relative repository links and fenced code blocks with a language label.
+5. Update the table of contents, relevant feature description, project tree, and
+   troubleshooting guidance when a change affects them.
+6. Keep machine-local paths, credentials, API keys, databases, logs, and case
+   results out of examples.
+
+The in-app renderer deliberately supports a stable Markdown subset: headings,
+paragraphs, emphasis, links, ordered and unordered lists, blockquotes, tables, and
+fenced code. Raw HTML is not trusted in the application view. Repository-hosted
+Markdown can still use presentation HTML for badges and the centered logo.
+
+When a topic grows large enough to obscure the main workflow, add a concise
+summary here and move deep reference material into `docs/<topic>.md`. Link the new
+guide from **Start here**, the table of contents, and the relevant feature section.
+This keeps the README comprehensive as an index while allowing future material to
+grow without turning one page into an unstructured manual.
+
+## Extension roadmap
+
+The current service boundaries are intended to support future additions without
+duplicating validation or coupling new surfaces directly to UI buttons.
+
+| Addition | Preferred extension point | Required safeguards |
+| --- | --- | --- |
+| Meshing workflows | `backend/meshing/` plus `tabs/meshing_tab.py` | Resolve fixed action IDs and verify case prerequisites |
+| New case commands | `backend/case/capabilities.py` | Keep unavailable actions visible with reasons; never accept arbitrary shell text |
+| Plot types and parsers | `backend/plots/realtime_plots.py` and `tabs/plots_tab.py` | Preserve incremental reads, non-overlap layout, and white PNG export |
+| Dataset readers or filters | `backend/post/` and the owning UI tab | Keep processing server-side and document accepted extensions |
+| Automation or chatbot tools | Shared application/service actions | Require typed parameters, confirmation where needed, and durable audit state |
+| Persistence fields | `database.py`, `app_state.py`, and backup normalization | Add a migration, preserve transactions, and update `app_state.json.example` |
+| Optional security controls | `security.py` and `tabs/settings_tab.py` | Remain disabled by default and validate restored values before use |
+| Additional documentation | A new `##` section or focused `docs/*.md` guide | Update navigation links and keep the in-app subset readable |
+
+These are extension options, not promises of schedule or scope. New work should
+follow the same local-first behavior: Docker-dependent features may degrade, but
+the application shell and documentation should continue to start.
+
+## Contributing
+
+Before changing code, read [AGENTS.md](./AGENTS.md), inspect the nearest tests, and
+preserve unrelated workspace changes. Keep each change focused and compatible with
+Python 3.10 or newer.
+
+A contribution is ready for review when it includes:
+
+- the user-visible implementation and proportionate automated tests;
+- documentation for changed behavior, configuration, or supported formats;
+- schema and portable-backup updates for persistence changes;
+- focused verification results and, for UI changes, desktop plus constrained-width
+  visual checks;
+- no machine-local databases, logs, ports, virtual environments, case results, or
+  credentials.
+
+Use the commands under [Development checks](#development-checks). A pull request or
+handoff should summarize behavior, compatibility or migration impact, and the exact
+commands that passed.
 
 ## Troubleshooting
 
