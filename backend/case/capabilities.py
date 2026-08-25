@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import platform
@@ -96,13 +97,56 @@ def _read_solver(case_path: Path) -> tuple[str, str]:
     )
 
 
-def _is_result_time_directory(path: Path) -> bool:
-    if not path.is_dir() or not _TIME_DIRECTORY.fullmatch(path.name):
-        return False
+@cached(LRUCache(maxsize=128))
+def _case_directory_facts_for_signature(
+    case_path_str: str, directory_mtime_ns: int
+) -> tuple[bool, bool, tuple[Path, ...]]:
+    """Collect root-level case facts in one scan per directory signature."""
+    del directory_mtime_ns
+    case_path = Path(case_path_str)
+    has_processors = False
+    has_result_times = False
+    targets: list[Path] = []
     try:
-        return float(path.name) > 0
-    except ValueError:
-        return False
+        with os.scandir(case_path_str) as entries:
+            for entry in entries:
+                name = entry.name
+                is_directory = entry.is_dir()
+                is_file = entry.is_file()
+                is_processor = bool(
+                    is_directory and _PROCESSOR_DIRECTORY.fullmatch(name)
+                )
+                is_result_time = False
+                if is_directory and _TIME_DIRECTORY.fullmatch(name):
+                    try:
+                        is_result_time = float(name) > 0
+                    except ValueError:
+                        pass
+
+                has_processors = has_processors or is_processor
+                has_result_times = has_result_times or is_result_time
+                if (
+                    is_result_time
+                    or is_processor
+                    or (is_directory and name in {"postProcessing", "VTK"})
+                    or (is_file and name.startswith("log."))
+                ):
+                    targets.append(case_path / name)
+    except OSError:
+        return False, False, ()
+    return (
+        has_processors,
+        has_result_times,
+        tuple(sorted(targets, key=lambda path: path.name.lower())),
+    )
+
+
+def _case_directory_facts(case_path: Path) -> tuple[bool, bool, tuple[Path, ...]]:
+    try:
+        directory_mtime_ns = case_path.stat().st_mtime_ns
+    except OSError:
+        return False, False, ()
+    return _case_directory_facts_for_signature(str(case_path), directory_mtime_ns)
 
 
 @cached(LRUCache(maxsize=128))
@@ -110,23 +154,9 @@ def _safe_clean_targets_for_signature(
     case_path_str: str, directory_mtime_ns: int
 ) -> tuple[Path, ...]:
     """Scan clean targets once per case-directory signature."""
-    del directory_mtime_ns
-    case_path = Path(case_path_str)
-    targets: list[Path] = []
-    try:
-        entries = list(case_path.iterdir())
-    except OSError:
-        return ()
-    for entry in entries:
-        name = entry.name
-        if (
-            _is_result_time_directory(entry)
-            or (entry.is_dir() and _PROCESSOR_DIRECTORY.fullmatch(name))
-            or (entry.is_dir() and name in {"postProcessing", "VTK"})
-            or (entry.is_file() and name.startswith("log."))
-        ):
-            targets.append(entry)
-    return tuple(sorted(targets, key=lambda path: path.name.lower()))
+    return _case_directory_facts_for_signature(
+        case_path_str, directory_mtime_ns
+    )[2]
 
 
 def _safe_clean_targets(case_path: Path) -> tuple[Path, ...]:
@@ -283,6 +313,7 @@ class CaseActionService:
         if solver_command and not _SAFE_EXECUTABLE.fullmatch(solver_command):
             solver_command = ""
 
+        has_processors, has_result_times, clean_targets = _case_directory_facts(path)
         requirements = {
             "surfaceFeatureExtract": any(
                 (path / "system" / name).is_file()
@@ -293,13 +324,8 @@ class CaseActionService:
             "topoSet": (path / "system" / "topoSetDict").is_file(),
             "setFields": (path / "system" / "setFieldsDict").is_file(),
             "decomposePar": (path / "system" / "decomposeParDict").is_file(),
-            "reconstructPar": any(
-                entry.is_dir() and _PROCESSOR_DIRECTORY.fullmatch(entry.name)
-                for entry in path.iterdir()
-            ),
-            "foamToVTK": any(
-                _is_result_time_directory(entry) for entry in path.iterdir()
-            ),
+            "reconstructPar": has_processors,
+            "foamToVTK": has_result_times,
         }
         executable_names = {
             action_id for action_id, required in requirements.items() if required
@@ -379,7 +405,6 @@ class CaseActionService:
             destructive=True,
         )
 
-        clean_targets = _safe_clean_targets(path)
         actions["safe_clean"] = CaseAction(
             "safe_clean",
             "Safe Clean Generated Outputs",

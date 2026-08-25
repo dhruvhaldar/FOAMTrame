@@ -44,6 +44,27 @@ def test_residual_log_is_parsed_incrementally(tmp_path):
     clear_cache(str(tmp_path))
 
 
+def test_residual_parser_defers_incomplete_final_record(tmp_path):
+    log_path = tmp_path / "log.foamRun"
+    log_path.write_bytes(
+        b"Time = 0.01\n"
+        b"GAMG: Solving for p, Initial residual = 1e-2, Final residual = 1e-5,"
+    )
+
+    parser = OpenFOAMFieldParser(tmp_path)
+    first = parser.get_residuals_from_log()
+    assert list(first["time"]) == [0.01]
+    assert list(first["p"]) == []
+
+    with log_path.open("ab") as stream:
+        stream.write(b" No Iterations 2\n")
+
+    updated = parser.get_residuals_from_log()
+    assert list(updated["time"]) == [0.01]
+    assert list(updated["p"]) == [1e-2]
+    clear_cache(str(tmp_path))
+
+
 def test_plot_appearance_export_and_custom_logo():
     glass = _plot_style("glass", "helvetica_neue")
     roboto = _plot_style("glass", "roboto")

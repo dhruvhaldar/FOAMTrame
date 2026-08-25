@@ -1335,80 +1335,34 @@ class OpenFOAMFieldParser:
                 # We capture initial length to support backfilling new fields.
                 initial_steps_count = len(residuals["time"])
 
-                # ⚡ Bolt Optimization: Use mmap + find() instead of line-by-line streaming
-                # This skips ~90% of parsing overhead by jumping directly to tokens.
                 if size == 0:
                     os.close(fd)
                     fd = None
                     return residuals
 
-                with mmap.mmap(fd, 0, access=mmap.ACCESS_READ) as mm:
-                    # ⚡ Bolt Optimization: Use memoryview to allow zero-copy slicing for float parsing.
-                    # float() in Python 3.x accepts memoryview, avoiding intermediate bytes objects.
-
-                    if start_offset > 0:
-                        mm.seek(start_offset)
-
-                    pos = start_offset
-
-                    # Initial search
-                    # Handle "Time" at start of file or chunk
-                    if pos == 0 or (
-                        pos < mm.size() and mm[pos : pos + 4] == TIME_PREFIX
-                    ):
-                        if pos == 0 and mm[0:4] == TIME_PREFIX:
-                            next_time = 0
-                        elif mm[pos : pos + 4] == TIME_PREFIX:
-                            next_time = pos
-                        else:
-                            next_time = mm.find(b"\nTime", pos)
-                    else:
-                        next_time = mm.find(b"\nTime", pos)
-
-                    next_solving = mm.find(SOLVING_FOR_TOKEN, pos)
-
+                # Buffered iteration performs one C-level newline search per record.
+                # It is faster here than repeatedly searching an mmap for each token,
+                # while retaining the append-only offset used by incremental polling.
+                with os.fdopen(fd, "rb", closefd=False) as stream:
+                    stream.seek(start_offset)
                     while True:
-                        if next_time == -1 and next_solving == -1:
-                            # Avoid skipping partial tokens at the end
-                            # Advance only to the last newline found
-                            last_newline = mm.rfind(b"\n", pos)
-                            if last_newline != -1:
-                                new_offset = last_newline + 1
-                            else:
-                                new_offset = pos
+                        line_start = new_offset
+                        line = stream.readline()
+                        if not line:
                             break
+                        if not line.endswith(b"\n"):
+                            # Keep an incomplete final record for the next poll.
+                            new_offset = line_start
+                            break
+                        new_offset += len(line)
 
-                        # Determine which token comes first
-                        if next_time != -1 and (
-                            next_solving == -1 or next_time < next_solving
-                        ):
-                            # Handle Time
-                            # next_time points to start of "\nTime" or "Time"
-                            # If it was "\nTime", the content starts at next_time + 1
-                            if mm[next_time : next_time + 1] == b"\n":
-                                content_start = next_time + 1
-                            else:
-                                content_start = next_time
-
-                            # Find end of line
-                            eol = mm.find(b"\n", content_start)
-                            if eol == -1:
-                                # Partial line, stop and wait for more data
-                                break
-
-                            # Manual parse "Time = <val>"
-                            # ⚡ Bolt Optimization: Search directly in mmap buffer to avoid line copy
-                            eq_idx = mm.find(b"=", content_start, eol)
+                        if line.startswith(TIME_PREFIX):
+                            eq_idx = line.find(b"=")
                             if eq_idx != -1:
-                                # ⚡ Bolt Optimization: Use mmap slicing directly to avoid memoryview buffer errors while keeping it fast
                                 try:
-                                    t_val = float(mm[eq_idx + 1 : eol])
-                                    residuals["time"].append(t_val)
+                                    residuals["time"].append(float(line[eq_idx + 1 :]))
                                 except ValueError:
-                                    # Fallback to regex
-                                    time_match = TIME_REGEX_BYTES.search(
-                                        mm, content_start, eol
-                                    )
+                                    time_match = TIME_REGEX_BYTES.search(line)
                                     if time_match:
                                         try:
                                             residuals["time"].append(
@@ -1416,68 +1370,37 @@ class OpenFOAMFieldParser:
                                             )
                                         except ValueError:
                                             pass
+                            continue
 
-                            pos = eol + 1
-                            new_offset = pos
-                            next_time = mm.find(b"\nTime", pos)
-                        else:
-                            # Handle Solving for
-                            # next_solving points to "Solving for"
-                            field_start = next_solving + 12
+                        solving_idx = line.find(SOLVING_FOR_TOKEN)
+                        if solving_idx == -1:
+                            continue
+                        field_start = solving_idx + len(SOLVING_FOR_TOKEN)
+                        res_idx = line.find(INITIAL_RESIDUAL_TOKEN, field_start)
+                        if res_idx == -1:
+                            continue
+                        raw_field_end = line.find(b",", field_start, res_idx)
+                        if raw_field_end == -1:
+                            raw_field_end = res_idx
+                        field_bytes = line[field_start:raw_field_end].strip()
+                        field = _FIELD_NAME_CACHE.get(field_bytes)
+                        if field is None:
+                            field = field_bytes.decode("utf-8")
+                            _FIELD_NAME_CACHE[field_bytes] = field
 
-                            # Limit search to next newline
-                            eol = mm.find(b"\n", field_start)
-                            if eol == -1:
-                                # Partial line, stop and wait for more data
-                                break
-
-                            res_idx = mm.find(INITIAL_RESIDUAL_TOKEN, field_start, eol)
-
-                            if res_idx != -1:
-                                # Extract field
-                                # ⚡ Bolt Optimization: Avoid creating chunk copy and splitting
-                                comma_in_field = mm.find(b",", field_start, res_idx)
-                                if comma_in_field != -1:
-                                    raw_field_end = comma_in_field
-                                else:
-                                    raw_field_end = res_idx
-
-                                # Note: Dictionary lookups require hashable keys (bytes), not memoryview.
-                                # So we still create a bytes object here.
-                                field_bytes = mm[field_start:raw_field_end].strip()
-
-                                # Cache field name
-                                field = _FIELD_NAME_CACHE.get(field_bytes)
-                                if field is None:
-                                    field = field_bytes.decode("utf-8")
-                                    _FIELD_NAME_CACHE[field_bytes] = field
-
-                                # Extract value
-                                val_start = res_idx + len(INITIAL_RESIDUAL_TOKEN)
-                                comma_pos = mm.find(b",", val_start, eol)
-
-                                if comma_pos != -1:
-                                    val_str = mm[val_start:comma_pos]
-                                else:
-                                    val_str = mm[val_start:eol]
-
-                                try:
-                                    val = float(val_str)
-                                    if field not in residuals:
-                                        # Backfill with zeros for previous steps to maintain alignment
-                                        # ⚡ Bolt Optimization: Use list multiplication instead of itertools.repeat
-                                        # array.array("d", [0.0] * N) is ~1.7x faster than itertools.repeat(0.0, N)
-                                        # because it avoids Python iterating over the generator.
-                                        residuals[field] = array.array(
-                                            "d", [0.0] * initial_steps_count
-                                        )
-                                    residuals[field].append(val)
-                                except ValueError:
-                                    pass
-
-                            pos = eol + 1
-                            new_offset = pos
-                            next_solving = mm.find(SOLVING_FOR_TOKEN, pos)
+                        val_start = res_idx + len(INITIAL_RESIDUAL_TOKEN)
+                        val_end = line.find(b",", val_start)
+                        if val_end == -1:
+                            val_end = -1
+                        try:
+                            val = float(line[val_start:val_end])
+                            if field not in residuals:
+                                residuals[field] = array.array(
+                                    "d", [0.0] * initial_steps_count
+                                )
+                            residuals[field].append(val)
+                        except ValueError:
+                            pass
 
             finally:
                 if fd is not None:
