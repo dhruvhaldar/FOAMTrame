@@ -104,7 +104,8 @@ Implementation: [tabs/setup_tab.py](./tabs/setup_tab.py)
 - Opens on **Case** when an active case exists and renders every supported native
   surface under `constant/geometry` when present, otherwise under
   `constant/triSurface`. The **Active geometry** dropdown switches between that
-  default and individual imported triSurface files.
+  default and individual imported triSurface files. **Reload case geometry**
+  resets the selector to the default before reloading it.
 - Falls back to **Custom** when no case is selected; case-dependent **Case** and
   **Library** controls remain visible but disabled.
 - Clears the case render before switching to a session-only custom VTK or surface

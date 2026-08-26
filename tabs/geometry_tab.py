@@ -348,7 +348,16 @@ def setup_geometry_tab(server):
             state.geometry_error_message = str(exc)
             publish("geometry_error_message")
 
-    ctrl.reload_case_geometry = load_active_case_geometry
+    def reload_default_case_geometry() -> None:
+        active_case = str(state.active_case or "")
+        if not active_case:
+            load_active_case_geometry()
+            return
+        state.geometry_case_selection = ""
+        persist_case_geometry_selection(active_case, "")
+        load_active_case_geometry()
+
+    ctrl.reload_case_geometry = reload_default_case_geometry
 
     @state.change("geometry_case_selection")
     def on_case_geometry_selection_change(geometry_case_selection, **_):
@@ -699,10 +708,6 @@ def build_geometry_drawer():
 
         with html.Div(v_if="geometry_mode === 'case'", classes="geometry-mode-panel"):
             html.Div("Active case geometry", classes="font-weight-bold mb-1")
-            html.Div(
-                "{{ active_case || 'No active case' }}",
-                classes="text-cyan-900 text-body-2 mb-2",
-            )
             html.Div(
                 "Choose the default case geometry or an imported surface.",
                 classes="text-caption text--secondary mb-3",
