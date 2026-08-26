@@ -7,6 +7,7 @@ from backend.case.capabilities import CaseActionService
 from backend.simulation_queue import SequentialSimulationQueue, SimulationJob
 from tabs.run_log_tab import (
     _allrun_skipped_stages,
+    _format_console_log_html,
     _reconcile_interrupted_history,
     _summarize_allrun_output,
 )
@@ -190,3 +191,18 @@ Starting time loop
 
     assert _summarize_allrun_output(output) is None
     assert _allrun_skipped_stages(output) == (("blockMesh", "log.blockMesh"),)
+
+
+def test_console_highlighting_escapes_output_and_emphasizes_cleanup_actions():
+    rendered = _format_console_log_html(
+        "<script>alert('unsafe')</script>\n"
+        "[FOAMTrame] [Notice] Review Allclean or Safe Clean Generated Outputs\n"
+        "[FOAMTrame] [Error] failed\n"
+    )
+
+    assert "<script>" not in rendered
+    assert "&lt;script&gt;" in rendered
+    assert "console-line--warning" in rendered
+    assert "console-line--error" in rendered
+    assert '<strong class="console-action">Allclean</strong>' in rendered
+    assert "Safe Clean Generated Outputs</strong>" in rendered

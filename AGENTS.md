@@ -255,6 +255,10 @@ exist.
 - Surface full and partial `Allrun` skips in both Console Log Output and an
   accessible, dismissible Run/Log notification. The notification must distinguish
   a complete no-op from partial skips and remain readable on constrained viewports.
+- Emphasize the reviewed cleanup choices (`Allclean` and `Safe Clean Generated
+  Outputs`) in skip notifications. Console highlighting must HTML-escape all
+  container output before applying distinct information, command, warning, error,
+  and ordinary-output colors.
 - Detect solver behavior from `system/controlDict`. Support modern `foamRun` solver
   modules and legacy dedicated solver executables.
 - Gate commands by their real prerequisites, including dictionaries, processor
@@ -262,6 +266,9 @@ exist.
 - `Allclean` requires confirmation.
 - The generated safe-clean action must preview the exact generated paths and remove
   only reviewed targets inside the active case. Never broaden its deletion scope.
+- Destructive-action confirmation cards must remain visibly glass-styled while
+  using a near-opaque surface, high-contrast warning treatment, and clearly
+  separated reviewed paths and actions.
 - UI and future chatbot calls must execute resolved fixed action IDs, not arbitrary
   shell strings.
 - The Run/Log drawer is intentionally wider than other drawers (430 px on desktop,
@@ -274,6 +281,10 @@ exist.
   button. Its Case Actions dialog uses a near-opaque list surface, retains concise
   unavailable reasons, and presents Available/Unavailable as equal-width,
   consistently outlined, high-contrast status chips.
+- Status labels must not change geometry with their text. Keep Case Actions
+  Available/Unavailable chips and run-history Completed/Skipped chips fixed-width,
+  equal-height, centered, and aligned in fixed status columns; vary semantic color,
+  not shape or position.
 - Capability summaries should be readable prose, e.g. “Detected 6 available
   action(s) · solver: **foamRun — fluid**”. Important solver labels should retain
   emphasis.

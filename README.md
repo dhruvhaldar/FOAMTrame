@@ -144,7 +144,9 @@ Placeholder: [tabs/meshing_tab.py](./tabs/meshing_tab.py)
   records the run as **Skipped**, uses a warning status instead of success, and
   shows a dismissible warning notification with reviewed cleanup guidance. Partial
   skips retain **Completed** status but are identified in both the console and an
-  informational notification. Existing results are never deleted automatically.
+  informational notification. Cleanup choices are emphasized, while safely escaped
+  console output uses distinct command, information, warning, error, and ordinary
+  output colors. Existing results are never deleted automatically.
 - Accepts additional validated runs while a simulation is active, executes them
   one at a time in FIFO order, and allows waiting jobs to be cancelled or cleared.
   Each submission retains the case and runtime configuration selected when it was

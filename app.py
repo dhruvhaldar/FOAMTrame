@@ -806,7 +806,29 @@ with SinglePageWithDrawerLayout(server) as layout:
             background: rgba(241, 248, 250, 0.96);
         }
         .v-application .capability-status-chip {
-            min-width: 100px;
+            width: 116px;
+            min-width: 116px;
+            max-width: 116px;
+            height: 22px;
+            justify-content: center;
+            font-weight: 600;
+        }
+        .v-application .capability-status-action {
+            flex: 0 0 116px;
+            width: 116px;
+            min-width: 116px;
+            margin-left: 12px;
+        }
+        .v-application .run-history-status-cell {
+            width: 116px;
+            min-width: 116px;
+            vertical-align: middle;
+        }
+        .v-application .run-history-status-chip {
+            width: 106px;
+            min-width: 106px;
+            max-width: 106px;
+            height: 22px;
             justify-content: center;
             font-weight: 600;
         }
@@ -816,6 +838,55 @@ with SinglePageWithDrawerLayout(server) as layout:
         .v-application .run-notification .v-snack__content {
             font-weight: 600;
             line-height: 1.45;
+        }
+        .v-application .run-notification__action {
+            display: inline-block;
+            padding: 0 4px;
+            color: #ffffff;
+            background: rgba(15, 23, 42, 0.24);
+            border-radius: 4px;
+            font-weight: 800;
+        }
+        .v-application .run-status-area {
+            min-width: 0;
+            gap: 6px;
+        }
+        .v-application .run-status-chip {
+            max-width: 100%;
+            height: auto !important;
+            min-height: 26px;
+        }
+        .v-application .run-status-chip .v-chip__content {
+            max-width: 100%;
+            padding-block: 4px;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            line-height: 1.2;
+            text-align: center;
+        }
+        .v-application .console-line--info {
+            color: #38bdf8;
+        }
+        .v-application .console-line--command {
+            color: #a5b4fc;
+            font-weight: 700;
+        }
+        .v-application .console-line--warning {
+            color: #fbbf24;
+        }
+        .v-application .console-line--error {
+            color: #fca5a5;
+            font-weight: 700;
+        }
+        .v-application .console-line--output {
+            color: #dbeafe;
+        }
+        .v-application .console-action {
+            padding: 0 3px;
+            color: #0f172a;
+            background: #fde68a;
+            border-radius: 3px;
+            font-weight: 800;
         }
         .v-application .case-workflow-item + .case-workflow-item {
             border-top: 1px solid rgba(100, 116, 139, 0.12);
@@ -852,6 +923,55 @@ with SinglePageWithDrawerLayout(server) as layout:
             overflow-y: auto;
             background: rgba(255, 255, 255, 0.52) !important;
             border-radius: 12px;
+        }
+        .v-application .action-confirm-card {
+            color: #172033;
+            background: rgba(248, 252, 253, 0.92) !important;
+            backdrop-filter: blur(28px) saturate(135%) !important;
+            -webkit-backdrop-filter: blur(28px) saturate(135%) !important;
+            border: 1px solid rgba(255, 255, 255, 0.94) !important;
+            box-shadow:
+                0 24px 64px rgba(15, 23, 42, 0.28),
+                inset 0 1px 0 rgba(255, 255, 255, 0.88) !important;
+        }
+        .v-application .action-confirm-card:hover {
+            transform: none !important;
+        }
+        .v-application .action-confirm-title {
+            color: #172033;
+        }
+        .v-application .action-confirm-message {
+            color: #475569;
+            font-weight: 500;
+        }
+        .v-application .action-confirm-warning.v-alert--text {
+            color: #9a3412 !important;
+            background: rgba(255, 237, 213, 0.9) !important;
+            border: 1px solid rgba(234, 88, 12, 0.42) !important;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+        }
+        .v-application .action-confirm-warning .v-alert__icon,
+        .v-application .action-confirm-warning .v-alert__content {
+            color: #9a3412 !important;
+            font-weight: 650;
+        }
+        .v-application .action-confirm-card .clean-preview-list {
+            background: rgba(255, 255, 255, 0.88) !important;
+            border-color: rgba(100, 116, 139, 0.28) !important;
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.92),
+                0 8px 22px rgba(15, 23, 42, 0.08);
+        }
+        .v-application .action-confirm-card .clean-preview-list .v-list-item {
+            color: #1e293b;
+        }
+        .v-application .action-confirm-card .clean-preview-list .v-list-item + .v-list-item {
+            border-top: 1px solid rgba(100, 116, 139, 0.12);
+        }
+        .v-application .action-confirm-actions {
+            margin: 0 8px 4px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(100, 116, 139, 0.16);
         }
         .v-application .run-log-drawer .v-btn.v-btn--disabled {
             color: #64748b !important;
