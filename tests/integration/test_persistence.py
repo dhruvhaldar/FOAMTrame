@@ -29,6 +29,7 @@ def sample_state(case: str = "cavity") -> dict:
             "ACTIVE_CASE": case,
         },
         "plot_preferences": app_state.default_plot_preferences(),
+        "geometry_preferences": app_state.default_geometry_preferences(),
         "security_preferences": app_state.default_security_preferences(),
         "run_history": [
             {
@@ -72,6 +73,7 @@ class DatabaseIntegrationTests(unittest.TestCase):
             {
                 "app_config",
                 "security_preferences",
+                "geometry_preferences",
                 "simulation_runs",
                 "cases",
                 "automation_actions",
@@ -153,8 +155,25 @@ class AppStateMigrationIntegrationTest(unittest.TestCase):
         self.assertEqual("motorBike", app_state.load_case_config()["ACTIVE_CASE"])
         self.assertEqual("roboto", app_state.load_plot_preferences()["font"])
         self.assertEqual("black", app_state.load_plot_preferences()["background"])
+        self.assertEqual(
+            "case", app_state.load_geometry_preferences()["preferred_mode"]
+        )
         self.assertEqual("loopback", app_state.load_security_preferences()["bind_mode"])
         self.assertTrue(app_state.LEGACY_APP_STATE_FILE.exists())
+
+    def test_geometry_preferences_are_normalised_during_restore(self):
+        backup = sample_state()
+        backup["geometry_preferences"] = {
+            "preferred_mode": "unknown",
+            "library_selection": "../outside.stl",
+        }
+
+        restored = app_state.restore_app_state_json(json.dumps(backup))
+
+        self.assertEqual(
+            {"preferred_mode": "case", "library_selection": ""},
+            restored["geometry_preferences"],
+        )
 
 
 class LauncherLoggingIntegrationTest(unittest.TestCase):

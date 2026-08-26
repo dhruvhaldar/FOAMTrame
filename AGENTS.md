@@ -155,11 +155,11 @@ can be invoked by all three surfaces.
 - SQLite (`foamtrame.db`) is the operational source of truth.
 - `database.py` owns the schema and transactions.
 - `app_state.py` is the stable application-facing persistence API.
-- Current schema/app-state version: `2`. When changing persisted structure, update
+- Current schema/app-state version: `3`. When changing persisted structure, update
   both schema migration behavior and backup normalization; never only bump a
   constant.
 - Persisted state includes case configuration, run history, plot preferences, and
-  security preferences.
+  geometry and security preferences.
 - JSON is an interchange/migration format only. Do not reintroduce separate
   `case_config.json`, `run_history.json`, or other operational JSON files.
 - `app_state.json.example` must track the current portable backup schema.
@@ -232,6 +232,20 @@ unless a component truly owns it.
 - Setup sidebar footer OpenFOAM version detection should use the configured
   container when Docker is available and clearly label a configured fallback when
   it is not.
+
+## Geometry behavior
+
+- Case Geometry is the default when an active case exists and renders supported
+  surfaces from `constant/triSurface`, falling back to `constant/geometry` when
+  triSurface has no supported files; it must not select arbitrary result datasets
+  elsewhere in the case.
+- Custom Dataset is the default when no case exists. Keep Case Geometry and the
+  OpenFOAM Library visible but disabled until a case is active.
+- The OpenFOAM Library lists `$FOAM_TUTORIALS/resources/geometry` from the
+  configured image and imports only a validated filename into the active case.
+- Geometry preferences participate in SQLite persistence and portable backup/
+  restore. Geometry files stay in case directories and custom uploads remain
+  session-only; neither belongs in SQLite or JSON backups.
 
 ## Run/Log behavior
 

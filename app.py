@@ -1078,6 +1078,114 @@ with SinglePageWithDrawerLayout(server) as layout:
             -webkit-backdrop-filter: blur(24px) !important;
             border-right: 1px solid rgba(255, 255, 255, 0.5) !important;
         }
+        .v-application .geometry-mode-toggle {
+            display: flex;
+            width: 100%;
+            padding: 4px;
+            border: 1px solid rgba(6, 154, 181, 0.2);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.5);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+        }
+        .v-application .geometry-mode-toggle .v-btn {
+            flex: 1 1 0;
+            min-width: 0 !important;
+            padding: 0 8px !important;
+            border: 0 !important;
+            border-radius: 9px !important;
+            box-shadow: none !important;
+            font-size: 0.76rem;
+            letter-spacing: 0.02em;
+        }
+        .v-application .geometry-mode-toggle .v-btn--active {
+            color: white !important;
+            background: linear-gradient(135deg, #069ab5, #0c6e87) !important;
+        }
+        .v-application .geometry-mode-toggle .v-btn--disabled {
+            color: #64748b !important;
+            background: rgba(226, 232, 240, 0.65) !important;
+            opacity: 0.62;
+        }
+        .v-application .geometry-mode-panel {
+            padding: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.72);
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.44);
+            box-shadow: 0 10px 26px rgba(15, 23, 42, 0.07);
+        }
+        .v-application .geometry-library-description {
+            max-width: 100%;
+            overflow-wrap: anywhere;
+            word-break: normal;
+        }
+        .v-application .geometry-secondary-button {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            margin-right: 0 !important;
+            margin-left: 0 !important;
+            box-sizing: border-box !important;
+            color: #0c6e87 !important;
+            border-color: rgba(6, 154, 181, 0.5) !important;
+            background: rgba(255, 255, 255, 0.54) !important;
+        }
+        .v-application .geometry-clear-custom-button {
+            min-height: 40px;
+            height: auto !important;
+            padding: 7px 10px !important;
+        }
+        .v-application .geometry-clear-custom-button .v-btn__content {
+            width: 100%;
+            min-width: 0;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            text-align: center;
+            line-height: 1.2;
+        }
+        .v-application .geometry-mode-panel .geometry-library-select input:focus,
+        .v-application .geometry-mode-panel .geometry-library-select input:focus-visible {
+            outline: none !important;
+            outline-offset: 0 !important;
+        }
+        .v-application .geometry-library-select.v-input--is-focused .v-input__slot {
+            box-shadow: 0 0 0 3px rgba(6, 154, 181, 0.16) !important;
+        }
+        .v-application .geometry-library-select.v-input--is-focused fieldset {
+            border-color: #069ab5 !important;
+            border-width: 2px !important;
+        }
+        .v-application .geometry-dataset-summary {
+            overflow-wrap: anywhere;
+        }
+        .v-application .geometry-viewer {
+            position: relative;
+            height: calc(100vh - 48px);
+            min-height: 0;
+            overflow: hidden;
+            background: linear-gradient(
+                180deg,
+                hsla(192, 100%, 86%, 1) 0%,
+                hsla(292, 37%, 88%, 1) 100%
+            );
+        }
+        .v-application .geometry-empty-state {
+            position: absolute;
+            z-index: 2;
+            top: 50%;
+            left: 50%;
+            width: min(420px, calc(100% - 32px));
+            padding: 28px;
+            color: #334155;
+            text-align: center;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            border: 1px solid rgba(255, 255, 255, 0.72);
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.42);
+            backdrop-filter: blur(20px) saturate(135%);
+            -webkit-backdrop-filter: blur(20px) saturate(135%);
+            box-shadow: 0 18px 42px rgba(15, 23, 42, 0.12);
+        }
         .v-application .glass-navbar {
             background: rgba(255, 255, 255, 0.35) !important;
             backdrop-filter: blur(20px) !important;
@@ -1900,7 +2008,8 @@ with SinglePageWithDrawerLayout(server) as layout:
     # more horizontal room. Keep the standard drawer on compact viewports so
     # the main content is not unnecessarily crowded.
     layout.drawer.width = (
-        "active_tab === 3 && !$vuetify.breakpoint.smAndDown ? 430 : 300",
+        "active_tab === 3 && !$vuetify.breakpoint.smAndDown ? 430 : "
+        "active_tab === 1 && !$vuetify.breakpoint.smAndDown ? 360 : 300",
     )
     with layout.drawer:
         build_setup_drawer()

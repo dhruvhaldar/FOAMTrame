@@ -179,6 +179,12 @@ def setup_settings_tab(server):
             state.openfoam_version = config["OPENFOAM_VERSION"]
             state.active_case = config["ACTIVE_CASE"]
             state.run_history = restored["run_history"]
+            geometry_preferences = restored["geometry_preferences"]
+            restored_geometry_mode = geometry_preferences["preferred_mode"]
+            if not config["ACTIVE_CASE"] and restored_geometry_mode != "custom":
+                restored_geometry_mode = "custom"
+            state.geometry_mode = restored_geometry_mode
+            state.geometry_library_selection = geometry_preferences["library_selection"]
             publish_security_preferences(restored["security_preferences"])
             state.app_state_backup_json = json.dumps(restored, indent=2) + "\n"
             state.app_state_restore_pending = ""

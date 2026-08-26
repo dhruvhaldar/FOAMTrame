@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "case_config": {
     "CASE_ROOT": "C:\\path\\to\\tutorial_cases",
     "DOCKER_IMAGE": "haldardhruv/ubuntu_noble_openfoam:v12",
@@ -7,11 +7,15 @@
     "ACTIVE_CASE": ""
   },
   "run_history": [],
+  "geometry_preferences": {
+    "preferred_mode": "case",
+    "library_selection": ""
+  },
   "plot_preferences": {
     "font": "roboto",
     "background": "glass",
     "logo_mode": "foamtrame",
-    "custom_logo": ""
+    "custom_logo_data": ""
   },
   "security_preferences": {
     "security_enabled": false,

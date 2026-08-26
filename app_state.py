@@ -4,6 +4,7 @@ import copy
 import json
 import logging
 import threading
+from pathlib import Path
 from typing import Any
 
 from database import SCHEMA_VERSION, database
@@ -38,11 +39,19 @@ def default_plot_preferences() -> dict[str, str]:
     }
 
 
+def default_geometry_preferences() -> dict[str, str]:
+    return {
+        "preferred_mode": "case",
+        "library_selection": "",
+    }
+
+
 def default_app_state() -> dict[str, Any]:
     return {
         "version": APP_STATE_VERSION,
         "case_config": default_case_config(),
         "plot_preferences": default_plot_preferences(),
+        "geometry_preferences": default_geometry_preferences(),
         "security_preferences": default_security_preferences(),
         "run_history": [],
     }
@@ -54,6 +63,7 @@ def _normalise_app_state(data: Any) -> dict[str, Any]:
 
     config = data.get("case_config", {})
     plot_preferences = data.get("plot_preferences", {})
+    geometry_preferences = data.get("geometry_preferences", {})
     security_preferences = data.get("security_preferences", {})
     history = data.get("run_history", [])
     if not isinstance(config, dict):
@@ -64,6 +74,8 @@ def _normalise_app_state(data: Any) -> dict[str, Any]:
         raise ValueError("run_history must be a JSON array of objects.")
     if not isinstance(plot_preferences, dict):
         raise ValueError("plot_preferences must be a JSON object.")
+    if not isinstance(geometry_preferences, dict):
+        raise ValueError("geometry_preferences must be a JSON object.")
     if not isinstance(security_preferences, dict):
         raise ValueError("security_preferences must be a JSON object.")
 
@@ -94,10 +106,22 @@ def _normalise_app_state(data: Any) -> dict[str, Any]:
         normalised_plots["custom_logo_data"] = ""
         normalised_plots["logo_mode"] = "none"
 
+    normalised_geometry = default_geometry_preferences()
+    for key in normalised_geometry:
+        if key in geometry_preferences:
+            value = geometry_preferences[key]
+            normalised_geometry[key] = "" if value is None else str(value)
+    if normalised_geometry["preferred_mode"] not in {"case", "custom", "library"}:
+        normalised_geometry["preferred_mode"] = "case"
+    selection = normalised_geometry["library_selection"]
+    if len(selection) > 255 or selection != Path(selection).name:
+        normalised_geometry["library_selection"] = ""
+
     return {
         "version": APP_STATE_VERSION,
         "case_config": normalised_config,
         "plot_preferences": normalised_plots,
+        "geometry_preferences": normalised_geometry,
         "security_preferences": normalise_security_preferences(security_preferences),
         "run_history": copy.deepcopy(history[:100]),
     }
@@ -172,10 +196,21 @@ def load_plot_preferences() -> dict[str, str]:
     return copy.deepcopy(load_app_state()["plot_preferences"])
 
 
+def load_geometry_preferences() -> dict[str, str]:
+    return copy.deepcopy(load_app_state()["geometry_preferences"])
+
+
 def update_plot_preferences(updates: dict[str, Any]) -> bool:
     with _state_lock:
         data = load_app_state()
         data["plot_preferences"].update(updates)
+        return save_app_state(data)
+
+
+def update_geometry_preferences(updates: dict[str, Any]) -> bool:
+    with _state_lock:
+        data = load_app_state()
+        data["geometry_preferences"].update(updates)
         return save_app_state(data)
 
 

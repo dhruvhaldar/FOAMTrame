@@ -101,12 +101,23 @@ Implementation: [tabs/setup_tab.py](./tabs/setup_tab.py)
 
 ### Geometry
 
-- Loads the newest supported geometry or VTK file found in the active case.
-- Accepts browser uploads for moderate-sized datasets.
-- Displays dataset type, point count, and cell count.
+- Opens on **Case** when an active case exists and renders every supported surface
+  under that case's `constant/triSurface` directory. When no supported triSurface
+  files exist, it falls back to the case's `constant/geometry` directory.
+- Falls back to **Custom** when no case is selected; case-dependent **Case** and
+  **Library** controls remain visible but disabled.
+- Clears the case render before switching to a session-only custom VTK or surface
+  dataset.
+- Browses `$FOAM_TUTORIALS/resources/geometry` inside the configured OpenFOAM
+  image and safely imports a selected resource into the active case.
+- Displays dataset type, aggregate point count, and aggregate cell count.
 - Uses server-side VTK rendering with camera reset and interactive controls.
+- Persists the preferred geometry mode and library selection in SQLite and the
+  portable JSON backup. Case geometry and uploaded datasets remain on disk and
+  are not embedded in the database or backup.
 
-Implementation: [tabs/geometry_tab.py](./tabs/geometry_tab.py)
+Implementation: [tabs/geometry_tab.py](./tabs/geometry_tab.py) and
+[backend/geometry/library.py](./backend/geometry/library.py)
 
 ### Meshing
 
@@ -583,12 +594,16 @@ JSON is now an interchange format only. A portable backup schema example remains
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "case_config": {
     "CASE_ROOT": "/path/to/tutorial_cases",
     "DOCKER_IMAGE": "haldardhruv/ubuntu_noble_openfoam:v12",
     "OPENFOAM_VERSION": "12",
     "ACTIVE_CASE": "aerofoilNACA0012"
+  },
+  "geometry_preferences": {
+    "preferred_mode": "case",
+    "library_selection": ""
   },
   "run_history": [],
   "security_preferences": {
@@ -616,7 +631,8 @@ The initial schema contains:
 | `schema_metadata` | Schema version and initialization markers |
 | `app_config` | Typed JSON values for case root, active case, Docker image, and OpenFOAM version |
 | `simulation_runs` | Indexed command, case, status, timestamps, duration, and complete compatible run record |
-| `plot_preferences` | Plot typography, background, and logo preferences |
+| `app_preferences` | Plot typography, background, and logo preferences |
+| `geometry_preferences` | Preferred Geometry subpage and library selection |
 | `security_preferences` | Validated network, CORS, header, size-limit, session-timeout, and API-key policy |
 | `cases` | Relational case catalogue ready for workspace synchronization |
 | `automation_actions` | Future chatbot/automation command queue and audit trail |
@@ -636,9 +652,9 @@ The initial schema contains:
 3. Wait for validation to succeed.
 4. Select **Restore App State**.
 
-Restore replaces the persisted case configuration, plot and security preferences,
-and run history. It does **not** copy case directories, simulation results,
-uploaded VTK datasets, or Docker images. If a backup references a case root that
+Restore replaces the persisted case configuration, plot, geometry, and security
+preferences, and run history. It does **not** copy case directories, imported case
+geometry, simulation results, uploaded VTK datasets, or Docker images. If a backup references a case root that
 does not exist on the new machine, update **Advanced Settings** after restoring.
 Security preferences containing an API-key hash are transferable, but the original
 plain-text key cannot be recovered from a backup.

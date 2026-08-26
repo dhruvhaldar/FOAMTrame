@@ -14,7 +14,7 @@ from runtime import settings
 logger = logging.getLogger("FOAMTrame")
 
 DATABASE_PATH = settings.database_path
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 def _utc_now() -> str:
@@ -81,6 +81,12 @@ class AppDatabase:
                 );
 
                 CREATE TABLE IF NOT EXISTS security_preferences (
+                    key TEXT PRIMARY KEY,
+                    value_json TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS geometry_preferences (
                     key TEXT PRIMARY KEY,
                     value_json TEXT NOT NULL,
                     updated_at TEXT NOT NULL
@@ -168,6 +174,9 @@ class AppDatabase:
             security_rows = connection.execute(
                 "SELECT key, value_json FROM security_preferences ORDER BY key"
             ).fetchall()
+            geometry_rows = connection.execute(
+                "SELECT key, value_json FROM geometry_preferences ORDER BY key"
+            ).fetchall()
             run_rows = connection.execute(
                 "SELECT record_json FROM simulation_runs ORDER BY position LIMIT 100"
             ).fetchall()
@@ -179,11 +188,15 @@ class AppDatabase:
         security_preferences = {
             row["key"]: json.loads(row["value_json"]) for row in security_rows
         }
+        geometry_preferences = {
+            row["key"]: json.loads(row["value_json"]) for row in geometry_rows
+        }
         history = [json.loads(row["record_json"]) for row in run_rows]
         return {
             "version": SCHEMA_VERSION,
             "case_config": config,
             "plot_preferences": preferences,
+            "geometry_preferences": geometry_preferences,
             "security_preferences": security_preferences,
             "run_history": history,
         }
@@ -193,6 +206,7 @@ class AppDatabase:
         config = data["case_config"]
         preferences = data.get("plot_preferences", {})
         security_preferences = data.get("security_preferences", {})
+        geometry_preferences = data.get("geometry_preferences", {})
         history = data["run_history"][:100]
         now = _utc_now()
 
@@ -212,6 +226,15 @@ class AppDatabase:
                 [
                     (key, json.dumps(value, ensure_ascii=False), now)
                     for key, value in security_preferences.items()
+                ],
+            )
+
+            connection.execute("DELETE FROM geometry_preferences")
+            connection.executemany(
+                "INSERT INTO geometry_preferences(key, value_json, updated_at) VALUES(?, ?, ?)",
+                [
+                    (key, json.dumps(value, ensure_ascii=False), now)
+                    for key, value in geometry_preferences.items()
                 ],
             )
 
