@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import logging.handlers
@@ -119,6 +120,50 @@ def load_runtime_settings(env: Mapping[str, str] | None = None) -> RuntimeSettin
 
 
 settings = load_runtime_settings()
+
+
+def _is_expected_wslink_disconnect(context: Mapping[str, Any]) -> bool:
+    """Return whether wslink lost a browser while an async send was pending."""
+    exception = context.get("exception")
+    if (
+        exception is None
+        or type(exception).__name__ != "ClientConnectionResetError"
+        or type(exception).__module__ != "aiohttp.client_exceptions"
+        or str(exception) != "Cannot write to closing transport"
+    ):
+        return False
+
+    future = context.get("future") or context.get("task")
+    get_coro = getattr(future, "get_coro", None)
+    coroutine = get_coro() if callable(get_coro) else None
+    coroutine_name = getattr(coroutine, "__qualname__", "")
+    return coroutine_name.endswith("WslinkHandler.sendWrappedMessage")
+
+
+def install_asyncio_exception_handler(
+    loop: asyncio.AbstractEventLoop | None = None,
+) -> None:
+    """Ignore the harmless wslink send race when a browser disconnects."""
+    event_loop = loop or asyncio.get_event_loop()
+    previous_handler = event_loop.get_exception_handler()
+    if getattr(previous_handler, "_foamtrame_disconnect_handler", False):
+        return
+
+    def handle_exception(
+        active_loop: asyncio.AbstractEventLoop, context: dict[str, Any]
+    ) -> None:
+        if _is_expected_wslink_disconnect(context):
+            logging.getLogger(__name__).debug(
+                "Browser disconnected while a pending wslink message was being sent"
+            )
+            return
+        if previous_handler is not None:
+            previous_handler(active_loop, context)
+        else:
+            active_loop.default_exception_handler(context)
+
+    setattr(handle_exception, "_foamtrame_disconnect_handler", True)
+    event_loop.set_exception_handler(handle_exception)
 
 
 def ensure_runtime_directories(config: RuntimeSettings = settings) -> None:

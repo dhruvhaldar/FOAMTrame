@@ -115,6 +115,7 @@ def setup_setup_tab(server):
         "openfoam_runtime_label",
         "openfoam_runtime_source",
     )
+    case_state_keys = ("cases_list", "active_case")
 
     @ctrl.add("on_server_ready")
     def capture_server_event_loop(**_):
@@ -134,6 +135,7 @@ def setup_setup_tab(server):
     def publish_setup_snapshot(**_):
         """Give reconnecting clients the latest completed background state."""
         server.force_state_push(*docker_state_keys)
+        server.force_state_push(*case_state_keys)
         server.force_state_push(
             "tutorials_list",
             "filtered_tutorials",
@@ -167,7 +169,7 @@ def setup_setup_tab(server):
                 state.cases_list = []
                 state.active_case = ""
                 save_config({"ACTIVE_CASE": ""})
-                state.flush()
+                publish_setup_state(*case_state_keys)
                 return
 
         try:
@@ -178,13 +180,13 @@ def setup_setup_tab(server):
             if state.active_case not in state.cases_list:
                 state.active_case = state.cases_list[0] if state.cases_list else ""
                 save_config({"ACTIVE_CASE": state.active_case})
-            state.flush()
+            publish_setup_state(*case_state_keys)
         except Exception as e:
             logger.error(f"Error scanning cases: {e}")
             state.cases_list = []
             state.active_case = ""
             save_config({"ACTIVE_CASE": ""})
-            state.flush()
+            publish_setup_state(*case_state_keys)
 
     ctrl.scan_cases = scan_cases
 
@@ -433,7 +435,7 @@ def setup_setup_tab(server):
 
         state.setup_status = f"Importing tutorial {tut}..."
         state.setup_status_color = "info"
-        state.flush()
+        publish_setup_state("setup_status", "setup_status_color")
 
         def run_import():
             try:
@@ -441,7 +443,7 @@ def setup_setup_tab(server):
                 if not client:
                     state.setup_status = "Docker not available for tutorial import."
                     state.setup_status_color = "error"
-                    state.flush()
+                    publish_setup_state("setup_status", "setup_status_color")
                     return
 
                 tut_name = posixpath.basename(tut)
@@ -485,12 +487,16 @@ def setup_setup_tab(server):
                 scan_cases()
                 state.active_case = tut_name
                 save_config({"ACTIVE_CASE": tut_name})
-                state.flush()
+                publish_setup_state(
+                    "setup_status",
+                    "setup_status_color",
+                    *case_state_keys,
+                )
             except Exception as e:
                 logger.error(f"Error importing tutorial: {e}")
                 state.setup_status = f"Import failed: {e}"
                 state.setup_status_color = "error"
-                state.flush()
+                publish_setup_state("setup_status", "setup_status_color")
 
         threading.Thread(target=run_import, daemon=True).start()
 
@@ -551,11 +557,6 @@ def build_setup_content():
                     # Active Case Card
                     with vuetify.VCard(
                         classes="pa-4 glass-card setup-main-card setup-case-card",
-                        style=(
-                            "((case_creation_tab === 0 && new_case_name && new_case_name.trim().length > 0) || "
-                            "(case_creation_tab === 1 && ((tutorial_search && tutorial_search.trim().length > 0) || selected_tutorial))) "
-                            "? 'opacity: 0.56; filter: saturate(0.72); transform: scale(0.995);' : ''",
-                        ),
                     ):
                         with vuetify.VCardTitle():
                             html.H2("Active Case", classes="setup-card-heading")

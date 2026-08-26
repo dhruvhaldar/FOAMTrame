@@ -1,18 +1,68 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 from datetime import datetime
 from io import StringIO
 import socket
 import sys
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from aiohttp.client_exceptions import ClientConnectionResetError
 
 import install
 import runtime
 from log_paths import dated_log_directory
 from runtime import installed_server_port
+
+
+class _PendingWslinkSend:
+    def get_coro(self):
+        return SimpleNamespace(
+            __qualname__="WslinkHandler.sendWrappedMessage",
+        )
+
+
+def test_expected_wslink_disconnect_is_not_reported_as_asyncio_error():
+    loop = asyncio.new_event_loop()
+    forwarded = []
+    loop.set_exception_handler(lambda active_loop, context: forwarded.append(context))
+    try:
+        runtime.install_asyncio_exception_handler(loop)
+        handler = loop.get_exception_handler()
+        assert handler is not None
+        handler(
+            loop,
+            {
+                "message": "Task exception was never retrieved",
+                "exception": ClientConnectionResetError(
+                    "Cannot write to closing transport"
+                ),
+                "future": _PendingWslinkSend(),
+            },
+        )
+    finally:
+        loop.close()
+
+    assert forwarded == []
+
+
+def test_asyncio_handler_forwards_unrelated_failures():
+    loop = asyncio.new_event_loop()
+    forwarded = []
+    loop.set_exception_handler(lambda active_loop, context: forwarded.append(context))
+    context = {"message": "Task exception was never retrieved", "exception": OSError()}
+    try:
+        runtime.install_asyncio_exception_handler(loop)
+        handler = loop.get_exception_handler()
+        assert handler is not None
+        handler(loop, context)
+    finally:
+        loop.close()
+
+    assert forwarded == [context]
 
 
 def test_auto_port_is_reserved_until_installer_releases_it():

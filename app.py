@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 
-from runtime import configure_logging, settings
+from runtime import configure_logging, install_asyncio_exception_handler, settings
 from app_state import load_security_preferences
 from security import (
     apply_trame_security,
@@ -1621,6 +1621,7 @@ with SinglePageWithDrawerLayout(server) as layout:
 
 def main():
     assert server is not None
+    install_asyncio_exception_handler()
     args, _ = server.cli.parse_known_args()
     if args.data:
         try:
