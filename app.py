@@ -98,7 +98,7 @@ with SinglePageWithDrawerLayout(server) as layout:
                 style="object-fit: contain;",
             )
             html.H1("FOAMTrame", classes="foamtrame-brand")
-    layout.title.style = "min-width: 206px; overflow: visible;"
+    layout.title.style = "min-width: 180px; overflow: visible;"
     layout.icon.hide()
 
     # Inject CSS style sheet into the HTML head using client.Style
@@ -1091,9 +1091,9 @@ with SinglePageWithDrawerLayout(server) as layout:
             height: 48px !important;
             min-height: 48px !important;
             width: 100% !important;
-            max-width: 1520px !important;
-            margin: 0 auto !important;
-            padding: 0 18px !important;
+            max-width: none !important;
+            margin: 0 !important;
+            padding: 0 12px !important;
         }
         /* Navbar Project Title Visibility */
         .v-application .glass-navbar .v-toolbar__title {
@@ -1105,13 +1105,14 @@ with SinglePageWithDrawerLayout(server) as layout:
         }
         /* Compact active-case badge next to the project title. */
         .v-application .active-case-chip {
-            max-width: 190px;
+            max-width: min(280px, 24vw);
             height: 24px !important;
             overflow: hidden !important;
             white-space: nowrap !important;
             flex: none !important;
             flex-shrink: 0 !important;
             margin-right: 14px !important;
+            margin-left: 0 !important;
             padding: 0 10px !important;
             border: 1px solid rgba(6, 154, 181, 0.14);
             font-size: 0.78rem !important;
@@ -1204,7 +1205,7 @@ with SinglePageWithDrawerLayout(server) as layout:
         }
         @media (max-width: 1300px) {
             .v-application .active-case-chip {
-                max-width: 140px;
+                max-width: 180px;
             }
             .glass-navbar .v-tab {
                 padding-right: 13px !important;
