@@ -101,9 +101,10 @@ Implementation: [tabs/setup_tab.py](./tabs/setup_tab.py)
 
 ### Geometry
 
-- Opens on **Case** when an active case exists and renders every supported surface
-  under that case's `constant/triSurface` directory. When no supported triSurface
-  files exist, it falls back to the case's `constant/geometry` directory.
+- Opens on **Case** when an active case exists and renders every supported native
+  surface under `constant/geometry` when present, otherwise under
+  `constant/triSurface`. The **Active geometry** dropdown switches between that
+  default and individual imported triSurface files.
 - Falls back to **Custom** when no case is selected; case-dependent **Case** and
   **Library** controls remain visible but disabled.
 - Clears the case render before switching to a session-only custom VTK or surface
@@ -112,9 +113,9 @@ Implementation: [tabs/setup_tab.py](./tabs/setup_tab.py)
   image and safely imports a selected resource into the active case.
 - Displays dataset type, aggregate point count, and aggregate cell count.
 - Uses server-side VTK rendering with camera reset and interactive controls.
-- Persists the preferred geometry mode and library selection in SQLite and the
-  portable JSON backup. Case geometry and uploaded datasets remain on disk and
-  are not embedded in the database or backup.
+- Persists the preferred geometry mode, library selection, and per-case active
+  geometry choice in SQLite and the portable JSON backup. Geometry files and
+  uploaded datasets remain on disk and are not embedded in the database or backup.
 
 Implementation: [tabs/geometry_tab.py](./tabs/geometry_tab.py) and
 [backend/geometry/library.py](./backend/geometry/library.py)

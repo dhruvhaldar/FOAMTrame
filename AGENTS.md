@@ -236,9 +236,10 @@ unless a component truly owns it.
 ## Geometry behavior
 
 - Case Geometry is the default when an active case exists and renders supported
-  surfaces from `constant/triSurface`, falling back to `constant/geometry` when
-  triSurface has no supported files; it must not select arbitrary result datasets
-  elsewhere in the case.
+  native surfaces from `constant/geometry` when present, otherwise from
+  `constant/triSurface`. Its Active geometry selector includes the default case
+  geometry and individual imported triSurface files; it must not select arbitrary
+  result datasets elsewhere in the case.
 - Custom Dataset is the default when no case exists. Keep Case Geometry and the
   OpenFOAM Library visible but disabled until a case is active.
 - The OpenFOAM Library lists `$FOAM_TUTORIALS/resources/geometry` from the

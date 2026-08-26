@@ -166,12 +166,21 @@ class AppStateMigrationIntegrationTest(unittest.TestCase):
         backup["geometry_preferences"] = {
             "preferred_mode": "unknown",
             "library_selection": "../outside.stl",
+            "case_geometry_selections": {
+                "aerofoil": "flange.stl.gz",
+                "../outside": "unsafe.stl",
+                "cavity": "../escape.stl",
+            },
         }
 
         restored = app_state.restore_app_state_json(json.dumps(backup))
 
         self.assertEqual(
-            {"preferred_mode": "case", "library_selection": ""},
+            {
+                "preferred_mode": "case",
+                "library_selection": "",
+                "case_geometry_selections": {"aerofoil": "flange.stl.gz"},
+            },
             restored["geometry_preferences"],
         )
 

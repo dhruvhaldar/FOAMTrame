@@ -9,7 +9,8 @@
   "run_history": [],
   "geometry_preferences": {
     "preferred_mode": "case",
-    "library_selection": ""
+    "library_selection": "",
+    "case_geometry_selections": {}
   },
   "plot_preferences": {
     "font": "roboto",

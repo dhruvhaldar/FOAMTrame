@@ -1142,15 +1142,15 @@ with SinglePageWithDrawerLayout(server) as layout:
             text-align: center;
             line-height: 1.2;
         }
-        .v-application .geometry-mode-panel .geometry-library-select input:focus,
-        .v-application .geometry-mode-panel .geometry-library-select input:focus-visible {
+        .v-application .geometry-mode-panel .geometry-select input:focus,
+        .v-application .geometry-mode-panel .geometry-select input:focus-visible {
             outline: none !important;
             outline-offset: 0 !important;
         }
-        .v-application .geometry-library-select.v-input--is-focused .v-input__slot {
+        .v-application .geometry-select.v-input--is-focused .v-input__slot {
             box-shadow: 0 0 0 3px rgba(6, 154, 181, 0.16) !important;
         }
-        .v-application .geometry-library-select.v-input--is-focused fieldset {
+        .v-application .geometry-select.v-input--is-focused fieldset {
             border-color: #069ab5 !important;
             border-width: 2px !important;
         }

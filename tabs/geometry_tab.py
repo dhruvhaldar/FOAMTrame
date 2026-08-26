@@ -7,7 +7,7 @@ import logging
 import tempfile
 import threading
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import vtk
 from trame.widgets import html, vtk as vtk_widgets, vuetify
@@ -15,7 +15,7 @@ from trame.widgets import html, vtk as vtk_widgets, vuetify
 from app_state import load_geometry_preferences, update_geometry_preferences
 from backend.geometry.library import (
     import_resource_geometry,
-    list_case_geometry,
+    list_case_geometry_choices,
     list_resource_geometry,
 )
 from tabs.setup_tab import get_docker_client, load_config
@@ -73,6 +73,17 @@ renderer.AddActor(placeholder_actor)
 active_actors: list[Any] = []
 custom_dataset: list[Any | None] = [None]
 custom_display_name = [""]
+
+
+def _schedule_on_event_loop(event_loop: Any, callback: Callable[[], None]) -> bool:
+    """Schedule UI/VTK work on Trame's event-loop thread when available."""
+    if event_loop is None or not event_loop.is_running():
+        return False
+    try:
+        event_loop.call_soon_threadsafe(callback)
+    except RuntimeError:
+        return False
+    return True
 
 
 def _reader_for(path: str | Path):
@@ -139,6 +150,13 @@ def setup_geometry_tab(server):
     state.setdefault("geometry_library_selection", preferences["library_selection"])
     state.setdefault("geometry_library_loading", False)
     state.setdefault("geometry_library_importing", False)
+    state.setdefault("geometry_case_options", [])
+    state.setdefault(
+        "geometry_case_selection",
+        preferences.get("case_geometry_selections", {}).get(
+            str(state.active_case or ""), ""
+        ),
+    )
 
     server_event_loop = [None]
     view_ready = [False]
@@ -146,7 +164,7 @@ def setup_geometry_tab(server):
     library_lock = threading.Lock()
     import_lock = threading.Lock()
 
-    def persist_preferences(updates: dict[str, str]) -> None:
+    def persist_preferences(updates: dict[str, Any]) -> None:
         changed = {
             key: value
             for key, value in updates.items()
@@ -246,14 +264,42 @@ def setup_geometry_tab(server):
             state.geometry_error_message = str(exc)
             publish("geometry_error_message")
 
+    def persist_case_geometry_selection(case_name: str, selection: str) -> None:
+        updated = dict(preferences.get("case_geometry_selections", {}))
+        updated[case_name] = selection
+        persist_preferences({"case_geometry_selections": updated})
+
     def load_active_case_geometry() -> None:
         active_case = str(state.active_case or "")
         if not active_case:
+            state.geometry_case_options = []
+            state.geometry_case_selection = ""
             clear_render("Select an active case to render its geometry.")
             return
         try:
             config = load_config()
-            paths = list_case_geometry(config["CASE_ROOT"], active_case)
+            choices = list_case_geometry_choices(config["CASE_ROOT"], active_case)
+            options = [{"text": "Default case geometry", "value": ""}]
+            options.extend(
+                {
+                    "text": f"Imported · {Path(value).name}",
+                    "value": value,
+                }
+                for value, paths in choices.items()
+                if value and paths
+            )
+            selection = str(state.geometry_case_selection or "")
+            if selection not in choices or not choices[selection]:
+                selection = ""
+            state.geometry_case_options = options
+            selection_changed = str(state.geometry_case_selection or "") != selection
+            if selection_changed:
+                state.geometry_case_selection = selection
+            publish(
+                "geometry_case_options",
+                *(["geometry_case_selection"] if selection_changed else []),
+            )
+            paths = choices.get(selection, [])
             if not paths:
                 clear_render(
                     "No supported geometry found in constant/triSurface or "
@@ -281,8 +327,14 @@ def setup_geometry_tab(server):
             count = len(loaded)
             render_datasets(
                 loaded,
-                file_name=f"{active_case} · {count} surface{'s' if count != 1 else ''}",
-                dataset_type="Case geometry",
+                file_name=(
+                    f"{active_case} · {count} surface{'s' if count != 1 else ''}"
+                    if not selection
+                    else Path(selection).name
+                ),
+                dataset_type=(
+                    "Case geometry" if not selection else "Imported geometry"
+                ),
                 info=f"{points:,} pts · {cells:,} cells",
             )
             if failures:
@@ -297,6 +349,16 @@ def setup_geometry_tab(server):
             publish("geometry_error_message")
 
     ctrl.reload_case_geometry = load_active_case_geometry
+
+    @state.change("geometry_case_selection")
+    def on_case_geometry_selection_change(geometry_case_selection, **_):
+        active_case = str(state.active_case or "")
+        if not active_case:
+            return
+        selection = str(geometry_case_selection or "")
+        persist_case_geometry_selection(active_case, selection)
+        if state.geometry_mode == "case":
+            load_active_case_geometry()
 
     def render_custom_or_empty() -> None:
         dataset = custom_dataset[0]
@@ -363,6 +425,9 @@ def setup_geometry_tab(server):
             state.geometry_mode = "custom"
             clear_render()
             return
+        state.geometry_case_selection = preferences.get(
+            "case_geometry_selections", {}
+        ).get(active_case, "")
         state.geometry_mode = "case"
         persist_preferences({"preferred_mode": "case"})
         load_active_case_geometry()
@@ -425,13 +490,15 @@ def setup_geometry_tab(server):
             return
         if not import_lock.acquire(blocking=False):
             return
+        case_name = str(state.active_case)
+        selection = str(state.geometry_library_selection)
         state.geometry_library_importing = True
-        state.geometry_status_message = (
-            f"Importing {state.geometry_library_selection} into {state.active_case}…"
-        )
+        state.geometry_status_message = f"Importing {selection} into {case_name}…"
         publish("geometry_library_importing", "geometry_status_message")
 
         def worker() -> None:
+            imported: Path | None = None
+            error_message = ""
             try:
                 config = load_config()
                 imported = import_resource_geometry(
@@ -439,19 +506,91 @@ def setup_geometry_tab(server):
                     config["DOCKER_IMAGE"],
                     config["OPENFOAM_VERSION"],
                     config["CASE_ROOT"],
-                    str(state.active_case),
-                    str(state.geometry_library_selection),
+                    case_name,
+                    selection,
                 )
-                state.geometry_status_message = (
-                    f"Imported {imported.name} into constant/triSurface."
-                )
-                state.geometry_error_message = ""
-                load_active_case_geometry()
             except Exception as exc:
-                state.geometry_error_message = f"Geometry import failed: {exc}"
-                state.geometry_status_message = ""
-            finally:
+                error_message = f"Geometry import failed: {exc}"
+
+            def complete_import() -> None:
+                try:
+                    if error_message:
+                        state.geometry_error_message = error_message
+                        state.geometry_status_message = ""
+                    elif imported is not None:
+                        state.geometry_status_message = (
+                            f"Imported {imported.name} into constant/triSurface."
+                        )
+                        state.geometry_error_message = ""
+                        try:
+                            config = load_config()
+                            tri_surface = (
+                                Path(config["CASE_ROOT"])
+                                / case_name
+                                / "constant"
+                                / "triSurface"
+                            )
+                            imported_selection = imported.relative_to(
+                                tri_surface
+                            ).as_posix()
+                            choices = list_case_geometry_choices(
+                                config["CASE_ROOT"], case_name
+                            )
+                            state.geometry_case_options = [
+                                {"text": "Default case geometry", "value": ""},
+                                *[
+                                    {
+                                        "text": f"Imported · {Path(value).name}",
+                                        "value": value,
+                                    }
+                                    for value, paths in choices.items()
+                                    if value and paths
+                                ],
+                            ]
+                            state.geometry_case_selection = imported_selection
+                            persist_case_geometry_selection(
+                                case_name, imported_selection
+                            )
+                            dataset = _read_dataset(imported)
+                            render_datasets(
+                                [(imported.name, dataset)],
+                                file_name=imported.name,
+                                dataset_type="Imported geometry",
+                                info=(
+                                    f"{dataset.GetNumberOfPoints():,} pts · "
+                                    f"{dataset.GetNumberOfCells():,} cells"
+                                ),
+                            )
+                            publish(
+                                "geometry_case_options",
+                                "geometry_case_selection",
+                            )
+                        except Exception as exc:
+                            state.geometry_error_message = (
+                                f"Imported {imported.name}, but it could not be "
+                                f"rendered: {exc}"
+                            )
+                finally:
+                    state.geometry_library_importing = False
+                    publish(
+                        "geometry_library_importing",
+                        "geometry_status_message",
+                        "geometry_error_message",
+                    )
+                    import_lock.release()
+
+            if not _schedule_on_event_loop(server_event_loop[0], complete_import):
+                logger.warning(
+                    "Geometry import completion could not be scheduled on the "
+                    "Trame event loop; skipping the VTK refresh."
+                )
                 state.geometry_library_importing = False
+                state.geometry_status_message = ""
+                state.geometry_error_message = (
+                    error_message
+                    or "Geometry imported, but the viewer refresh could not be "
+                    "scheduled. Reload Case Geometry."
+                )
                 publish(
                     "geometry_library_importing",
                     "geometry_status_message",
@@ -565,9 +704,17 @@ def build_geometry_drawer():
                 classes="text-cyan-900 text-body-2 mb-2",
             )
             html.Div(
-                "Renders supported surfaces from constant/triSurface, falling back "
-                "to constant/geometry.",
+                "Choose the default case geometry or an imported surface.",
                 classes="text-caption text--secondary mb-3",
+            )
+            vuetify.VSelect(
+                label="Active geometry",
+                v_model=("geometry_case_selection", ""),
+                items=("geometry_case_options", []),
+                dense=True,
+                outlined=True,
+                hide_details=True,
+                classes="geometry-select geometry-case-select mb-3",
             )
             vuetify.VBtn(
                 "Reload case geometry",
@@ -624,7 +771,7 @@ def build_geometry_drawer():
                 dense=True,
                 outlined=True,
                 hide_details=True,
-                classes="geometry-library-select mb-3",
+                classes="geometry-select geometry-library-select mb-3",
             )
             with vuetify.VRow(dense=True, classes="mb-1"):
                 with vuetify.VCol(cols=5):

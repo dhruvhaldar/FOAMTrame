@@ -31,42 +31,54 @@ def resolve_case_path(case_root: str | Path, case_name: str) -> Path:
     return case_path
 
 
-def list_case_geometry(case_root: str | Path, case_name: str) -> list[Path]:
-    """List preferred renderable surface files belonging to an OpenFOAM case.
+def _files_under(directory: Path) -> list[Path]:
+    if not directory.is_dir():
+        return []
+    resolved_directory = directory.resolve()
 
-    ``constant/triSurface`` remains the primary source. Official OpenFOAM cases
-    may instead keep their display geometry under ``constant/geometry``, so that
-    directory is used only when triSurface has no supported files.
+    def is_inside_directory(path: Path) -> bool:
+        try:
+            path.resolve().relative_to(resolved_directory)
+            return True
+        except ValueError:
+            return False
+
+    return sorted(
+        (
+            path
+            for path in directory.rglob("*")
+            if path.is_file()
+            and path.name.lower().endswith(LIBRARY_EXTENSIONS)
+            and is_inside_directory(path)
+        ),
+        key=lambda path: path.relative_to(directory).as_posix().lower(),
+    )
+
+
+def list_case_geometry_choices(
+    case_root: str | Path, case_name: str
+) -> dict[str, list[Path]]:
+    """Return default and individually selectable triSurface geometries.
+
+    The empty key represents the case's default geometry. Native
+    ``constant/geometry`` files define that default when present; otherwise all
+    supported ``constant/triSurface`` files do. Each triSurface file is also an
+    individual choice so imported library geometry can be selected explicitly.
     """
     constant = resolve_case_path(case_root, case_name) / "constant"
+    geometry_files = _files_under(constant / "geometry")
+    tri_surface = constant / "triSurface"
+    tri_surface_files = _files_under(tri_surface)
+    default_files = geometry_files or tri_surface_files
+    choices: dict[str, list[Path]] = {"": default_files}
+    for path in tri_surface_files:
+        choices[path.relative_to(tri_surface).as_posix()] = [path]
+    return choices
 
-    def files_under(directory: Path) -> list[Path]:
-        if not directory.is_dir():
-            return []
-        resolved_directory = directory.resolve()
 
-        def is_inside_directory(path: Path) -> bool:
-            try:
-                path.resolve().relative_to(resolved_directory)
-                return True
-            except ValueError:
-                return False
-
-        return sorted(
-            (
-                path
-                for path in directory.rglob("*")
-                if path.is_file()
-                and path.name.lower().endswith(LIBRARY_EXTENSIONS)
-                and is_inside_directory(path)
-            ),
-            key=lambda path: path.relative_to(directory).as_posix().lower(),
-        )
-
-    tri_surface_files = files_under(constant / "triSurface")
-    if tri_surface_files:
-        return tri_surface_files
-    return files_under(constant / "geometry")
+def list_case_geometry(case_root: str | Path, case_name: str) -> list[Path]:
+    """List the default renderable geometry belonging to an OpenFOAM case."""
+    return list_case_geometry_choices(case_root, case_name)[""]
 
 
 _OPENFOAM_BASHRC = r"""

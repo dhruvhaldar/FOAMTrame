@@ -10,6 +10,7 @@ from backend.geometry.library import (
     import_resource_geometry,
     is_supported_geometry_name,
     list_case_geometry,
+    list_case_geometry_choices,
     list_resource_geometry,
     resolve_case_path,
 )
@@ -35,7 +36,7 @@ class FakeDockerClient:
         self.containers = FakeContainers(output)
 
 
-def test_case_geometry_prefers_tri_surface_and_ignores_result_datasets():
+def test_case_geometry_prefers_native_constant_geometry():
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
         tri_surface = root / "cavity" / "constant" / "triSurface"
@@ -53,10 +54,12 @@ def test_case_geometry_prefers_tri_surface_and_ignores_result_datasets():
 
         files = list_case_geometry(root, "cavity")
 
-        assert [path.name for path in files] == ["body.stl", "detail.obj.gz"]
+        assert [path.name for path in files] == ["fallback.obj.gz"]
+        choices = list_case_geometry_choices(root, "cavity")
+        assert list(choices) == ["", "body.stl", "nested/detail.obj.gz"]
 
 
-def test_case_geometry_falls_back_to_constant_geometry():
+def test_case_geometry_loads_constant_geometry_without_tri_surface():
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
         geometry = root / "aerofoil" / "constant" / "geometry"
@@ -67,6 +70,18 @@ def test_case_geometry_falls_back_to_constant_geometry():
         files = list_case_geometry(root, "aerofoil")
 
         assert [path.name for path in files] == ["NACA0012.obj.gz"]
+
+
+def test_case_geometry_uses_tri_surface_without_native_geometry():
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        tri_surface = root / "cavity" / "constant" / "triSurface"
+        tri_surface.mkdir(parents=True)
+        (tri_surface / "body.stl").write_text("solid body", encoding="utf-8")
+
+        files = list_case_geometry(root, "cavity")
+
+        assert [path.name for path in files] == ["body.stl"]
 
 
 def test_case_path_rejects_traversal():

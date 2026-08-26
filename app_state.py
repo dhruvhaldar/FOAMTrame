@@ -4,7 +4,7 @@ import copy
 import json
 import logging
 import threading
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from database import SCHEMA_VERSION, database
@@ -39,10 +39,11 @@ def default_plot_preferences() -> dict[str, str]:
     }
 
 
-def default_geometry_preferences() -> dict[str, str]:
+def default_geometry_preferences() -> dict[str, Any]:
     return {
         "preferred_mode": "case",
         "library_selection": "",
+        "case_geometry_selections": {},
     }
 
 
@@ -107,7 +108,7 @@ def _normalise_app_state(data: Any) -> dict[str, Any]:
         normalised_plots["logo_mode"] = "none"
 
     normalised_geometry = default_geometry_preferences()
-    for key in normalised_geometry:
+    for key in ("preferred_mode", "library_selection"):
         if key in geometry_preferences:
             value = geometry_preferences[key]
             normalised_geometry[key] = "" if value is None else str(value)
@@ -116,6 +117,23 @@ def _normalise_app_state(data: Any) -> dict[str, Any]:
     selection = normalised_geometry["library_selection"]
     if len(selection) > 255 or selection != Path(selection).name:
         normalised_geometry["library_selection"] = ""
+    case_selections = geometry_preferences.get("case_geometry_selections", {})
+    if isinstance(case_selections, dict):
+        for raw_case, raw_selection in list(case_selections.items())[:100]:
+            case_name = str(raw_case)
+            geometry_selection = "" if raw_selection is None else str(raw_selection)
+            selection_path = PurePosixPath(geometry_selection)
+            if (
+                case_name
+                and len(case_name) <= 255
+                and Path(case_name).name == case_name
+                and len(geometry_selection) <= 512
+                and not selection_path.is_absolute()
+                and ".." not in selection_path.parts
+            ):
+                normalised_geometry["case_geometry_selections"][case_name] = (
+                    geometry_selection
+                )
 
     return {
         "version": APP_STATE_VERSION,
@@ -196,7 +214,7 @@ def load_plot_preferences() -> dict[str, str]:
     return copy.deepcopy(load_app_state()["plot_preferences"])
 
 
-def load_geometry_preferences() -> dict[str, str]:
+def load_geometry_preferences() -> dict[str, Any]:
     return copy.deepcopy(load_app_state()["geometry_preferences"])
 
 
