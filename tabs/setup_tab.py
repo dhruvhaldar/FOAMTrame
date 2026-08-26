@@ -8,6 +8,8 @@ import posixpath
 import re
 import shutil
 import threading
+from collections.abc import Mapping
+from datetime import date, datetime
 from pathlib import Path
 from trame.widgets import html, vuetify
 
@@ -18,6 +20,31 @@ logger = logging.getLogger("FOAMTrame")
 # Backwards-compatible names used by the existing tab modules.
 load_config = load_case_config
 save_config = update_case_config
+
+
+def resolve_build_date(
+    environment: Mapping[str, str] | None = None,
+    source_path: Path | None = None,
+) -> str:
+    """Return an ISO build date from CI metadata or the application source."""
+    build_environment = os.environ if environment is None else environment
+    configured = build_environment.get("FOAMTRAME_BUILD_DATE", "").strip()
+    if configured:
+        try:
+            return date.fromisoformat(configured).isoformat()
+        except ValueError:
+            logger.warning("Ignoring invalid FOAMTRAME_BUILD_DATE; expected YYYY-MM-DD")
+
+    build_source = source_path or Path(__file__).resolve().parents[1] / "app.py"
+    try:
+        return (
+            datetime.fromtimestamp(build_source.stat().st_mtime)
+            .astimezone()
+            .date()
+            .isoformat()
+        )
+    except OSError:
+        return date.today().isoformat()
 
 
 def get_docker_client():
@@ -81,6 +108,7 @@ def setup_setup_tab(server):
     state.setdefault("docker_image", config["DOCKER_IMAGE"])
     state.setdefault("openfoam_version", config["OPENFOAM_VERSION"])
     state.setdefault("openfoam_runtime_version", "")
+    state.setdefault("foamtrame_build_date", resolve_build_date())
     state.setdefault("openfoam_runtime_label", "OpenFOAM: detecting…")
     state.setdefault(
         "openfoam_runtime_source",
@@ -514,27 +542,74 @@ def setup_setup_tab(server):
 
 
 def build_setup_drawer():
-    with html.Div(v_show="active_tab === 0", classes="pa-4"):
+    with html.Div(v_show="active_tab === 0", classes="pa-4 setup-drawer"):
         # Header / Status Cards in Sidebar
-        html.Div(
-            "Health Checkup 💊",
-            classes="text-subtitle-1 font-weight-bold text-slate-800 mb-2",
-            style="color: #0f172a;",
-        )
-        vuetify.VAlert(
-            "{{ trame_status }}",
-            type=("trame_status_color", "success"),
-            dense=True,
-            outlined=True,
-            classes="mb-2 setup-status-alert",
-        )
-        vuetify.VAlert(
-            "{{ setup_status }}",
-            type=("setup_status_color", "info"),
-            dense=True,
-            outlined=True,
-            classes="mb-3 setup-status-alert",
-        )
+        with html.Div():
+            html.Div(
+                "Health Checkup 💊",
+                classes="text-subtitle-1 font-weight-bold text-slate-800 mb-2",
+                style="color: #0f172a;",
+            )
+            vuetify.VAlert(
+                "{{ trame_status }}",
+                type=("trame_status_color", "success"),
+                dense=True,
+                outlined=True,
+                classes="mb-2 setup-status-alert",
+            )
+            vuetify.VAlert(
+                "{{ setup_status }}",
+                type=("setup_status_color", "info"),
+                dense=True,
+                outlined=True,
+                classes="mb-3 setup-status-alert",
+            )
+
+        with html.Div(
+            classes="setup-sidebar-footer",
+            role="contentinfo",
+            aria_label="FOAMTrame licensing and runtime information",
+        ):
+            with html.Div(
+                classes="footer-openfoam-version d-flex align-center",
+                title=("openfoam_runtime_source",),
+            ):
+                html.Img(
+                    src=(
+                        "(String(openfoam_runtime_version || openfoam_version || '').match(/\\d/g) || []).length >= 4 "
+                        "? '/static/icons/openfoam-vXXXX_series.svg' "
+                        ": '/static/icons/openfoam-vXX_series.png'",
+                    ),
+                    alt="OpenFOAM logo",
+                    classes="footer-openfoam-logo",
+                )
+                html.Span(
+                    "{{ openfoam_runtime_label }}",
+                    classes="setup-footer-version-text",
+                )
+            with html.Div(classes="setup-footer-identity"):
+                html.Div("FOAMTrame © 2026", classes="setup-footer-title")
+                html.Div(
+                    "Licensed under GNU GPLv3",
+                    classes="setup-footer-license",
+                )
+                html.Div(
+                    "Build {{ foamtrame_build_date }}",
+                    classes="setup-footer-build",
+                )
+            with html.Div(classes="setup-footer-powered"):
+                html.Span("Powered by", classes="setup-footer-label")
+                with html.Div(classes="setup-footer-powered-logos"):
+                    html.Img(
+                        src="/static/icons/docker-logo.avif",
+                        alt="Docker",
+                        classes="setup-footer-docker-logo",
+                    )
+                    html.Img(
+                        src="/static/icons/trame-text.svg",
+                        alt="Trame",
+                        classes="setup-footer-trame-logo",
+                    )
 
 
 def build_setup_content():
@@ -760,49 +835,4 @@ def build_setup_content():
                                 click=ctrl.trigger_checks,
                                 block=True,
                                 classes="theme-btn-warning",
-                            )
-
-                # Footer Glass Overlay Card
-                with vuetify.VCard(classes="glass-card setup-footer-card"):
-                    with html.Div(classes="setup-footer-layout"):
-                        with html.Div(classes="setup-footer-identity"):
-                            html.Div(
-                                "FOAMTrame © 2026",
-                                classes="setup-footer-title",
-                            )
-                            html.Div(
-                                "Licensed under GNU GPLv3",
-                                classes="setup-footer-license",
-                            )
-                        with html.Div(classes="setup-footer-powered"):
-                            html.Span(
-                                "Powered by",
-                                classes="setup-footer-label",
-                            )
-                            html.Img(
-                                src="/static/icons/docker-logo.avif",
-                                alt="Docker Logo",
-                                classes="setup-footer-docker-logo",
-                            )
-                            html.Img(
-                                src="/static/icons/trame-text.svg",
-                                alt="Trame Logo",
-                                classes="setup-footer-trame-logo",
-                            )
-                        with html.Div(
-                            classes="footer-openfoam-version d-flex align-center",
-                            title=("openfoam_runtime_source",),
-                        ):
-                            html.Img(
-                                src=(
-                                    "(String(openfoam_runtime_version || openfoam_version || '').match(/\\d/g) || []).length >= 4 "
-                                    "? '/static/icons/openfoam-vXXXX_series.svg' "
-                                    ": '/static/icons/openfoam-vXX_series.png'",
-                                ),
-                                alt="OpenFOAM Logo",
-                                classes="footer-openfoam-logo",
-                            )
-                            html.Span(
-                                "{{ openfoam_runtime_label }}",
-                                classes="setup-footer-version-text",
                             )

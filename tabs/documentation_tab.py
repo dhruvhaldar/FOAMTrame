@@ -18,6 +18,15 @@ _RAW_TAG_RE = re.compile(r"<[^>]+>")
 _INLINE_TOKEN_RE = re.compile(
     r"!\[([^]]*)\]\(([^)]+)\)|\[([^]]+)\]\(([^)]+)\)|`([^`]+)`|\*\*([^*]+)\*\*"
 )
+_MERMAID_FLOWCHART_RE = re.compile(r"^\s*flowchart\s+LR\s*$")
+_MERMAID_NODE_RE = re.compile(
+    r'^\s*(?P<id>[A-Za-z][A-Za-z0-9_]*)\s*\[\s*"(?P<label>.+)"\s*\]\s*$'
+)
+_MERMAID_EDGE_RE = re.compile(
+    r"^\s*(?P<source>[A-Za-z][A-Za-z0-9_]*)\s*"
+    r'(?P<arrow><-->|-->)\s*(?:\|"(?P<label>[^"]+)"\|\s*)?'
+    r"(?P<target>[A-Za-z][A-Za-z0-9_]*)\s*$"
+)
 
 
 def _slugify(value: str) -> str:
@@ -72,6 +81,171 @@ def _table_cells(line: str) -> list[str]:
     return [cell.strip() for cell in line.strip().strip("|").split("|")]
 
 
+def _render_mermaid_flowchart(lines: list[str]) -> str | None:
+    """Render the small, trusted Mermaid LR subset used by the README."""
+    content = [line for line in lines if line.strip()]
+    if not content or _MERMAID_FLOWCHART_RE.fullmatch(content[0]) is None:
+        return None
+
+    nodes: dict[str, list[str]] = {}
+    edges: list[tuple[str, str, str, str]] = []
+    for line in content[1:]:
+        node_match = _MERMAID_NODE_RE.fullmatch(line)
+        if node_match is not None:
+            label_parts = re.split(r"<br\s*/?>", node_match.group("label"))
+            nodes[node_match.group("id")] = [
+                _RAW_TAG_RE.sub("", part).strip()
+                for part in label_parts
+                if part.strip()
+            ]
+            continue
+        edge_match = _MERMAID_EDGE_RE.fullmatch(line)
+        if edge_match is not None:
+            edges.append(
+                (
+                    edge_match.group("source"),
+                    edge_match.group("target"),
+                    edge_match.group("arrow"),
+                    edge_match.group("label") or "",
+                )
+            )
+            continue
+        return None
+
+    if (
+        not nodes
+        or not edges
+        or any(
+            source not in nodes or target not in nodes for source, target, _, _ in edges
+        )
+    ):
+        return None
+
+    ranks = dict.fromkeys(nodes, 0)
+    for _ in nodes:
+        changed = False
+        for source, target, _, _ in edges:
+            candidate = ranks[source] + 1
+            if candidate > ranks[target]:
+                ranks[target] = candidate
+                changed = True
+        if not changed:
+            break
+
+    columns: dict[int, list[str]] = {}
+    for node_id in nodes:
+        columns.setdefault(ranks[node_id], []).append(node_id)
+
+    node_width = 190
+    node_height = 70
+    column_gap = 64
+    row_gap = 42
+    margin = 34
+    max_rank = max(columns)
+    max_rows = max(len(column) for column in columns.values())
+    width = margin * 2 + (max_rank + 1) * node_width + max_rank * column_gap
+    height = max(
+        350,
+        margin * 2 + max_rows * node_height + (max_rows - 1) * row_gap,
+    )
+    positions: dict[str, tuple[float, float]] = {}
+    for rank, column in columns.items():
+        group_height = len(column) * node_height + (len(column) - 1) * row_gap
+        start_y = (height - group_height) / 2
+        for row, node_id in enumerate(column):
+            positions[node_id] = (
+                margin + rank * (node_width + column_gap),
+                start_y + row * (node_height + row_gap),
+            )
+
+    svg: list[str] = [
+        '<figure class="documentation-flowchart">',
+        (
+            f'<svg viewBox="0 0 {width} {height}" role="img" '
+            'aria-labelledby="documentation-flowchart-title" '
+            'preserveAspectRatio="xMidYMid meet">'
+        ),
+        '<title id="documentation-flowchart-title">FOAMTrame architecture flowchart</title>',
+        "<defs>",
+        (
+            '<marker id="documentation-arrow-end" viewBox="0 0 10 10" '
+            'refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">'
+            '<path d="M 0 0 L 10 5 L 0 10 z" /></marker>'
+        ),
+        "</defs>",
+    ]
+
+    for source, target, arrow, label in edges:
+        source_x, source_y = positions[source]
+        target_x, target_y = positions[target]
+        x1 = source_x + node_width
+        y1 = source_y + node_height / 2
+        x2 = target_x
+        y2 = target_y + node_height / 2
+        control = max(28, (x2 - x1) * 0.45)
+        marker_start = (
+            ' marker-start="url(#documentation-arrow-end)"' if arrow == "<-->" else ""
+        )
+        svg.append(
+            f'<path class="documentation-flowchart__edge" d="M {x1} {y1} '
+            f'C {x1 + control} {y1}, {x2 - control} {y2}, {x2} {y2}" '
+            f'marker-end="url(#documentation-arrow-end)"{marker_start} />'
+        )
+        if label:
+            label_x = (x1 + x2) / 2
+            label_y = (y1 + y2) / 2 - 7
+            svg.append(
+                f'<text class="documentation-flowchart__edge-label" '
+                f'x="{label_x}" y="{label_y}">{html_lib.escape(label)}</text>'
+            )
+
+    for node_id, label_lines in nodes.items():
+        x, y = positions[node_id]
+        center_x = x + node_width / 2
+        center_y = y + node_height / 2
+        svg.append('<g class="documentation-flowchart__node">')
+        svg.append(
+            f'<rect x="{x}" y="{y}" width="{node_width}" height="{node_height}" '
+            'rx="13" ry="13" />'
+        )
+        first_y = center_y - (len(label_lines) - 1) * 10
+        for index, label_line in enumerate(label_lines):
+            text_class = (
+                "documentation-flowchart__node-title"
+                if index == 0
+                else "documentation-flowchart__node-detail"
+            )
+            svg.append(
+                f'<text class="{text_class}" x="{center_x}" '
+                f'y="{first_y + index * 21}">{html_lib.escape(label_line)}</text>'
+            )
+        svg.append("</g>")
+
+    svg.extend(
+        [
+            "</svg>",
+            "<figcaption>FOAMTrame components and their validated data flows.</figcaption>",
+            "</figure>",
+        ]
+    )
+    return "".join(svg)
+
+
+def _render_fenced_block(language: str, lines: list[str]) -> str:
+    if language.lower() == "mermaid":
+        diagram = _render_mermaid_flowchart(lines)
+        if diagram is not None:
+            return diagram
+    language_class = (
+        f' class="language-{html_lib.escape(language, quote=True)}"' if language else ""
+    )
+    return (
+        f"<pre><code{language_class}>"
+        + html_lib.escape("\n".join(lines))
+        + "</code></pre>"
+    )
+
+
 def render_markdown(markdown_text: str) -> str:
     """Render the README subset used by FOAMTrame without trusting raw HTML."""
 
@@ -100,16 +274,7 @@ def render_markdown(markdown_text: str) -> str:
         fence = _FENCE_RE.match(line)
         if fence:
             if in_code:
-                language_class = (
-                    f' class="language-{html_lib.escape(code_language, quote=True)}"'
-                    if code_language
-                    else ""
-                )
-                rendered.append(
-                    f"<pre><code{language_class}>"
-                    + html_lib.escape("\n".join(code_lines))
-                    + "</code></pre>"
-                )
+                rendered.append(_render_fenced_block(code_language, code_lines))
                 code_lines.clear()
                 in_code = False
             else:
@@ -193,9 +358,7 @@ def render_markdown(markdown_text: str) -> str:
         index += 1
 
     if in_code:
-        rendered.append(
-            "<pre><code>" + html_lib.escape("\n".join(code_lines)) + "</code></pre>"
-        )
+        rendered.append(_render_fenced_block(code_language, code_lines))
     flush_paragraph()
     close_list()
     return "\n".join(rendered)
@@ -297,39 +460,61 @@ def setup_documentation_tab(server):
 
 
 def build_documentation_drawer(ctrl):
-    with html.Div(v_show="active_tab === 6", classes="pa-4 documentation-drawer"):
-        with html.Div(classes="d-flex align-center mb-3"):
+    with html.Div(
+        v_show="active_tab === 6",
+        classes="pa-3 documentation-drawer",
+        role="region",
+        aria_label="Documentation navigation",
+    ):
+        with html.Div(classes="d-flex align-center mb-1"):
             vuetify.VIcon(
                 "mdi-book-open-page-variant", color="cyan darken-3", classes="mr-2"
             )
             html.Div("Documentation", classes="text-subtitle-1 font-weight-bold")
+            vuetify.VSpacer()
+            with vuetify.VBtn(
+                icon=True,
+                small=True,
+                click=ctrl.reload_documentation,
+                title="Reload README",
+                aria_label="Reload README documentation",
+            ):
+                vuetify.VIcon("mdi-refresh", small=True)
         html.P(
-            "Browse the project README by section. Refresh after editing README.md.",
-            classes="text-caption mb-4",
+            "README sections",
+            classes="text-overline text--secondary mb-1",
         )
-        vuetify.VSelect(
-            v_model=("documentation_section", "overview"),
-            items=("documentation_sections", []),
-            item_text="title",
-            item_value="value",
-            label="README section",
-            outlined=True,
+        with vuetify.VList(
             dense=True,
-            hide_details=True,
-            classes="mb-4",
-        )
-        vuetify.VBtn(
-            "Reload README",
-            click=ctrl.reload_documentation,
-            outlined=True,
-            block=True,
-            classes="mb-4",
-        )
-        vuetify.VAlert(
+            nav=True,
+            classes="documentation-section-list pa-0",
+            aria_label="README sections",
+        ):
+            with vuetify.VListItem(
+                v_for="item in documentation_sections",
+                key=("item.value",),
+                click="documentation_section = item.value",
+                input_value=("documentation_section === item.value",),
+                active_class="documentation-section-item--active",
+                classes="documentation-section-item px-2",
+                aria_current=("documentation_section === item.value ? 'page' : null",),
+            ):
+                with vuetify.VListItemIcon(classes="documentation-section-marker mr-2"):
+                    vuetify.VIcon(
+                        "{{ documentation_section === item.value ? 'mdi-chevron-right-circle' : 'mdi-circle-small' }}",
+                        x_small=True,
+                        color=(
+                            "documentation_section === item.value ? 'cyan darken-3' : 'grey lighten-1'",
+                        ),
+                    )
+                vuetify.VListItemTitle(
+                    "{{ item.title }}", classes="documentation-section-title"
+                )
+        html.Div(
             "{{ documentation_status }}",
-            type=("documentation_status_color", "info"),
-            dense=True,
-            outlined=True,
+            classes="documentation-status text-caption mt-1 px-1",
+            role="status",
+            aria_live="polite",
         )
 
 

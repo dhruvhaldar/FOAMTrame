@@ -56,3 +56,37 @@ def test_repository_readme_has_documentation_extension_sections():
     assert "Documentation maintenance" in titles
     assert "Extension roadmap" in titles
     assert "Contributing" in titles
+
+
+def test_renderer_turns_supported_mermaid_flowchart_into_accessible_svg():
+    result = render_markdown(
+        """## Architecture
+
+```mermaid
+flowchart LR
+    Browser["Browser UI<br>Vue"]
+    Server["Server<br>Trame"]
+    Browser <-->|"wslink"| Server
+```
+"""
+    )
+
+    assert "<svg viewBox=" in result
+    assert 'role="img"' in result
+    assert "FOAMTrame architecture flowchart" in result
+    assert "Browser UI" in result
+    assert "wslink" in result
+    assert 'class="language-mermaid"' not in result
+
+
+def test_renderer_safely_falls_back_for_unsupported_mermaid():
+    result = render_markdown(
+        """```mermaid
+sequenceDiagram
+    User->>App: Open
+```
+"""
+    )
+
+    assert 'class="language-mermaid"' in result
+    assert "sequenceDiagram" in result

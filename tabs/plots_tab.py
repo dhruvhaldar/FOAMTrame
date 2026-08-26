@@ -1168,6 +1168,7 @@ def build_plots_content():
                         icon=True,
                         small=True,
                         title="Save as PNG",
+                        aria_label=f"Save {title} as PNG",
                         disabled=("plots_loading",),
                         click=lambda key=chart_key: ctrl.plots_export_chart(key),
                     ):
@@ -1176,6 +1177,7 @@ def build_plots_content():
                         icon=True,
                         small=True,
                         title="Maximize plot",
+                        aria_label=f"Maximize {title} plot",
                         click=lambda key=chart_key: ctrl.plots_select_chart(key, True),
                     ):
                         vuetify.VIcon("mdi-arrow-expand-all", small=True)
@@ -1186,6 +1188,7 @@ def build_plots_content():
                         max_width="100%",
                         classes="plot-rendered-image",
                         style="border-radius: 8px;",
+                        alt=f"{title} plot",
                     )
 
     with vuetify.VContainer(
@@ -1201,6 +1204,8 @@ def build_plots_content():
                     text=True,
                     type=("plots_status_type", "info"),
                     classes="mb-2 plots-status-alert",
+                    role="status",
+                    aria_live="polite",
                 ):
                     vuetify.VProgressCircular(
                         v_if="plots_loading",
@@ -1224,14 +1229,20 @@ def build_plots_content():
         fullscreen=True,
         hide_overlay=True,
         transition="dialog-bottom-transition",
+        aria_labelledby="maximized-plot-title",
     ):
         with vuetify.VCard(classes="plots-maximized-dialog"):
             with vuetify.VToolbar(dense=True, classes="glass-navbar flex-grow-0"):
                 with vuetify.VBtn(
-                    icon=True, click="plots_maximized = false", title="Close"
+                    icon=True,
+                    click="plots_maximized = false",
+                    title="Close",
+                    aria_label="Close maximized plot",
                 ):
                     vuetify.VIcon("mdi-close")
-                vuetify.VToolbarTitle("{{ plots_active_chart_title }}")
+                vuetify.VToolbarTitle(
+                    "{{ plots_active_chart_title }}", id="maximized-plot-title"
+                )
                 vuetify.VSpacer()
                 with vuetify.VBtn(
                     text=True,

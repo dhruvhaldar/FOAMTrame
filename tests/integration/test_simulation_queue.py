@@ -5,7 +5,11 @@ import pytest
 
 from backend.case.capabilities import CaseActionService
 from backend.simulation_queue import SequentialSimulationQueue, SimulationJob
-from tabs.run_log_tab import _reconcile_interrupted_history
+from tabs.run_log_tab import (
+    _allrun_skipped_stages,
+    _reconcile_interrupted_history,
+    _summarize_allrun_output,
+)
 
 
 def make_job(job_id: int) -> SimulationJob:
@@ -160,3 +164,29 @@ def test_queue_continues_after_executor_failure():
 
     assert queue.wait_until_idle(timeout=2)
     assert executed == [1, 2]
+
+
+def test_allrun_output_detects_complete_no_op_from_existing_logs():
+    output = """
+[FOAMTrame] >>> ./Allrun
+blockMesh already run on /tmp/FOAM_Run: remove log file 'log.blockMesh' to re-run
+transformPoints already run on /tmp/FOAM_Run: remove log file 'log.transformPoints' to re-run
+foamRun already run on /tmp/FOAM_Run: remove log file 'log.foamRun' to re-run
+"""
+
+    assert _summarize_allrun_output(output) == (
+        ("blockMesh", "log.blockMesh"),
+        ("transformPoints", "log.transformPoints"),
+        ("foamRun", "log.foamRun"),
+    )
+
+
+def test_allrun_output_is_not_no_op_when_any_stage_did_work():
+    output = """
+[FOAMTrame] >>> ./Allrun
+blockMesh already run on /tmp/FOAM_Run: remove log file 'log.blockMesh' to re-run
+Starting time loop
+"""
+
+    assert _summarize_allrun_output(output) is None
+    assert _allrun_skipped_stages(output) == (("blockMesh", "log.blockMesh"),)

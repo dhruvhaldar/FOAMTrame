@@ -84,10 +84,15 @@ state.setdefault("active_tab", 0)
 with SinglePageWithDrawerLayout(server) as layout:
     layout.title.set_text("")
     with layout.title:
+        html.A(
+            "Skip to main content",
+            href="#main-content",
+            classes="foamtrame-skip-link",
+        )
         with html.Div(classes="d-flex align-center"):
             html.Img(
                 src="/static/icons/logo.svg",
-                alt="App Logo",
+                alt="FOAMTrame logo",
                 height="34",
                 classes="mr-2",
                 style="object-fit: contain;",
@@ -107,6 +112,33 @@ with SinglePageWithDrawerLayout(server) as layout:
             margin: 0 !important;
             padding: 0 !important;
             line-height: 1.2 !important;
+        }
+        .foamtrame-skip-link {
+            position: fixed;
+            top: 6px;
+            left: 8px;
+            z-index: 10001;
+            padding: 9px 13px;
+            color: #ffffff !important;
+            background: #075f75;
+            border-radius: 8px;
+            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.3);
+            transform: translateY(-150%);
+            transition: transform 120ms ease;
+        }
+        .foamtrame-skip-link:focus {
+            transform: translateY(0);
+        }
+        .v-application :is(
+            button,
+            [href],
+            input,
+            select,
+            textarea,
+            [tabindex]:not([tabindex="-1"])
+        ):focus-visible {
+            outline: 3px solid rgba(6, 154, 181, 0.78) !important;
+            outline-offset: 2px !important;
         }
 
         .v-application {
@@ -361,21 +393,24 @@ with SinglePageWithDrawerLayout(server) as layout:
         .v-application .setup-advanced-card .v-expansion-panel-header__icon {
             transition: none !important;
         }
-        .v-application .setup-footer-card {
-            padding: 14px 20px !important;
-            overflow: hidden;
+        .v-application .setup-drawer {
+            display: flex;
+            flex-direction: column;
+            min-height: calc(100vh - 48px);
+            overflow-y: auto;
         }
-        .v-application .setup-footer-layout {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) auto;
-            align-items: center;
-            column-gap: 18px;
-            row-gap: 10px;
-            width: 100%;
+        .v-application .setup-sidebar-footer {
+            margin-top: auto;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.58);
+            border: 1px solid rgba(6, 154, 181, 0.18);
+            border-radius: 14px;
+            box-shadow: 0 8px 22px rgba(12, 110, 135, 0.1);
         }
         .v-application .setup-footer-identity {
             min-width: 0;
-            text-align: left;
+            margin-top: 10px;
+            text-align: center;
         }
         .v-application .setup-footer-title {
             color: #0f172a;
@@ -384,6 +419,7 @@ with SinglePageWithDrawerLayout(server) as layout:
             line-height: 1.3;
         }
         .v-application .setup-footer-license,
+        .v-application .setup-footer-build,
         .v-application .setup-footer-label {
             color: #64748b;
             font-size: 0.76rem;
@@ -393,16 +429,28 @@ with SinglePageWithDrawerLayout(server) as layout:
         .v-application .setup-footer-license {
             margin-top: 2px;
         }
+        .v-application .setup-footer-build {
+            margin-top: 3px;
+            color: #0c6e87;
+            font-variant-numeric: tabular-nums;
+        }
         .v-application .setup-footer-powered {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            margin-top: 9px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(100, 116, 139, 0.14);
+            white-space: nowrap;
+        }
+        .v-application .setup-footer-powered-logos {
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 10px;
-            grid-column: 1 / -1;
-            grid-row: 2;
-            padding-top: 9px;
-            border-top: 1px solid rgba(100, 116, 139, 0.14);
-            white-space: nowrap;
+            gap: 9px;
+            max-width: 100%;
         }
         .v-application .setup-footer-docker-logo {
             width: auto;
@@ -590,14 +638,11 @@ with SinglePageWithDrawerLayout(server) as layout:
             min-height: 280px;
             justify-content: flex-start;
         }
-        .v-application .setup-advanced-card,
-        .v-application .setup-footer-card {
+        .v-application .setup-advanced-card {
             flex: 0 0 auto;
         }
         .v-application .footer-openfoam-version {
-            grid-column: 2;
-            grid-row: 1;
-            justify-self: end;
+            justify-content: center;
             gap: 7px;
             min-height: 30px;
             padding: 4px 10px;
@@ -620,31 +665,10 @@ with SinglePageWithDrawerLayout(server) as layout:
             font-weight: 700;
             line-height: 1.2;
         }
-        @media (max-width: 900px) {
-            .v-application .setup-footer-layout {
-                grid-template-columns: 1fr;
-                justify-items: center;
-                gap: 11px;
-            }
-            .v-application .setup-footer-identity {
-                grid-column: 1;
-                grid-row: 1;
-                text-align: center;
-            }
-            .v-application .footer-openfoam-version {
-                grid-column: 1;
-                grid-row: 2;
-                justify-self: center;
-            }
-            .v-application .setup-footer-powered {
-                grid-column: 1;
-                grid-row: 3;
-                width: 100%;
-            }
-        }
         .v-application .run-log-drawer {
             max-height: calc(100vh - 48px);
             overflow-y: auto;
+            overflow-x: hidden;
             scrollbar-width: thin;
             scrollbar-color: rgba(71, 85, 105, 0.5) transparent;
         }
@@ -719,6 +743,79 @@ with SinglePageWithDrawerLayout(server) as layout:
             background: rgba(255, 255, 255, 0.45) !important;
             border: 1px solid rgba(255, 255, 255, 0.72);
             border-radius: 12px;
+        }
+        .v-application .available-actions-btn .v-btn__content {
+            width: 100%;
+        }
+        .v-application .run-action-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 7px;
+        }
+        .v-application .run-action-grid .v-btn {
+            min-width: 0 !important;
+            margin: 0 !important;
+            padding-inline: 8px !important;
+        }
+        .v-application .run-action-grid .v-btn__content {
+            min-width: 0;
+            font-size: 0.68rem;
+            letter-spacing: 0.02em;
+        }
+        .v-application .run-action-grid--cleanup {
+            grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr);
+        }
+        .v-application .run-action-grid--cleanup .v-btn__content {
+            font-size: 0.66rem;
+            letter-spacing: 0.01em;
+        }
+        .v-application .capability-dialog {
+            overflow: hidden;
+            background: rgba(248, 252, 253, 0.98) !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+        }
+        .v-application .capability-dialog__header {
+            color: #063f50;
+            background: linear-gradient(
+                135deg,
+                rgba(207, 250, 254, 0.96),
+                rgba(255, 255, 255, 0.9)
+            );
+            border-bottom: 1px solid rgba(6, 154, 181, 0.22);
+        }
+        .v-application .capability-dialog__icon {
+            display: grid;
+            width: 42px;
+            height: 42px;
+            place-items: center;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #069ab5, #0c6e87);
+            box-shadow: 0 8px 20px rgba(6, 110, 135, 0.24);
+        }
+        .v-application .capability-dialog__list {
+            max-height: min(56vh, 480px);
+            background: rgba(255, 255, 255, 0.98) !important;
+            border-color: rgba(12, 110, 135, 0.2);
+            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+        }
+        .v-application .capability-dialog__list .case-workflow-item {
+            background: rgba(255, 255, 255, 0.96);
+        }
+        .v-application .capability-dialog__list .case-workflow-item:nth-child(even) {
+            background: rgba(241, 248, 250, 0.96);
+        }
+        .v-application .capability-status-chip {
+            min-width: 100px;
+            justify-content: center;
+            font-weight: 600;
+        }
+        .v-application .run-notification {
+            max-width: min(520px, calc(100vw - 32px));
+        }
+        .v-application .run-notification .v-snack__content {
+            font-weight: 600;
+            line-height: 1.45;
         }
         .v-application .case-workflow-item + .case-workflow-item {
             border-top: 1px solid rgba(100, 116, 139, 0.12);
@@ -1426,6 +1523,50 @@ with SinglePageWithDrawerLayout(server) as layout:
             max-width: 1180px;
             margin: 0 auto;
         }
+        .v-application .documentation-drawer {
+            display: flex;
+            flex-direction: column;
+            max-height: calc(100vh - 48px);
+            overflow: hidden;
+        }
+        .v-application .documentation-section-list {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            border: 1px solid rgba(6, 154, 181, 0.16);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.4) !important;
+        }
+        .v-application .documentation-section-item {
+            min-height: 27px !important;
+            margin: 1px 3px !important;
+            border-radius: 7px;
+        }
+        .v-application .documentation-section-marker {
+            align-self: center;
+            min-width: 16px !important;
+            margin-block: 0 !important;
+        }
+        .v-application .documentation-section-title {
+            font-size: 0.72rem;
+            line-height: 1.15;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+        .v-application .documentation-section-item--active {
+            color: #075f75 !important;
+            background: linear-gradient(
+                90deg,
+                rgba(6, 154, 181, 0.16),
+                rgba(207, 250, 254, 0.42)
+            ) !important;
+            font-weight: 700;
+        }
+        .v-application .documentation-status {
+            flex: 0 0 auto;
+            color: #526274;
+            line-height: 1.25;
+        }
         .v-application .documentation-card {
             min-height: calc(100vh - 112px);
         }
@@ -1479,6 +1620,71 @@ with SinglePageWithDrawerLayout(server) as layout:
             background: transparent;
             color: inherit;
             padding: 0;
+        }
+        .v-application .documentation-flowchart {
+            margin: 1.25rem 0 1.5rem;
+            padding: 16px;
+            overflow-x: auto;
+            background: linear-gradient(
+                145deg,
+                rgba(255, 255, 255, 0.94),
+                rgba(224, 247, 250, 0.78)
+            );
+            border: 1px solid rgba(6, 154, 181, 0.22);
+            border-radius: 16px;
+            box-shadow: 0 10px 28px rgba(12, 110, 135, 0.1);
+        }
+        .v-application .documentation-flowchart svg {
+            display: block;
+            min-width: 900px;
+            width: 100%;
+            height: auto;
+        }
+        .v-application .documentation-flowchart__node rect {
+            fill: rgba(255, 255, 255, 0.98);
+            stroke: #069ab5;
+            stroke-width: 2;
+            filter: drop-shadow(0 5px 8px rgba(12, 110, 135, 0.12));
+        }
+        .v-application .documentation-flowchart__node-title,
+        .v-application .documentation-flowchart__node-detail {
+            text-anchor: middle;
+            dominant-baseline: middle;
+            font-family: Inter, Roboto, sans-serif;
+        }
+        .v-application .documentation-flowchart__node-title {
+            fill: #075f75;
+            font-size: 15px;
+            font-weight: 700;
+        }
+        .v-application .documentation-flowchart__node-detail {
+            fill: #475569;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .v-application .documentation-flowchart__edge {
+            fill: none;
+            stroke: #0c6e87;
+            stroke-width: 2;
+        }
+        .v-application .documentation-flowchart marker path {
+            fill: #0c6e87;
+        }
+        .v-application .documentation-flowchart__edge-label {
+            fill: #334155;
+            stroke: rgba(248, 252, 253, 0.96);
+            stroke-width: 6px;
+            paint-order: stroke;
+            text-anchor: middle;
+            font-family: Inter, Roboto, sans-serif;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .v-application .documentation-flowchart figcaption {
+            margin-top: 8px;
+            color: #526274;
+            font-size: 0.75rem;
+            text-align: center;
         }
         .v-application .documentation-content blockquote {
             border-left: 4px solid #069ab5;
@@ -1540,6 +1746,7 @@ with SinglePageWithDrawerLayout(server) as layout:
             background_color="transparent",
             classes="ml-2 compact-navbar-tabs",
             show_arrows=True,
+            aria_label="Primary navigation",
         ):
             vuetify.VTab("Setup")
             vuetify.VTab("Geometry")
@@ -1572,7 +1779,7 @@ with SinglePageWithDrawerLayout(server) as layout:
     # more horizontal room. Keep the standard drawer on compact viewports so
     # the main content is not unnecessarily crowded.
     layout.drawer.width = (
-        "active_tab === 3 && !$vuetify.breakpoint.smAndDown ? 360 : 300",
+        "active_tab === 3 && !$vuetify.breakpoint.smAndDown ? 430 : 300",
     )
     with layout.drawer:
         build_setup_drawer()
@@ -1585,38 +1792,41 @@ with SinglePageWithDrawerLayout(server) as layout:
         build_settings_drawer()
 
     with layout.content:
-        with vuetify.VOverlay(
-            v_model=("docker_checking", True),
-            absolute=True,
-            opacity=0.7,
-            color="#0f172a",
-            classes="d-flex flex-column align-center justify-center text-center",
-            style="z-index: 9999;",
-        ):
-            vuetify.VProgressCircular(
-                indeterminate=True,
-                size=64,
-                width=6,
-                color="cyan lighten-2",
-                classes="mb-4",
-            )
-            html.H3(
-                "{{ setup_status }}",
-                classes="white--text font-weight-medium mb-1",
-            )
-            html.P(
-                "Please wait while Docker integration is initialized...",
-                classes="cyan--text text--lighten-4 text-caption mb-0",
-            )
+        with html.Main(id="main-content", tabindex="-1"):
+            with vuetify.VOverlay(
+                v_model=("docker_checking", True),
+                absolute=True,
+                opacity=0.7,
+                color="#0f172a",
+                classes="d-flex flex-column align-center justify-center text-center",
+                style="z-index: 9999;",
+                aria_live="polite",
+                aria_label="Docker initialization status",
+            ):
+                vuetify.VProgressCircular(
+                    indeterminate=True,
+                    size=64,
+                    width=6,
+                    color="cyan lighten-2",
+                    classes="mb-4",
+                )
+                html.H3(
+                    "{{ setup_status }}",
+                    classes="white--text font-weight-medium mb-1",
+                )
+                html.P(
+                    "Please wait while Docker integration is initialized...",
+                    classes="cyan--text text--lighten-4 text-caption mb-0",
+                )
 
-        build_setup_content()
-        build_geometry_content()
-        build_meshing_content()
-        build_run_log_content()
-        build_plots_content()
-        build_visualizer_content(ctrl)
-        build_documentation_content()
-        build_settings_content()
+            build_setup_content()
+            build_geometry_content()
+            build_meshing_content()
+            build_run_log_content()
+            build_plots_content()
+            build_visualizer_content(ctrl)
+            build_documentation_content()
+            build_settings_content()
 
 
 def main():

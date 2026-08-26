@@ -1,4 +1,4 @@
-from tabs.setup_tab import detect_openfoam_version
+from tabs.setup_tab import detect_openfoam_version, resolve_build_date
 
 
 class FakeContainers:
@@ -28,3 +28,7 @@ def test_openfoam_version_is_read_from_container_environment():
     assert "WM_PROJECT_VERSION" in args[1][2]
     assert kwargs["remove"] is True
     assert kwargs["network_disabled"] is True
+
+
+def test_build_date_accepts_valid_ci_override():
+    assert resolve_build_date({"FOAMTRAME_BUILD_DATE": "2026-08-26"}) == "2026-08-26"

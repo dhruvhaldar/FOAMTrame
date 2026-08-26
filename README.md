@@ -86,8 +86,11 @@ a reachable Docker daemon and configured image.
 
 - Verifies the Trame server, Docker daemon, and configured OpenFOAM image.
 - Detects `WM_PROJECT_VERSION` from the configured Docker image and displays it
-  in the footer, with an explicitly labelled configured-version fallback when
-  the container runtime cannot be inspected.
+  in the always-visible Setup sidebar footer, with an explicitly labelled
+  configured-version fallback when the container runtime cannot be inspected.
+- Shows a dynamic `Build YYYY-MM-DD` value in that footer. Packaged and CI builds
+  may set `FOAMTRAME_BUILD_DATE`; local source runs fall back to the `app.py`
+  modification date.
 - Scans a configurable case-root directory and restores the last active case.
 - Creates a blank OpenFOAM case with `0`, `constant`, and `system` directories.
 - Discovers official tutorials inside the Docker image.
@@ -121,6 +124,9 @@ Placeholder: [tabs/meshing_tab.py](./tabs/meshing_tab.py)
   exact missing prerequisite.
 - Prefers a case-provided `Allrun`; otherwise offers a reviewable guided sequence
   containing only confidently detected preprocessing, meshing, and solver steps.
+- Keeps WORKFLOW, DETECTED COMMANDS, and CLEANUP visible in the wider Run/Log
+  sidebar. The compact command grid remains directly actionable, while the
+  detailed capability list and unavailable reasons open from **Available actions**.
 - Derives the solver application and optional solver module from
   `system/controlDict` instead of assuming `simpleFoam` or `pimpleFoam`.
 - Detects `surfaceFeatureExtract`, `blockMesh`, `snappyHexMesh`, `topoSet`,
@@ -131,6 +137,14 @@ Placeholder: [tabs/meshing_tab.py](./tabs/meshing_tab.py)
   `postProcessing`, `VTK`, and `log.*` files. The initial `0` directory and
   `constant/polyMesh` are preserved.
 - Streams console output and supports stopping the active process.
+- Archives FOAMTrame console output separately from case-owned solver logs. A
+  case-provided `Allrun` remains responsible for `log.foamRun`, so launching or
+  observing a run never truncates an existing residual log.
+- Recognizes OpenFOAM's “already run” output. If every `Allrun` stage is skipped,
+  records the run as **Skipped**, uses a warning status instead of success, and
+  shows a dismissible warning notification with reviewed cleanup guidance. Partial
+  skips retain **Completed** status but are identified in both the console and an
+  informational notification. Existing results are never deleted automatically.
 - Accepts additional validated runs while a simulation is active, executes them
   one at a time in FIFO order, and allows waiting jobs to be cancelled or cleared.
   Each submission retains the case and runtime configuration selected when it was
@@ -193,9 +207,12 @@ Implementation: [tabs/settings_tab.py](./tabs/settings_tab.py) and [app_state.py
 
 - Reads this `README.md` directly from the repository; there is no second copy to
   become stale.
-- Splits level-two headings into manageable, selectable sections in the drawer.
+- Splits level-two headings into a persistent, keyboard-accessible section list in
+  the drawer; all section names remain discoverable without a dropdown.
 - Renders headings, lists, tables, links, quotes, and fenced code blocks locally,
   without a CDN or browser-side Markdown dependency.
+- Converts the supported fenced Mermaid `flowchart LR` subset into accessible
+  inline SVG and safely displays unsupported Mermaid syntax as escaped code.
 - Sanitizes README content before it reaches Vue and provides **Reload README** for
   reviewing edits without restarting FOAMTrame.
 
@@ -540,10 +557,15 @@ Tutorial discovery and import use the configured Docker image. The tutorial is c
 1. Choose an active case under **Setup**.
 2. Open **Run/Log**.
 3. Set the desired process count if parallel execution is required.
-4. Select a command from the drawer.
+4. Select a workflow or detected command from the drawer. Use **Available actions**
+   to review the complete capability list and unavailable reasons.
 5. Follow output in **Console Log Output**.
+6. If `Allrun` is reported as **Skipped**, review **Allclean** or **Safe Clean
+   Generated Outputs** before rerunning. Cleanup is always explicit and confirmed.
 
-Run history records command, case, status, timestamps, and duration.
+Run history records command, case, status, timestamps, and duration. The main
+status chip and run history distinguish completed, skipped, failed, and running
+states using matching success, warning, error, and progress treatments.
 
 ## App-state persistence
 
@@ -841,15 +863,19 @@ in-app **Documentation** page. Keep it useful to both audiences:
 3. Put the outcome and common command first, followed by constraints, alternatives,
    and implementation detail.
 4. Prefer relative repository links and fenced code blocks with a language label.
+   Use fenced `mermaid` with `flowchart LR` for architecture diagrams; the in-app
+   renderer converts the supported node-and-edge subset into accessible inline SVG.
 5. Update the table of contents, relevant feature description, project tree, and
    troubleshooting guidance when a change affects them.
 6. Keep machine-local paths, credentials, API keys, databases, logs, and case
    results out of examples.
 
 The in-app renderer deliberately supports a stable Markdown subset: headings,
-paragraphs, emphasis, links, ordered and unordered lists, blockquotes, tables, and
-fenced code. Raw HTML is not trusted in the application view. Repository-hosted
-Markdown can still use presentation HTML for badges and the centered logo.
+paragraphs, emphasis, links, ordered and unordered lists, blockquotes, tables,
+fenced code, and left-to-right Mermaid flowcharts. Unsupported or malformed
+Mermaid syntax is displayed safely as code instead of being executed. Raw HTML is
+not trusted in the application view. Repository-hosted Markdown can still use
+presentation HTML for badges and the centered logo.
 
 When a topic grows large enough to obscure the main workflow, add a concise
 summary here and move deep reference material into `docs/<topic>.md`. Link the new
