@@ -154,9 +154,7 @@ def _safe_clean_targets_for_signature(
     case_path_str: str, directory_mtime_ns: int
 ) -> tuple[Path, ...]:
     """Scan clean targets once per case-directory signature."""
-    return _case_directory_facts_for_signature(
-        case_path_str, directory_mtime_ns
-    )[2]
+    return _case_directory_facts_for_signature(case_path_str, directory_mtime_ns)[2]
 
 
 def _safe_clean_targets(case_path: Path) -> tuple[Path, ...]:

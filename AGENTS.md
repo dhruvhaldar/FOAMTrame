@@ -460,6 +460,18 @@ uv run --locked ty check
 uv run --locked pytest -q
 ```
 
+After every source change and before handing work back, always run both
+repository-wide Ruff gates exactly as CI does:
+
+```powershell
+uv run --locked ruff check .
+uv run --locked ruff format --check .
+```
+
+Focused lint checks are useful during development but do not replace these final
+repository-wide checks. If the format gate reports files, apply Ruff formatting
+to those files and rerun both commands before declaring the change ready.
+
 On Windows, the system pytest temp root may be inaccessible. In that environment,
 use a unique workspace-local base temp and remove it after the run:
 

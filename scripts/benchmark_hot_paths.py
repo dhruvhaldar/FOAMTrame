@@ -12,7 +12,9 @@ from backend.case.capabilities import CaseActionService
 from backend.plots.realtime_plots import OpenFOAMFieldParser, clear_cache
 
 
-def _measure(operation, *, repeats: int = 9, iterations: int = 20) -> tuple[float, float]:
+def _measure(
+    operation, *, repeats: int = 9, iterations: int = 20
+) -> tuple[float, float]:
     samples = []
     for _ in range(repeats):
         started = time.perf_counter()
