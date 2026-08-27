@@ -116,7 +116,9 @@ def _read_dataset(path: str | Path):
             inner_extension = Path(source.stem).suffix.lower()
             if inner_extension not in {".stl", ".obj", ".ply"}:
                 raise ValueError(f"Unsupported compressed geometry '{source.name}'")
-            with gzip.open(source, "rb") as compressed:
+            # This reads one validated geometry stream; it does not extract archive
+            # member names or permit a caller-controlled destination path.
+            with gzip.open(source, "rb") as compressed:  # nosec: no archive paths
                 with tempfile.NamedTemporaryFile(
                     suffix=inner_extension, delete=False
                 ) as expanded:
