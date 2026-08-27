@@ -145,8 +145,7 @@ def import_resource_geometry(
         raise ValueError("Select a valid OpenFOAM geometry resource.")
 
     case_path = resolve_case_path(case_root, case_name)
-    requested_case_path = Path(case_root).absolute() / case_name
-    tri_surface = requested_case_path / "constant" / "triSurface"
+    tri_surface = case_path / "constant" / "triSurface"
     tri_surface.mkdir(parents=True, exist_ok=True)
     resolved_tri_surface = tri_surface.resolve()
     try:
@@ -155,11 +154,13 @@ def import_resource_geometry(
         raise ValueError(
             "The case triSurface directory resolves outside the active case."
         ) from exc
-    imported = tri_surface / filename
+    imported = resolved_tri_surface / filename
     if imported.is_symlink():
         raise ValueError("The selected destination is an unsafe symbolic link.")
     host_path = (
-        tri_surface.as_posix() if platform.system() == "Windows" else str(tri_surface)
+        resolved_tri_surface.as_posix()
+        if platform.system() == "Windows"
+        else str(resolved_tri_surface)
     )
     shell_script = (
         _OPENFOAM_BASHRC

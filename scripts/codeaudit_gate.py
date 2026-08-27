@@ -42,7 +42,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        from codeaudit.api_interfaces import filescan
+        from codeaudit.api_interfaces import (  # ty: ignore[unresolved-import, unused-ignore-comment]
+            filescan,
+        )
     except ImportError:
         parser.error(
             "CodeAudit is unavailable; use Python 3.11+ and install dev dependencies"

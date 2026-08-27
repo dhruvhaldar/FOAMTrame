@@ -49,6 +49,21 @@ print("hello")
     assert "unsafe" in result
 
 
+def test_renderer_uses_raw_repository_url_only_for_relative_images():
+    result = render_markdown(
+        "![FOAMTrame](./static/icons/logo.svg) [logo source](./static/icons/logo.svg)"
+    )
+
+    assert (
+        'src="https://raw.githubusercontent.com/dhruvhaldar/FOAMTrame/'
+        'main/static/icons/logo.svg"' in result
+    )
+    assert (
+        'href="https://github.com/dhruvhaldar/FOAMTrame/blob/'
+        'main/static/icons/logo.svg"' in result
+    )
+
+
 def test_repository_readme_has_documentation_extension_sections():
     readme = Path(__file__).resolve().parents[2] / "README.md"
     sections = read_documentation(readme)

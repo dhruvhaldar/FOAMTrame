@@ -10,6 +10,7 @@ from trame.widgets import html, vuetify
 
 README_PATH = Path(__file__).resolve().parents[1] / "README.md"
 REPOSITORY_URL = "https://github.com/dhruvhaldar/FOAMTrame"
+RAW_REPOSITORY_URL = "https://raw.githubusercontent.com/dhruvhaldar/FOAMTrame"
 
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 _FENCE_RE = re.compile(r"^```\s*([\w+-]*)\s*$")
@@ -35,10 +36,12 @@ def _slugify(value: str) -> str:
     return slug or "section"
 
 
-def _safe_link(url: str) -> str | None:
+def _safe_link(url: str, *, image: bool = False) -> str | None:
     value = url.strip()
     parsed = urlparse(value)
-    if value.startswith("#") or parsed.scheme in {"http", "https", "mailto"}:
+    if parsed.scheme in {"http", "https"}:
+        return html_lib.escape(value, quote=True)
+    if not image and (value.startswith("#") or parsed.scheme == "mailto"):
         return html_lib.escape(value, quote=True)
     if parsed.scheme or parsed.netloc or not parsed.path or parsed.path.startswith("/"):
         return None
@@ -52,8 +55,14 @@ def _safe_link(url: str) -> str | None:
     if not candidate.exists():
         return None
 
-    object_type = "tree" if candidate.is_dir() else "blob"
     repository_path = quote(relative_path.as_posix(), safe="/")
+    if image:
+        if not candidate.is_file():
+            return None
+        target = f"{RAW_REPOSITORY_URL}/main/{repository_path}"
+        return html_lib.escape(target, quote=True)
+
+    object_type = "tree" if candidate.is_dir() else "blob"
     fragment = f"#{quote(parsed.fragment, safe='-_.~')}" if parsed.fragment else ""
     target = f"{REPOSITORY_URL}/{object_type}/main/{repository_path}{fragment}"
     return html_lib.escape(target, quote=True)
@@ -66,8 +75,8 @@ def _inline_markdown(value: str) -> str:
         output.append(html_lib.escape(value[cursor : match.start()]))
         image_alt, image_url, link_text, link_url, code, strong = match.groups()
         if image_alt is not None:
-            safe_url = _safe_link(image_url)
-            if safe_url and urlparse(image_url).scheme in {"http", "https"}:
+            safe_url = _safe_link(image_url, image=True)
+            if safe_url:
                 output.append(
                     f'<img src="{safe_url}" alt="{html_lib.escape(image_alt, quote=True)}" '
                     'loading="lazy">'
