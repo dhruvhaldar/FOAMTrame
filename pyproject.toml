@@ -46,7 +46,7 @@ exclude = [
 ]
 
 [tool.ty.analysis]
-allowed-unresolved-imports = ["accelerator", "pyvista"]
+allowed-unresolved-imports = ["accelerator", "codeaudit.api_interfaces", "pyvista"]
 
 [tool.ty.environment]
 python-platform = "all"
