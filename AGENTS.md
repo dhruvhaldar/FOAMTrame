@@ -142,7 +142,8 @@ live under `backend/`.
 - `app.py`: primary Trame server.
 - `flask_server.py`: optional companion HTTP API; it is not needed by the Trame UI.
 - `start.ps1` / `start.sh`: supported launchers. They invoke `run.py` so complete
-  child output is captured.
+  child output is captured. A synchronized `.venv` is executed directly on normal
+  starts; verified Python/uv bootstrapping is only the missing-environment fallback.
 - `install.ps1` / `install.sh`: thin platform wrappers around `install.py`.
 - `manage.py`: database initialization and machine-readable diagnostics.
 
@@ -245,6 +246,12 @@ unless a component truly owns it.
   OpenFOAM Library visible but disabled until a case is active.
 - The OpenFOAM Library lists `$FOAM_TUTORIALS/resources/geometry` from the
   configured image and imports only a validated filename into the active case.
+- Resolve the case and `constant/triSurface` destination canonically before the
+  Docker bind mount and return the same canonical path on every platform. A
+  completed background import may persist its captured case selection, but must
+  update options, status, and VTK rendering only if that case is still active.
+- A failed custom-dataset replacement must leave the previously rendered dataset
+  and filename intact.
 - Geometry preferences participate in SQLite persistence and portable backup/
   restore. Geometry files stay in case directories and custom uploads remain
   session-only; neither belongs in SQLite or JSON backups.
@@ -280,6 +287,10 @@ exist.
 - Gate commands by their real prerequisites, including dictionaries, processor
   directories, result times, scripts, and Docker executables.
 - `Allclean` requires confirmation.
+- Do not keep the current Allclean archive open inside `<case>/logs/` while the
+  case script runs. Spool its console output outside the bind-mounted case and
+  publish `run_<id>.log` only after the container exits, so Windows file locking
+  cannot make the case-owned cleanup fail.
 - The generated safe-clean action must preview the exact generated paths and remove
   only reviewed targets inside the active case. Never broaden its deletion scope.
 - Destructive-action confirmation cards must remain visibly glass-styled while
@@ -315,6 +326,9 @@ exist.
 - Plot data should be checked eagerly when the app starts and when an active case
   is selected. Entering Plots should show a meaningful loading state and then the
   relevant cached or live data without a manual refresh button.
+- Keep Matplotlib off the server-readiness critical path. Initial plot placeholders
+  are lightweight SVG data URIs; load Matplotlib and bundled fonts on the first
+  real chart render while preserving eager background data discovery.
 - A running simulation is live; a completed simulation is cached. Do not invert the
   labels or slider state.
 - Poll incrementally while a simulation is active and stop unnecessary full reads
@@ -364,6 +378,10 @@ changing plot layout.
   when viewport height makes it unavoidable.
 - Keep README reload status available as a polite live region and preserve the
   accessible name on the icon-only reload control.
+- Validate repository-relative Markdown targets against the repository root.
+  Ordinary file and directory links map to GitHub blob/tree URLs; relative image
+  files map to `raw.githubusercontent.com`. Reject traversal, missing targets, and
+  directories used as images.
 
 ## Optional security
 
@@ -446,7 +464,12 @@ logs/YYYYMMDD/install.log
   stderr, and exit code.
 - `install.log` captures silent installer commands and output.
 - Case-local simulation archives under `<case>/logs/` are separate domain data and
-  remain keyed by run ID.
+  remain keyed by run ID. Allclean archives are staged outside the case until the
+  cleanup container exits, then copied back under the same run-ID convention.
+- Normal launches must use the installed `.venv` directly. Keep Python and `uv`
+  probing as a fallback for a missing environment rather than recurring startup
+  work. `FOAMTRAME_STARTUP_TIMING=1` enables import/controller/layout checkpoints;
+  `benchmarks/benchmark_startup.py` measures time to the first HTTP 200 response.
 
 ## Testing and verification
 
@@ -498,6 +521,10 @@ Test expectations:
 - OpenFOAM footer version behavior: update
   `tests/integration/test_openfoam_version.py`.
 - Entry-point changes must keep `tests/smoke/test_server_starts.py` passing.
+- Startup-path changes: run `benchmarks/benchmark_startup.py` and keep
+  `tests/integration/test_startup_optimization.py` passing.
+- Run archive/queue changes: update `tests/integration/test_simulation_queue.py`.
+- Documentation renderer changes: update `tests/integration/test_documentation.py`.
 
 For UI changes, also inspect the actual running app at a desktop viewport and at
 least one constrained viewport. Confirm no clipping, overflow, layout jump, hidden
@@ -517,6 +544,9 @@ settings merely to test conditional UI.
 - Keep documentation, schema examples, runtime behavior, and tests synchronized.
 - Keep the CodeAudit CI gate clean at medium severity and above. Use inline
   `# nosec` only for reviewed false positives and include the reason.
+- CodeAudit is a Python 3.11+ development dependency. Keep its direct optional
+  import in `scripts/codeaudit_gate.py`; `pyproject.toml` narrowly allows
+  `codeaudit.api_interfaces` to be unresolved during Python 3.10 type checking.
 - Do not claim a fix is complete solely because code compiles. Run proportionate
   tests and visually verify layout changes.
 - If Docker is unavailable, keep the UI functional and report the limitation
