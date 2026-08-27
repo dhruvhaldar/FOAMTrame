@@ -174,17 +174,24 @@ def setup_settings_tab(server):
         try:
             restored = restore_app_state_json(state.app_state_restore_pending)
             config = restored["case_config"]
+            geometry_preferences = restored["geometry_preferences"]
+            if hasattr(ctrl, "apply_restored_geometry_preferences"):
+                ctrl.apply_restored_geometry_preferences(
+                    geometry_preferences, config["ACTIVE_CASE"]
+                )
             state.case_root = config["CASE_ROOT"]
             state.docker_image = config["DOCKER_IMAGE"]
             state.openfoam_version = config["OPENFOAM_VERSION"]
             state.active_case = config["ACTIVE_CASE"]
             state.run_history = restored["run_history"]
-            geometry_preferences = restored["geometry_preferences"]
             restored_geometry_mode = geometry_preferences["preferred_mode"]
             if not config["ACTIVE_CASE"] and restored_geometry_mode != "custom":
                 restored_geometry_mode = "custom"
             state.geometry_mode = restored_geometry_mode
             state.geometry_library_selection = geometry_preferences["library_selection"]
+            state.geometry_case_selection = geometry_preferences.get(
+                "case_geometry_selections", {}
+            ).get(config["ACTIVE_CASE"], "")
             publish_security_preferences(restored["security_preferences"])
             state.app_state_backup_json = json.dumps(restored, indent=2) + "\n"
             state.app_state_restore_pending = ""

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from tabs.geometry_tab import _schedule_on_event_loop
+from tabs.geometry_tab import _replace_geometry_preferences, _schedule_on_event_loop
 
 pytestmark = pytest.mark.integration
 
@@ -36,3 +36,20 @@ def test_geometry_completion_is_not_run_without_event_loop():
 
     assert _schedule_on_event_loop(None, lambda: completed.append(True)) is False
     assert completed == []
+
+
+def test_restored_geometry_preferences_replace_live_cache():
+    current = {
+        "library_selection": "old.stl.gz",
+        "case_geometry_selections": {"aerofoil": "old.stl.gz"},
+    }
+    restored = {
+        "preferred_mode": "case",
+        "library_selection": "flange.stl.gz",
+        "case_geometry_selections": {"aerofoil": "flange.stl.gz"},
+    }
+
+    selections = _replace_geometry_preferences(current, restored, "aerofoil")
+
+    assert selections == ("flange.stl.gz", "flange.stl.gz")
+    assert current == restored

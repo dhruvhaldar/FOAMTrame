@@ -141,11 +141,10 @@ def _is_expected_wslink_disconnect(context: Mapping[str, Any]) -> bool:
 
 
 def install_asyncio_exception_handler(
-    loop: asyncio.AbstractEventLoop | None = None,
+    loop: asyncio.AbstractEventLoop,
 ) -> None:
     """Ignore the harmless wslink send race when a browser disconnects."""
-    event_loop = loop or asyncio.get_event_loop()
-    previous_handler = event_loop.get_exception_handler()
+    previous_handler = loop.get_exception_handler()
     if getattr(previous_handler, "_foamtrame_disconnect_handler", False):
         return
 
@@ -163,7 +162,7 @@ def install_asyncio_exception_handler(
             active_loop.default_exception_handler(context)
 
     setattr(handle_exception, "_foamtrame_disconnect_handler", True)
-    event_loop.set_exception_handler(handle_exception)
+    loop.set_exception_handler(handle_exception)
 
 
 def ensure_runtime_directories(config: RuntimeSettings = settings) -> None:

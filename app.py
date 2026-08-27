@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import sys
 
 from runtime import configure_logging, install_asyncio_exception_handler, settings
@@ -64,6 +65,12 @@ server.serve["static"] = "static"
 state, ctrl = server.state, server.controller
 startup_security_preferences = load_security_preferences()
 apply_trame_security(server, startup_security_preferences)
+
+
+@ctrl.add("on_server_ready")
+def install_runtime_asyncio_exception_handler(**_):
+    install_asyncio_exception_handler(asyncio.get_running_loop())
+
 
 # Set browser page title and favicon
 state.trame__title = "FOAMTrame"
@@ -2061,7 +2068,6 @@ with SinglePageWithDrawerLayout(server) as layout:
 
 def main():
     assert server is not None
-    install_asyncio_exception_handler()
     args, _ = server.cli.parse_known_args()
     if args.data:
         try:

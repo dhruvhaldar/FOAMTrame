@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Callable
 
 from tabs import setup_tab
 
@@ -37,6 +38,7 @@ class FakeState:
 class FakeController:
     def __init__(self):
         self.events = {}
+        self.import_tutorial_case: Callable[[], None] = lambda: None
 
     def add(self, name):
         def register(callback):

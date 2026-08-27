@@ -26,6 +26,11 @@ _ALREADY_RUN_LINE = re.compile(
     r"^(?P<stage>\S+) already run on .+?: remove log file "
     r"['\"](?P<log>log\.[^'\"]+)['\"] to re-run\s*$"
 )
+_ALLRUN_EXECUTION_EVIDENCE = re.compile(
+    r"^(?:Running\b|Executing\b|Starting time loop\b|Create time\b|"
+    r"Time\s*=|Application\s*:)",
+    re.IGNORECASE,
+)
 _ALLRUN_DIAGNOSTIC_LIMIT = 256 * 1024
 _CONSOLE_ACTIONS = ("Safe Clean Generated Outputs", "Allclean")
 
@@ -74,7 +79,7 @@ def _allrun_skipped_stages(output: str) -> tuple[tuple[str, str], ...]:
 
 
 def _summarize_allrun_output(output: str) -> tuple[tuple[str, str], ...] | None:
-    """Return skipped Allrun stages, or ``None`` when actual work was also seen."""
+    """Return skipped stages unless output contains evidence of actual work."""
     skipped: list[tuple[str, str]] = []
     for raw_line in output.splitlines():
         line = raw_line.strip()
@@ -82,7 +87,12 @@ def _summarize_allrun_output(output: str) -> tuple[tuple[str, str], ...] | None:
             continue
         match = _ALREADY_RUN_LINE.fullmatch(line)
         if match is None:
-            return None
+            if _ALLRUN_EXECUTION_EVIDENCE.match(line):
+                return None
+            # Case-authored Allrun scripts commonly print banners, separators,
+            # and context around runApplication's "already run" diagnostics.
+            # Such prose is not evidence that a stage executed.
+            continue
         skipped.append((match.group("stage"), match.group("log")))
     return tuple(skipped) if skipped else None
 

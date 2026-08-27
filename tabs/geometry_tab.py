@@ -86,6 +86,19 @@ def _schedule_on_event_loop(event_loop: Any, callback: Callable[[], None]) -> bo
     return True
 
 
+def _replace_geometry_preferences(
+    current: dict[str, Any], restored: dict[str, Any], active_case: str
+) -> tuple[str, str]:
+    """Replace the live preference cache and return restored UI selections."""
+    current.clear()
+    current.update(restored)
+    library_selection = str(restored.get("library_selection", ""))
+    case_selection = str(
+        restored.get("case_geometry_selections", {}).get(active_case, "")
+    )
+    return library_selection, case_selection
+
+
 def _reader_for(path: str | Path):
     extension = Path(path).suffix.lower()
     reader_class = READERS.get(extension)
@@ -172,6 +185,17 @@ def setup_geometry_tab(server):
         }
         if changed and update_geometry_preferences(changed):
             preferences.update(changed)
+
+    def apply_restored_geometry_preferences(
+        restored_preferences: dict[str, Any], active_case: str
+    ) -> None:
+        library_selection, case_selection = _replace_geometry_preferences(
+            preferences, restored_preferences, active_case
+        )
+        state.geometry_library_selection = library_selection
+        state.geometry_case_selection = case_selection
+
+    ctrl.apply_restored_geometry_preferences = apply_restored_geometry_preferences
 
     @ctrl.add("on_server_ready")
     def capture_geometry_event_loop(**_):

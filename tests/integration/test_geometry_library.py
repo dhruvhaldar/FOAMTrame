@@ -122,6 +122,27 @@ def test_resource_import_uses_positional_filename_and_case_mount():
         assert options["volumes"][imported.parent.as_posix()]["bind"] == "/output"
 
 
+def test_resource_import_rejects_tri_surface_symlink_outside_case():
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        constant = root / "cavity" / "constant"
+        constant.mkdir(parents=True)
+        outside = root / "shared"
+        outside.mkdir()
+        try:
+            (constant / "triSurface").symlink_to(outside, target_is_directory=True)
+        except OSError:
+            pytest.skip()
+
+        client = FakeDockerClient()
+        with pytest.raises(ValueError, match="resolves outside the active case"):
+            import_resource_geometry(
+                client, "openfoam:test", "12", root, "cavity", "motorBike.stl"
+            )
+
+        assert client.containers.calls == []
+
+
 @pytest.mark.parametrize(
     "name", ["../escape.stl", "bad name.stl", "script.sh", "nested/body.obj"]
 )

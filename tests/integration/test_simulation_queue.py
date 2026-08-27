@@ -182,6 +182,22 @@ foamRun already run on /tmp/FOAM_Run: remove log file 'log.foamRun' to re-run
     )
 
 
+def test_allrun_banners_do_not_turn_complete_no_op_into_partial_skip():
+    output = """
+[FOAMTrame] >>> ./Allrun
+================ Aerofoil workflow ================
+Checking existing stages
+blockMesh already run on /tmp/FOAM_Run: remove log file 'log.blockMesh' to re-run
+foamRun already run on /tmp/FOAM_Run: remove log file 'log.foamRun' to re-run
+---------------------------------------------------
+"""
+
+    assert _summarize_allrun_output(output) == (
+        ("blockMesh", "log.blockMesh"),
+        ("foamRun", "log.foamRun"),
+    )
+
+
 def test_allrun_output_is_not_no_op_when_any_stage_did_work():
     output = """
 [FOAMTrame] >>> ./Allrun
