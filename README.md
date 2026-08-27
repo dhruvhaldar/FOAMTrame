@@ -394,7 +394,9 @@ provided with those platform-specific packages, an already synchronized `.venv`,
 or a populated `uv` cache. Docker-based OpenFOAM operations additionally require
 Docker and the configured image to already be installed locally. Once these assets
 are present, `start.ps1` and `start.sh` are independent of global Python and `uv`
-installations.
+installations. The launchers use the installed `.venv` directly on normal starts;
+the verified Python and `uv` bootstrap path is retained as a fallback when that
+environment is absent.
 
 ### Automated silent-install examples
 
@@ -528,6 +530,7 @@ uv run --locked python manage.py init-db
 | `FOAMTRAME_LOG_DIR` | `<data-dir>/logs` | Base directory for date-grouped application logs |
 | `FOAMTRAME_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL` |
 | `FOAMTRAME_FRAMEWORK_LOG_LEVEL` | `WARNING` | Trame/wslink verbosity; set to `INFO` only for framework diagnostics |
+| `FOAMTRAME_STARTUP_TIMING` | Disabled | Set to `1` to log timed import, controller, layout, and server-ready checkpoints |
 | `FOAMTRAME_PORT` | Installer selection (`8087` when skipped) | Override the installed port when `--port` is omitted |
 
 Operational logs are grouped by the local start date using `YYYYMMDD` folders.
@@ -537,6 +540,16 @@ verbatim to `logs/YYYYMMDD/run.log`, including child stdout, stderr, the invoked
 command, timestamps, and exit code. Silent installer output uses
 `logs/YYYYMMDD/install.log`. CLI `--host` and `--port` override runtime defaults. When `--host` is
 omitted, the Trame host comes from **Settings → Security** (`127.0.0.1` by default).
+
+Measure first-HTTP-response startup time without changing real settings:
+
+```powershell
+.\.venv\Scripts\python.exe benchmarks\benchmark_startup.py --runs 3
+```
+
+Add `--verbose` to include the internal startup checkpoints for bottleneck
+diagnosis. The benchmark uses a temporary database, log directory, and free
+loopback port for every run.
 
 ### Load a dataset at startup
 
@@ -605,9 +618,16 @@ JSON is now an interchange format only. A portable backup schema example remains
   },
   "geometry_preferences": {
     "preferred_mode": "case",
-    "library_selection": ""
+    "library_selection": "",
+    "case_geometry_selections": {}
   },
   "run_history": [],
+  "plot_preferences": {
+    "font": "roboto",
+    "background": "glass",
+    "logo_mode": "foamtrame",
+    "custom_logo_data": ""
+  },
   "security_preferences": {
     "security_enabled": false,
     "bind_mode": "loopback",

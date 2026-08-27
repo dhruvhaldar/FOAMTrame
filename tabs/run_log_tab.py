@@ -6,10 +6,13 @@ import logging
 import os
 import platform
 import re
+import shutil
+import tempfile
 import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import IO
 from trame.widgets import html, vuetify
 
 from app_state import load_run_history, update_run_history
@@ -33,6 +36,43 @@ _ALLRUN_EXECUTION_EVIDENCE = re.compile(
 )
 _ALLRUN_DIAGNOSTIC_LIMIT = 256 * 1024
 _CONSOLE_ACTIONS = ("Safe Clean Generated Outputs", "Allclean")
+
+
+class _RunArchive:
+    """Stream console output without exposing an open file to case cleanup."""
+
+    def __init__(self, path: Path, *, defer_publish: bool = False):
+        self.path = path
+        self.defer_publish = defer_publish
+        self.stream: IO[str] | None = None
+
+    def open(self) -> "_RunArchive":
+        if self.defer_publish:
+            self.stream = tempfile.TemporaryFile(
+                mode="w+", encoding="utf-8", buffering=1
+            )
+        else:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self.stream = self.path.open("w", encoding="utf-8", buffering=1)
+        return self
+
+    def write(self, value: str) -> None:
+        if self.stream is not None:
+            self.stream.write(value)
+
+    def publish(self) -> None:
+        if not self.defer_publish or self.stream is None:
+            return
+        self.stream.flush()
+        self.stream.seek(0)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with self.path.open("w", encoding="utf-8", buffering=1) as destination:
+            shutil.copyfileobj(self.stream, destination)
+
+    def close(self) -> None:
+        if self.stream is not None:
+            self.stream.close()
+            self.stream = None
 
 
 def _format_console_log_html(log_text: str) -> str:
@@ -480,7 +520,6 @@ def setup_run_log_tab(server):
             )
             _active_container[0] = container
             log_dir = job.case_path / "logs"
-            log_dir.mkdir(parents=True, exist_ok=True)
             archive_log_path = log_dir / f"run_{job.id}.log"
             # A case-supplied Allrun owns its log.foamRun. Opening it here would
             # truncate existing results and can race OpenFOAM's runApplication.
@@ -491,14 +530,16 @@ def setup_run_log_tab(server):
             )
             live_log = None
             archive_log = None
+            exit_code = 0
             console_chunks: list[str] = []
             console_chars = 0
             diagnostic_truncated = False
             try:
                 try:
-                    archive_log = archive_log_path.open(
-                        "w", encoding="utf-8", buffering=1
-                    )
+                    archive_log = _RunArchive(
+                        archive_log_path,
+                        defer_publish=job.action_ids == ("allclean",),
+                    ).open()
                 except OSError as log_err:
                     logger.warning("Could not open run archive log: %s", log_err)
                 if live_log_path is not None:
@@ -529,12 +570,17 @@ def setup_run_log_tab(server):
                         new_text[-50000:] if len(new_text) > 60000 else new_text
                     )
                     publish_state("run_log_text")
+                exit_code = container.wait().get("StatusCode", 0)
+                if archive_log is not None:
+                    try:
+                        archive_log.publish()
+                    except OSError as log_err:
+                        logger.warning("Could not publish run archive log: %s", log_err)
             finally:
                 if archive_log is not None:
                     archive_log.close()
                 if live_log is not None:
                     live_log.close()
-            exit_code = container.wait().get("StatusCode", 0)
             if exit_code != 0:
                 status = "Failed"
             elif job.action_ids == ("allrun",) and not diagnostic_truncated:

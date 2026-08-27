@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import os
 import sys
+import time
+
+_STARTUP_STARTED = time.perf_counter()
 
 from runtime import configure_logging, install_asyncio_exception_handler, settings
 from app_state import load_security_preferences
@@ -12,10 +17,29 @@ from security import (
 )
 
 configure_logging()
+logger = logging.getLogger("FOAMTrame")
+_STARTUP_TIMING_ENABLED = os.environ.get("FOAMTRAME_STARTUP_TIMING", "").strip() in {
+    "1",
+    "true",
+    "yes",
+}
+
+
+def _startup_checkpoint(step: str) -> None:
+    level = logging.INFO if _STARTUP_TIMING_ENABLED else logging.DEBUG
+    logger.log(
+        level,
+        "Startup +%.3fs: %s",
+        time.perf_counter() - _STARTUP_STARTED,
+        step,
+    )
+
 
 from trame.app import get_server
 from trame.ui.vuetify import SinglePageWithDrawerLayout
 from trame.widgets import vuetify, html, client
+
+_startup_checkpoint("Trame imports complete")
 
 from tabs.geometry_tab import (
     build_geometry_content,
@@ -58,6 +82,8 @@ from tabs.visualizer_tab import (
     setup_visualizer_tab,
 )
 
+_startup_checkpoint("tab imports complete")
+
 server = get_server(client_type="vue2")
 assert server is not None
 server.cli.add_argument("--data", help="Optional dataset to load at startup")
@@ -70,6 +96,7 @@ apply_trame_security(server, startup_security_preferences)
 @ctrl.add("on_server_ready")
 def install_runtime_asyncio_exception_handler(**_):
     install_asyncio_exception_handler(asyncio.get_running_loop())
+    _startup_checkpoint("server ready")
 
 
 # Set browser page title and favicon
@@ -85,6 +112,8 @@ setup_plots_tab(server)
 load_dataset = setup_visualizer_tab(server)
 setup_settings_tab(server)
 setup_documentation_tab(server)
+
+_startup_checkpoint("tab controllers initialized")
 
 state.setdefault("active_tab", 0)
 
@@ -2064,6 +2093,8 @@ with SinglePageWithDrawerLayout(server) as layout:
             build_visualizer_content(ctrl)
             build_documentation_content()
             build_settings_content()
+
+_startup_checkpoint("UI layout built")
 
 
 def main():

@@ -6,6 +6,7 @@ import pytest
 from backend.case.capabilities import CaseActionService
 from backend.simulation_queue import SequentialSimulationQueue, SimulationJob
 from tabs.run_log_tab import (
+    _RunArchive,
     _allrun_skipped_stages,
     _format_console_log_html,
     _reconcile_interrupted_history,
@@ -222,3 +223,18 @@ def test_console_highlighting_escapes_output_and_emphasizes_cleanup_actions():
     assert "console-line--error" in rendered
     assert '<strong class="console-action">Allclean</strong>' in rendered
     assert "Safe Clean Generated Outputs</strong>" in rendered
+
+
+def test_deferred_run_archive_is_absent_until_cleanup_finishes(tmp_path):
+    archive_path = tmp_path / "case" / "logs" / "run_42.log"
+    archive = _RunArchive(archive_path, defer_publish=True).open()
+    try:
+        archive.write("Cleaning case\n")
+        assert not archive_path.exists()
+        assert not archive_path.parent.exists()
+
+        archive.publish()
+
+        assert archive_path.read_text(encoding="utf-8") == "Cleaning case\n"
+    finally:
+        archive.close()

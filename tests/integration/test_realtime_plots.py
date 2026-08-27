@@ -65,6 +65,23 @@ def test_residual_parser_defers_incomplete_final_record(tmp_path):
     clear_cache(str(tmp_path))
 
 
+def test_residual_parser_backfills_field_first_seen_after_later_time(tmp_path):
+    log_path = tmp_path / "log.foamRun"
+    log_path.write_text(
+        "Time = 0\n"
+        "Time = 1\n"
+        "smoothSolver: Solving for alpha.water, Initial residual = 1e-3, "
+        "Final residual = 1e-7, No Iterations 1\n",
+        encoding="utf-8",
+    )
+
+    residuals = OpenFOAMFieldParser(tmp_path).get_residuals_from_log()
+
+    assert list(residuals["time"]) == [0.0, 1.0]
+    assert list(residuals["alpha.water"]) == [0.0, 1e-3]
+    clear_cache(str(tmp_path))
+
+
 def test_plot_appearance_export_and_custom_logo():
     glass = _plot_style("glass", "helvetica_neue")
     roboto = _plot_style("glass", "roboto")

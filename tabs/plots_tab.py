@@ -7,6 +7,7 @@ import logging
 import os
 import threading
 import time
+from html import escape
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -16,15 +17,6 @@ from PIL import Image
 from trame.widgets import client, html, vuetify
 
 logger = logging.getLogger("FOAMTrame")
-
-# Matplotlib backend must be set before importing pyplot
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import matplotlib.ticker as mticker
-from matplotlib import font_manager
-from matplotlib.offsetbox import AnnotationBbox, OffsetImage
 
 from app_state import load_plot_preferences, update_plot_preferences
 
@@ -40,14 +32,64 @@ _LIBERATION_SERIF_FONT_PATH = (
     _PROJECT_ROOT / "static" / "fonts" / "LiberationSerif-Regular.ttf"
 )
 _FOAMFLASK_LOGO_PATH = _PROJECT_ROOT / "static" / "icons" / "foamflask-plot-logo.png"
+_matplotlib_lock = threading.Lock()
+_matplotlib_loaded = False
+matplotlib: Any = None
+plt: Any = None
+mticker: Any = None
+font_manager: Any = None
+AnnotationBbox: Any = None
+OffsetImage: Any = None
 
-for _font_path in (
-    _HEROS_FONT_PATH,
-    _ROBOTO_FONT_PATH,
-    _LIBERATION_SERIF_FONT_PATH,
-):
-    if _font_path.is_file():
-        font_manager.fontManager.addfont(str(_font_path))
+
+def _load_matplotlib() -> None:
+    """Load the plotting stack on first render, after the web server can start."""
+    global _matplotlib_loaded
+    global AnnotationBbox, OffsetImage, font_manager, matplotlib, mticker, plt
+    if _matplotlib_loaded:
+        return
+    with _matplotlib_lock:
+        if _matplotlib_loaded:
+            return
+        import matplotlib as matplotlib_module
+
+        matplotlib_module.use("Agg")
+        import matplotlib.pyplot as pyplot_module
+        import matplotlib.ticker as ticker_module
+        from matplotlib import font_manager as font_manager_module
+        from matplotlib.offsetbox import AnnotationBbox as annotation_bbox_class
+        from matplotlib.offsetbox import OffsetImage as offset_image_class
+
+        matplotlib = matplotlib_module
+        plt = pyplot_module
+        mticker = ticker_module
+        font_manager = font_manager_module
+        AnnotationBbox = annotation_bbox_class
+        OffsetImage = offset_image_class
+
+        for font_path in (
+            _HEROS_FONT_PATH,
+            _ROBOTO_FONT_PATH,
+            _LIBERATION_SERIF_FONT_PATH,
+        ):
+            if font_path.is_file():
+                font_manager.fontManager.addfont(str(font_path))
+        _matplotlib_loaded = True
+
+
+def _placeholder_chart(message: str) -> str:
+    """Return a cheap startup placeholder without importing Matplotlib."""
+    label = escape(message, quote=True)
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="840" height="392" '
+        'viewBox="0 0 840 392" role="img">'
+        '<rect width="100%" height="100%" fill="none"/>'
+        '<text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" '
+        'fill="#475569" font-family="Arial, sans-serif" font-size="20">'
+        f"{label}</text></svg>"
+    )
+    return "data:image/svg+xml;base64," + base64.b64encode(svg.encode()).decode()
+
 
 # Fields always attempted for residuals
 _RESIDUAL_FIELDS = ["Ux", "Uy", "Uz", "p", "k", "epsilon", "omega", "T", "rho"]
@@ -93,6 +135,7 @@ _LIGHT_COLORS = [
 
 
 def _font_properties(font_choice: str) -> font_manager.FontProperties:
+    _load_matplotlib()
     if font_choice == "helvetica_neue" and _HEROS_FONT_PATH.is_file():
         return font_manager.FontProperties(fname=str(_HEROS_FONT_PATH))
     if font_choice == "roboto" and _ROBOTO_FONT_PATH.is_file():
@@ -194,6 +237,7 @@ def _plot_style(
 
 @cached(LRUCache(maxsize=4))
 def _logo_array(logo_mode: str, custom_logo_data: str = "") -> Optional[np.ndarray]:
+    _load_matplotlib()
     try:
         if logo_mode == "foamflask" and _FOAMFLASK_LOGO_PATH.is_file():
             with Image.open(_FOAMFLASK_LOGO_PATH) as image:
@@ -213,6 +257,7 @@ def _logo_array(logo_mode: str, custom_logo_data: str = "") -> Optional[np.ndarr
 
 def _add_plot_logo(ax, style: Dict[str, Any]):
     """Place the logo in a reserved right margin, never over plotted data."""
+    _load_matplotlib()
     logo = _logo_array(style["logo_mode"], style["custom_logo_data"])
     if logo is None:
         return None
@@ -267,6 +312,7 @@ def _add_non_overlapping_legend(ax, style: Dict[str, Any]):
 
 def _fig_to_b64(fig: plt.Figure, style: Optional[Dict[str, Any]] = None) -> str:
     """Render a matplotlib figure to a base64-encoded PNG data URI."""
+    _load_matplotlib()
     style = style or _plot_style()
     buf = io.BytesIO()
     fig.savefig(
@@ -535,11 +581,11 @@ def setup_plots_tab(server):
 
     # --- State defaults ---
     initial_case = getattr(state, "active_case", "") or ""
-    loading_chart = _make_empty_chart("Loading...")
+    loading_chart = _placeholder_chart("Loading...")
     initial_chart = (
         loading_chart
         if initial_case
-        else _make_empty_chart("Select an active case to start")
+        else _placeholder_chart("Select an active case to start")
     )
     state.setdefault("plots_scalar_chart", initial_chart)
     state.setdefault("plots_umag_chart", initial_chart)

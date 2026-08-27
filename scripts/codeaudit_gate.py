@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import importlib
 from pathlib import Path
 from typing import Any
 
@@ -43,9 +42,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        filescan = importlib.import_module(  # nosec: fixed optional dependency module
-            "codeaudit.api_interfaces"
-        ).filescan
+        from codeaudit.api_interfaces import filescan
     except ImportError:
         parser.error(
             "CodeAudit is unavailable; use Python 3.11+ and install dev dependencies"

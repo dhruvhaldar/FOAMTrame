@@ -25,7 +25,7 @@ def test_renderer_supports_readme_structure_and_escapes_raw_html():
     result = render_markdown(
         """## Guide
 
-**Safe** [site](https://example.com) [local](./secret)
+**Safe** [site](https://example.com) [license](./LICENSE) [unsafe](../secret)
 
 | Name | Value |
 | --- | --- |
@@ -41,7 +41,8 @@ print("hello")
 
     assert "<strong>Safe</strong>" in result
     assert 'href="https://example.com"' in result
-    assert "./secret" not in result
+    assert 'href="https://github.com/dhruvhaldar/FOAMTrame/blob/main/LICENSE"' in result
+    assert "../secret" not in result
     assert "<table>" in result
     assert 'class="language-python"' in result
     assert "<script>" not in result

@@ -1332,9 +1332,6 @@ class OpenFOAMFieldParser:
                 # ⚡ Bolt Optimization: Avoid intermediate buffer allocation
                 # Append directly to residuals to save memory and avoid copying.
                 # If parsing fails, the cache entry is cleared anyway, so partial updates are safe.
-                # We capture initial length to support backfilling new fields.
-                initial_steps_count = len(residuals["time"])
-
                 if size == 0:
                     os.close(fd)
                     fd = None
@@ -1395,8 +1392,12 @@ class OpenFOAMFieldParser:
                         try:
                             val = float(line[val_start:val_end])
                             if field not in residuals:
+                                # The residual belongs to the most recent Time
+                                # record. Backfill every earlier record parsed in
+                                # this read as well as records from the cache.
+                                prior_steps_count = max(len(residuals["time"]) - 1, 0)
                                 residuals[field] = array.array(
-                                    "d", [0.0] * initial_steps_count
+                                    "d", [0.0] * prior_steps_count
                                 )
                             residuals[field].append(val)
                         except ValueError:

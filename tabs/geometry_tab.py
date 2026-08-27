@@ -464,6 +464,9 @@ def setup_geometry_tab(server):
             "case_geometry_selections", {}
         ).get(active_case, "")
         state.geometry_mode = "case"
+        state.geometry_status_message = ""
+        state.geometry_error_message = ""
+        publish("geometry_status_message", "geometry_error_message")
         persist_preferences({"preferred_mode": "case"})
         load_active_case_geometry()
 
@@ -550,13 +553,10 @@ def setup_geometry_tab(server):
             def complete_import() -> None:
                 try:
                     if error_message:
-                        state.geometry_error_message = error_message
-                        state.geometry_status_message = ""
+                        if str(state.active_case or "") == case_name:
+                            state.geometry_error_message = error_message
+                            state.geometry_status_message = ""
                     elif imported is not None:
-                        state.geometry_status_message = (
-                            f"Imported {imported.name} into constant/triSurface."
-                        )
-                        state.geometry_error_message = ""
                         try:
                             config = load_config()
                             tri_surface = (
@@ -571,6 +571,15 @@ def setup_geometry_tab(server):
                             choices = list_case_geometry_choices(
                                 config["CASE_ROOT"], case_name
                             )
+                            persist_case_geometry_selection(
+                                case_name, imported_selection
+                            )
+                            if str(state.active_case or "") != case_name:
+                                return
+                            state.geometry_status_message = (
+                                f"Imported {imported.name} into constant/triSurface."
+                            )
+                            state.geometry_error_message = ""
                             state.geometry_case_options = [
                                 {"text": "Default case geometry", "value": ""},
                                 *[
@@ -583,9 +592,6 @@ def setup_geometry_tab(server):
                                 ],
                             ]
                             state.geometry_case_selection = imported_selection
-                            persist_case_geometry_selection(
-                                case_name, imported_selection
-                            )
                             dataset = _read_dataset(imported)
                             render_datasets(
                                 [(imported.name, dataset)],
@@ -601,10 +607,11 @@ def setup_geometry_tab(server):
                                 "geometry_case_selection",
                             )
                         except Exception as exc:
-                            state.geometry_error_message = (
-                                f"Imported {imported.name}, but it could not be "
-                                f"rendered: {exc}"
-                            )
+                            if str(state.active_case or "") == case_name:
+                                state.geometry_error_message = (
+                                    f"Imported {imported.name}, but it could not be "
+                                    f"rendered: {exc}"
+                                )
                 finally:
                     state.geometry_library_importing = False
                     publish(
@@ -620,12 +627,13 @@ def setup_geometry_tab(server):
                     "Trame event loop; skipping the VTK refresh."
                 )
                 state.geometry_library_importing = False
-                state.geometry_status_message = ""
-                state.geometry_error_message = (
-                    error_message
-                    or "Geometry imported, but the viewer refresh could not be "
-                    "scheduled. Reload Case Geometry."
-                )
+                if str(state.active_case or "") == case_name:
+                    state.geometry_status_message = ""
+                    state.geometry_error_message = (
+                        error_message
+                        or "Geometry imported, but the viewer refresh could not be "
+                        "scheduled. Reload Case Geometry."
+                    )
                 publish(
                     "geometry_library_importing",
                     "geometry_status_message",
@@ -690,7 +698,6 @@ def setup_geometry_tab(server):
             with tempfile.NamedTemporaryFile(suffix=extension, delete=False) as upload:
                 upload.write(content)
                 temporary_path = Path(upload.name)
-            state.geometry_file_name = name
             load_custom_dataset(str(temporary_path), name)
         except Exception as exc:
             state.geometry_error_message = str(exc)

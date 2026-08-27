@@ -115,7 +115,10 @@ def test_resource_import_uses_positional_filename_and_case_mount():
                 client, "openfoam:test", "12", root, "cavity", "motorBike.stl"
             )
 
-        assert imported == root / "cavity" / "constant" / "triSurface" / "motorBike.stl"
+        expected = (
+            root / "cavity" / "constant" / "triSurface" / "motorBike.stl"
+        ).resolve()
+        assert imported == expected
         image, command, options = client.containers.calls[0]
         assert image == "openfoam:test"
         assert command[-1] == "motorBike.stl"
