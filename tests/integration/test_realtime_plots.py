@@ -44,6 +44,44 @@ def test_residual_log_is_parsed_incrementally(tmp_path):
     clear_cache(str(tmp_path))
 
 
+def test_residual_parser_defers_incomplete_final_record(tmp_path):
+    log_path = tmp_path / "log.foamRun"
+    log_path.write_bytes(
+        b"Time = 0.01\n"
+        b"GAMG: Solving for p, Initial residual = 1e-2, Final residual = 1e-5,"
+    )
+
+    parser = OpenFOAMFieldParser(tmp_path)
+    first = parser.get_residuals_from_log()
+    assert list(first["time"]) == [0.01]
+    assert list(first["p"]) == []
+
+    with log_path.open("ab") as stream:
+        stream.write(b" No Iterations 2\n")
+
+    updated = parser.get_residuals_from_log()
+    assert list(updated["time"]) == [0.01]
+    assert list(updated["p"]) == [1e-2]
+    clear_cache(str(tmp_path))
+
+
+def test_residual_parser_backfills_field_first_seen_after_later_time(tmp_path):
+    log_path = tmp_path / "log.foamRun"
+    log_path.write_text(
+        "Time = 0\n"
+        "Time = 1\n"
+        "smoothSolver: Solving for alpha.water, Initial residual = 1e-3, "
+        "Final residual = 1e-7, No Iterations 1\n",
+        encoding="utf-8",
+    )
+
+    residuals = OpenFOAMFieldParser(tmp_path).get_residuals_from_log()
+
+    assert list(residuals["time"]) == [0.0, 1.0]
+    assert list(residuals["alpha.water"]) == [0.0, 1e-3]
+    clear_cache(str(tmp_path))
+
+
 def test_plot_appearance_export_and_custom_logo():
     glass = _plot_style("glass", "helvetica_neue")
     roboto = _plot_style("glass", "roboto")
@@ -71,9 +109,7 @@ def test_plot_appearance_export_and_custom_logo():
         assert rendered.size[0] > 500
 
     logo_buffer = io.BytesIO()
-    Image.new("RGBA", (20, 10), (6, 154, 181, 255)).save(
-        logo_buffer, format="PNG"
-    )
+    Image.new("RGBA", (20, 10), (6, 154, 181, 255)).save(logo_buffer, format="PNG")
     uploaded = _uploaded_logo_data(
         {
             "name": "logo.png",
@@ -87,7 +123,9 @@ def test_plot_appearance_export_and_custom_logo():
 
 def test_times_font_uses_bundled_liberation_serif_without_warning(caplog):
     font = _font_properties("times_new_roman")
-    assert font.get_file().endswith("LiberationSerif-Regular.ttf")
+    font_file = font.get_file()
+    assert isinstance(font_file, str)
+    assert font_file.endswith("LiberationSerif-Regular.ttf")
 
     caplog.set_level("WARNING", logger="matplotlib.font_manager")
     _build_line_chart(
@@ -100,9 +138,7 @@ def test_times_font_uses_bundled_liberation_serif_without_warning(caplog):
     )
 
     assert not [
-        record
-        for record in caplog.records
-        if "Liberation Serif" in record.getMessage()
+        record for record in caplog.records if "Liberation Serif" in record.getMessage()
     ]
 
 

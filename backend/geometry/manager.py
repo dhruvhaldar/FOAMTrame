@@ -1,18 +1,20 @@
 import logging
 import os
-import shutil
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Union
 from werkzeug.utils import secure_filename
 from backend.utils import sanitize_error
 
 logger = logging.getLogger("FOAMTrame")
 
+
 class GeometryManager:
     """Manages geometry files (STL) in the OpenFOAM case."""
 
     @staticmethod
-    def upload_stl(case_path: Union[str, Path], file, filename: str) -> Dict[str, Union[bool, str]]:
+    def upload_stl(
+        case_path: Union[str, Path], file, filename: str
+    ) -> Dict[str, Union[bool, str]]:
         """
         Save an uploaded STL file to the constant/triSurface directory.
 
@@ -38,20 +40,29 @@ class GeometryManager:
             allowed_extensions = (".stl", ".obj", ".gz")
             # Check the final extension
             if not safe_filename.lower().endswith(allowed_extensions):
-                 return {"success": False, "message": "Only .stl, .obj, and .gz files are allowed."}
+                return {
+                    "success": False,
+                    "message": "Only .stl, .obj, and .gz files are allowed.",
+                }
 
             filepath = tri_surface_dir / safe_filename
             file.save(str(filepath))
 
             logger.info(f"Uploaded Geometry to {filepath}")
-            return {"success": True, "message": "File uploaded successfully.", "filename": safe_filename}
+            return {
+                "success": True,
+                "message": "File uploaded successfully.",
+                "filename": safe_filename,
+            }
 
         except Exception as e:
             logger.error(f"Error uploading Geometry: {e}")
             return {"success": False, "message": sanitize_error(e)}
 
     @staticmethod
-    def list_stls(case_path: Union[str, Path]) -> Dict[str, Union[bool, List[Dict[str, Union[str, int]]], str]]:
+    def list_stls(
+        case_path: Union[str, Path],
+    ) -> Dict[str, Union[bool, List[Dict[str, Union[str, int]]], str]]:
         """
         List all geometry files in the constant/triSurface directory.
 
@@ -79,14 +90,13 @@ class GeometryManager:
                             # Check extension efficiently
                             name = entry.name
                             if name.lower().endswith(allowed_ext_tuple):
-                                files.append({
-                                    "name": name,
-                                    "size": entry.stat().st_size
-                                })
+                                files.append(
+                                    {"name": name, "size": entry.stat().st_size}
+                                )
             except FileNotFoundError:
                 return {"success": True, "files": []}
             except OSError:
-                pass # Directory might have been deleted concurrently
+                pass  # Directory might have been deleted concurrently
 
             # Sort by name
             files.sort(key=lambda x: x["name"])
@@ -97,7 +107,9 @@ class GeometryManager:
             return {"success": False, "message": sanitize_error(e)}
 
     @staticmethod
-    def delete_stl(case_path: Union[str, Path], filename: str) -> Dict[str, Union[bool, str]]:
+    def delete_stl(
+        case_path: Union[str, Path], filename: str
+    ) -> Dict[str, Union[bool, str]]:
         """
         Delete an STL file from the constant/triSurface directory.
 

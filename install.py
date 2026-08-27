@@ -91,7 +91,7 @@ def run(
             raise ValueError("Silent installer commands require an installation log.")
         log.write(f"\n> {command_line}\n")
         log.flush()
-        subprocess.run(
+        subprocess.run(  # nosec: argv list is assembled from trusted installer paths
             command,
             cwd=PROJECT_ROOT,
             env=installer_environment(silent=True, base=env),
@@ -104,14 +104,20 @@ def run(
         return
 
     print(f"\n> {command_line}", flush=True)
-    subprocess.run(command, cwd=PROJECT_ROOT, env=env, check=True)
+    subprocess.run(  # nosec: argv list is assembled from trusted installer paths
+        command, cwd=PROJECT_ROOT, env=env, check=True
+    )
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Create an isolated FOAMTrame installation on Windows or Linux."
     )
-    parser.add_argument("--dev", action="store_true", help="Install test dependencies")
+    parser.add_argument(
+        "--dev",
+        action="store_true",
+        help="Install development and test dependencies",
+    )
     parser.add_argument(
         "--silent",
         "--quiet",
@@ -202,7 +208,9 @@ def main() -> int:
 
         python = venv_python(venv_dir)
         if not python.exists():
-            raise SystemExit(f"Virtual environment was not created correctly: {venv_dir}")
+            raise SystemExit(
+                f"Virtual environment was not created correctly: {venv_dir}"
+            )
 
         run(
             [str(python), str(PROJECT_ROOT / "manage.py"), "init-db"],
@@ -249,7 +257,9 @@ def main() -> int:
     print("\nFOAMTrame installation completed successfully.")
     print(f"Server URL: http://127.0.0.1:{selected_port}/")
     if not docker and not args.skip_docker_check:
-        print("Docker was not found. Install/start Docker before running OpenFOAM operations.")
+        print(
+            "Docker was not found. Install/start Docker before running OpenFOAM operations."
+        )
     if platform.system() == "Windows":
         print(r"Start with: .\start.ps1")
     else:

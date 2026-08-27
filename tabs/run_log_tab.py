@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import asyncio
+import html as html_lib
 import logging
 import os
 import platform
 import re
+import shutil
+import tempfile
 import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import IO
 from trame.widgets import html, vuetify
 
 from app_state import load_run_history, update_run_history
@@ -21,18 +25,134 @@ from backend.simulation_queue import (
 
 logger = logging.getLogger("FOAMTrame")
 
+_ALREADY_RUN_LINE = re.compile(
+    r"^(?P<stage>\S+) already run on .+?: remove log file "
+    r"['\"](?P<log>log\.[^'\"]+)['\"] to re-run\s*$"
+)
+_ALLRUN_EXECUTION_EVIDENCE = re.compile(
+    r"^(?:Running\b|Executing\b|Starting time loop\b|Create time\b|"
+    r"Time\s*=|Application\s*:)",
+    re.IGNORECASE,
+)
+_ALLRUN_DIAGNOSTIC_LIMIT = 256 * 1024
+_CONSOLE_ACTIONS = ("Safe Clean Generated Outputs", "Allclean")
+
+
+class _RunArchive:
+    """Stream console output without exposing an open file to case cleanup."""
+
+    def __init__(self, path: Path, *, defer_publish: bool = False):
+        self.path = path
+        self.defer_publish = defer_publish
+        self.stream: IO[str] | None = None
+
+    def open(self) -> "_RunArchive":
+        if self.defer_publish:
+            self.stream = tempfile.TemporaryFile(
+                mode="w+", encoding="utf-8", buffering=1
+            )
+        else:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self.stream = self.path.open("w", encoding="utf-8", buffering=1)
+        return self
+
+    def write(self, value: str) -> None:
+        if self.stream is not None:
+            self.stream.write(value)
+
+    def publish(self) -> None:
+        if not self.defer_publish or self.stream is None:
+            return
+        self.stream.flush()
+        self.stream.seek(0)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with self.path.open("w", encoding="utf-8", buffering=1) as destination:
+            shutil.copyfileobj(self.stream, destination)
+
+    def close(self) -> None:
+        if self.stream is not None:
+            self.stream.close()
+            self.stream = None
+
+
+def _format_console_log_html(log_text: str) -> str:
+    """Escape container output and add presentation-only console highlighting."""
+    rendered: list[str] = []
+    for raw_line in log_text.splitlines(keepends=True):
+        stripped = raw_line.strip()
+        if "[Error]" in raw_line:
+            line_class = "error"
+        elif (
+            "[Notice]" in raw_line
+            or " already run on " in raw_line
+            or "To rerun" in raw_line
+        ):
+            line_class = "warning"
+        elif ">>>" in raw_line:
+            line_class = "command"
+        elif "[FOAMTrame]" in raw_line:
+            line_class = "info"
+        else:
+            line_class = "output"
+
+        escaped = html_lib.escape(raw_line)
+        for action in _CONSOLE_ACTIONS:
+            escaped = escaped.replace(
+                action,
+                f'<strong class="console-action">{action}</strong>',
+            )
+        if stripped:
+            rendered.append(
+                f'<span class="console-line console-line--{line_class}">{escaped}</span>'
+            )
+        else:
+            rendered.append(escaped)
+    return "".join(rendered)
+
+
+def _allrun_skipped_stages(output: str) -> tuple[tuple[str, str], ...]:
+    return tuple(
+        (match.group("stage"), match.group("log"))
+        for raw_line in output.splitlines()
+        if (match := _ALREADY_RUN_LINE.fullmatch(raw_line.strip())) is not None
+    )
+
+
+def _summarize_allrun_output(output: str) -> tuple[tuple[str, str], ...] | None:
+    """Return skipped stages unless output contains evidence of actual work."""
+    skipped: list[tuple[str, str]] = []
+    for raw_line in output.splitlines():
+        line = raw_line.strip()
+        if not line or line == "[FOAMTrame] >>> ./Allrun":
+            continue
+        match = _ALREADY_RUN_LINE.fullmatch(line)
+        if match is None:
+            if _ALLRUN_EXECUTION_EVIDENCE.match(line):
+                return None
+            # Case-authored Allrun scripts commonly print banners, separators,
+            # and context around runApplication's "already run" diagnostics.
+            # Such prose is not evidence that a stage executed.
+            continue
+        skipped.append((match.group("stage"), match.group("log")))
+    return tuple(skipped) if skipped else None
+
+
 def _get_cpu_info() -> dict[str, int]:
     logical = os.cpu_count() or 1
     physical = logical
     try:
         import psutil
+
         physical = psutil.cpu_count(logical=False) or logical
     except Exception:
         if platform.system() == "Windows":
             try:
                 import subprocess
+
                 cmd = "Get-CimInstance Win32_Processor | Select-Object -ExpandProperty NumberOfCores"
-                out = subprocess.check_output(["powershell", "-Command", cmd], text=True)
+                out = subprocess.check_output(  # nosec: fixed local diagnostic command
+                    ["powershell", "-Command", cmd], text=True
+                )
                 physical = int(out.strip())
             except Exception:
                 pass
@@ -73,7 +193,14 @@ def setup_run_log_tab(server):
     state.setdefault("has_parallel_config", False)
 
     state.setdefault("run_log_text", "Ready for output...")
+    state.setdefault("run_log_html", _format_console_log_html(state.run_log_text))
     state.setdefault("run_status", "Idle")
+    state.setdefault("run_status_color", "success")
+    state.setdefault("run_notification_visible", False)
+    state.setdefault("run_notification_text", "")
+    state.setdefault("run_notification_color", "blue-grey darken-3")
+    state.setdefault("run_notification_kind", "")
+    state.setdefault("run_notification_skipped_count", 0)
     state.setdefault("is_running", False)
     run_history, history_changed = _reconcile_interrupted_history(_load_run_history())
     state.setdefault("run_history", run_history)
@@ -83,7 +210,9 @@ def setup_run_log_tab(server):
     state.setdefault("queued_run_count", 0)
     empty_inspection = case_action_service.inspect_case(None)
     state.setdefault("case_action_map", empty_inspection.action_map())
-    state.setdefault("case_workflow_items", list(empty_inspection.action_map().values()))
+    state.setdefault(
+        "case_workflow_items", list(empty_inspection.action_map().values())
+    )
     state.setdefault("guided_action_ids", [])
     state.setdefault("guided_action_labels", [])
     state.setdefault("clean_preview", [])
@@ -92,6 +221,7 @@ def setup_run_log_tab(server):
     state.setdefault("capability_available_count", 0)
     state.setdefault("capability_solver_label", "")
     state.setdefault("capability_scanning", False)
+    state.setdefault("available_actions_dialog", False)
     state.setdefault("action_confirm_dialog", False)
     state.setdefault("pending_action_id", "")
     state.setdefault("pending_action_title", "")
@@ -120,11 +250,15 @@ def setup_run_log_tab(server):
     )
 
     def publish_state(*keys: str):
-        state.dirty(*keys)
+        published_keys = list(dict.fromkeys(keys))
+        if "run_log_text" in published_keys:
+            state.run_log_html = _format_console_log_html(state.run_log_text)
+            published_keys.append("run_log_html")
+        state.dirty(*published_keys)
         state.flush()
         loop = _server_event_loop[0]
         if loop is not None and loop.is_running():
-            loop.call_soon_threadsafe(server.force_state_push, *keys)
+            loop.call_soon_threadsafe(server.force_state_push, *published_keys)
 
     @ctrl.add("on_server_ready")
     def capture_run_log_event_loop(**_):
@@ -199,6 +333,7 @@ def setup_run_log_tab(server):
 
     def check_parallel_config():
         from tabs.setup_tab import load_config
+
         config = load_config()
         case_root = config.get("CASE_ROOT", "")
         active_case = state.active_case or ""
@@ -224,7 +359,9 @@ def setup_run_log_tab(server):
 
             if num_match:
                 state.detected_num_processes = num_match.group(1)
-                state.detected_method = method_match.group(1) if method_match else "unknown"
+                state.detected_method = (
+                    method_match.group(1) if method_match else "unknown"
+                )
                 state.has_parallel_config = True
             else:
                 state.has_parallel_config = False
@@ -289,7 +426,8 @@ def setup_run_log_tab(server):
         except Exception as exc:
             state.run_log_text = f"[FOAMTrame] [Error] {exc}\n"
             state.run_status = "Action unavailable"
-            state.flush()
+            state.run_status_color = "error"
+            publish_state("run_log_text", "run_status", "run_status_color")
             trigger_capability_scan()
             return
 
@@ -314,7 +452,9 @@ def setup_run_log_tab(server):
         if queue is None:
             finish_history_entry(run_id, "Failed", 0.0)
             state.run_log_text = "[FOAMTrame] [Error] Simulation queue unavailable.\n"
-            state.flush()
+            state.run_status = f"{command_label} Failed"
+            state.run_status_color = "error"
+            publish_state("run_log_text", "run_status", "run_status_color")
             return
         queue.enqueue(job)
         publish_state("run_history")
@@ -327,6 +467,10 @@ def setup_run_log_tab(server):
         started_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
         update_history_entry(job.id, status="Running", start_time=started_at)
         state.run_status = f"Running {job.command_label}..."
+        state.run_status_color = "warning"
+        state.run_notification_visible = False
+        state.run_notification_kind = ""
+        state.run_notification_skipped_count = 0
         if job.safe_clean:
             state.run_log_text = (
                 f"[FOAMTrame] Cleaning reviewed outputs for '{job.case_name}'...\n"
@@ -341,7 +485,13 @@ def setup_run_log_tab(server):
                 )
                 + "\n"
             )
-        publish_state("run_history", "run_status", "run_log_text")
+        publish_state(
+            "run_history",
+            "run_status",
+            "run_status_color",
+            "run_log_text",
+            "run_notification_visible",
+        )
         try:
             if job.safe_clean:
                 removed = case_action_service.clean_case(job.inspection)
@@ -370,19 +520,26 @@ def setup_run_log_tab(server):
             )
             _active_container[0] = container
             log_dir = job.case_path / "logs"
-            log_dir.mkdir(parents=True, exist_ok=True)
             archive_log_path = log_dir / f"run_{job.id}.log"
-            is_solver_run = any(
-                action_id in {"allrun", "solver"} for action_id in job.action_ids
+            # A case-supplied Allrun owns its log.foamRun. Opening it here would
+            # truncate existing results and can race OpenFOAM's runApplication.
+            # Only mirror console output for the standalone solver action.
+            is_direct_solver_run = job.action_ids == ("solver",)
+            live_log_path = (
+                job.case_path / "log.foamRun" if is_direct_solver_run else None
             )
-            live_log_path = job.case_path / "log.foamRun" if is_solver_run else None
             live_log = None
             archive_log = None
+            exit_code = 0
+            console_chunks: list[str] = []
+            console_chars = 0
+            diagnostic_truncated = False
             try:
                 try:
-                    archive_log = archive_log_path.open(
-                        "w", encoding="utf-8", buffering=1
-                    )
+                    archive_log = _RunArchive(
+                        archive_log_path,
+                        defer_publish=job.action_ids == ("allclean",),
+                    ).open()
                 except OSError as log_err:
                     logger.warning("Could not open run archive log: %s", log_err)
                 if live_log_path is not None:
@@ -394,6 +551,16 @@ def setup_run_log_tab(server):
                         logger.warning("Could not open live residual log: %s", log_err)
                 for line in container.logs(stream=True):
                     decoded = line.decode(errors="ignore")
+                    if (
+                        job.action_ids == ("allrun",)
+                        and not diagnostic_truncated
+                        and console_chars + len(decoded) <= _ALLRUN_DIAGNOSTIC_LIMIT
+                    ):
+                        console_chunks.append(decoded)
+                        console_chars += len(decoded)
+                    elif job.action_ids == ("allrun",):
+                        console_chunks.clear()
+                        diagnostic_truncated = True
                     if archive_log is not None:
                         archive_log.write(decoded)
                     if live_log is not None:
@@ -403,13 +570,62 @@ def setup_run_log_tab(server):
                         new_text[-50000:] if len(new_text) > 60000 else new_text
                     )
                     publish_state("run_log_text")
+                exit_code = container.wait().get("StatusCode", 0)
+                if archive_log is not None:
+                    try:
+                        archive_log.publish()
+                    except OSError as log_err:
+                        logger.warning("Could not publish run archive log: %s", log_err)
             finally:
                 if archive_log is not None:
                     archive_log.close()
                 if live_log is not None:
                     live_log.close()
-            if container.wait().get("StatusCode", 0) != 0:
+            if exit_code != 0:
                 status = "Failed"
+            elif job.action_ids == ("allrun",) and not diagnostic_truncated:
+                allrun_output = "".join(console_chunks)
+                skipped = _allrun_skipped_stages(allrun_output)
+                if _summarize_allrun_output(allrun_output) is not None:
+                    status = "Skipped"
+                    stage_labels = ", ".join(
+                        f"{stage} ({log_name})" for stage, log_name in skipped
+                    )
+                    state.run_log_text += (
+                        "\n[FOAMTrame] [Notice] Allrun performed no new work: "
+                        f"{len(skipped)} stage(s) were already complete: "
+                        f"{stage_labels}.\n"
+                        "[FOAMTrame] To rerun, review and confirm Allclean or "
+                        "Safe Clean Generated Outputs first. Existing results "
+                        "were preserved.\n"
+                    )
+                    state.run_notification_text = (
+                        f"Allrun skipped {len(skipped)} completed stage(s) and "
+                        "performed no new work. Review Allclean or Safe Clean "
+                        "Generated Outputs before rerunning. Existing results "
+                        "were preserved."
+                    )
+                    state.run_notification_color = "warning"
+                    state.run_notification_kind = "skipped"
+                    state.run_notification_skipped_count = len(skipped)
+                    state.run_notification_visible = True
+                elif skipped:
+                    stage_labels = ", ".join(
+                        f"{stage} ({log_name})" for stage, log_name in skipped
+                    )
+                    state.run_log_text += (
+                        "\n[FOAMTrame] [Notice] Allrun completed, but skipped "
+                        f"{len(skipped)} existing stage(s): {stage_labels}. "
+                        "Other stages ran normally.\n"
+                    )
+                    state.run_notification_text = (
+                        f"Allrun completed with {len(skipped)} existing stage(s) "
+                        "skipped. See Console Log Output for details."
+                    )
+                    state.run_notification_color = "cyan darken-3"
+                    state.run_notification_kind = "partial"
+                    state.run_notification_skipped_count = len(skipped)
+                    state.run_notification_visible = True
         except Exception as exc:
             status = "Failed"
             state.run_log_text += (
@@ -426,7 +642,22 @@ def setup_run_log_tab(server):
                 _active_container[0] = None
             finish_history_entry(job.id, status, duration)
             state.run_status = f"{job.command_label} {status} ({duration}s)"
-            publish_state("run_history", "run_status", "run_log_text")
+            state.run_status_color = {
+                "Completed": "success",
+                "Skipped": "warning",
+                "Failed": "error",
+            }.get(status, "info")
+            publish_state(
+                "run_history",
+                "run_status",
+                "run_status_color",
+                "run_log_text",
+                "run_notification_visible",
+                "run_notification_text",
+                "run_notification_color",
+                "run_notification_kind",
+                "run_notification_skipped_count",
+            )
             check_parallel_config()
             trigger_capability_scan()
 
@@ -446,7 +677,7 @@ def setup_run_log_tab(server):
         inspection = inspection or _inspection[0]
         if inspection.case_path is None:
             state.run_log_text = "[FOAMTrame] [Error] No active case selected.\n"
-            state.flush()
+            publish_state("run_log_text")
             return
         config, _ = current_case_context()
         queued_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
@@ -465,7 +696,9 @@ def setup_run_log_tab(server):
             queued_at=queued_at,
             safe_clean=True,
         )
-        _simulation_queue[0].enqueue(job)
+        queue = _simulation_queue[0]
+        assert queue is not None
+        queue.enqueue(job)
         publish_state("run_history")
 
     def request_case_action(action_id: str):
@@ -473,7 +706,7 @@ def setup_run_log_tab(server):
         if action is None or not action.available:
             reason = action.reason if action else "Unknown action"
             state.run_log_text = f"[FOAMTrame] [Error] Action unavailable: {reason}\n"
-            state.flush()
+            publish_state("run_log_text")
             return
         if action.destructive:
             state.pending_action_id = action_id
@@ -486,7 +719,9 @@ def setup_run_log_tab(server):
             state.pending_action_preview = (
                 list(state.clean_preview)
                 if action_id == "safe_clean"
-                else ["Review the case's Allclean script if its cleanup policy is uncertain."]
+                else [
+                    "Review the case's Allclean script if its cleanup policy is uncertain."
+                ]
             )
             _pending_clean_inspection[0] = (
                 _inspection[0] if action_id == "safe_clean" else None
@@ -514,11 +749,13 @@ def setup_run_log_tab(server):
             state.run_log_text = (
                 "[FOAMTrame] Allrun is available and remains the preferred workflow.\n"
             )
-            state.flush()
+            publish_state("run_log_text")
             return
         if not inspection.guided_actions:
-            state.run_log_text = "[FOAMTrame] No confident guided-run steps were detected.\n"
-            state.flush()
+            state.run_log_text = (
+                "[FOAMTrame] No confident guided-run steps were detected.\n"
+            )
+            publish_state("run_log_text")
             return
         state.guided_run_dialog = True
         state.flush()
@@ -567,8 +804,10 @@ def setup_run_log_tab(server):
         if _active_container[0]:
             try:
                 _active_container[0].kill()
-                state.run_log_text = state.run_log_text + "\n[FOAMTrame] Process terminated by user.\n"
-                state.flush()
+                state.run_log_text = (
+                    state.run_log_text + "\n[FOAMTrame] Process terminated by user.\n"
+                )
+                publish_state("run_log_text")
             except Exception as e:
                 logger.error(f"Error stopping container: {e}")
 
@@ -576,12 +815,13 @@ def setup_run_log_tab(server):
 
     def clear_log():
         state.run_log_text = "Ready for output..."
-        state.flush()
+        publish_state("run_log_text")
 
     ctrl.clear_log = clear_log
 
     @state.change("active_case")
     def on_active_case_change_run_log(**_):
+        state.available_actions_dialog = False
         state.action_confirm_dialog = False
         state.guided_run_dialog = False
         state.pending_action_id = ""
@@ -604,7 +844,9 @@ def setup_run_log_tab(server):
 
 def build_run_log_drawer():
     from trame.app import get_server
+
     server = get_server()
+    assert server is not None
     ctrl = server.controller
 
     def capability_button(
@@ -628,7 +870,12 @@ def build_run_log_drawer():
             title=(f"case_action_map.{action_id}.reason",),
         )
 
-    with html.Div(v_show="active_tab === 3", classes="pa-4 run-log-drawer"):
+    with html.Div(
+        v_show="active_tab === 3",
+        classes="pa-4 run-log-drawer",
+        role="region",
+        aria_label="Run and Log controls",
+    ):
         # Parallel & Core Configuration Section
         html.Div("Parallel & Core Config", classes="text-overline text--secondary mb-1")
         vuetify.VTextField(
@@ -662,9 +909,15 @@ def build_run_log_drawer():
                 click=ctrl.scan_case_capabilities,
                 disabled=("capability_scanning",),
                 title="Rescan case capabilities",
+                aria_label="Rescan case capabilities",
             ):
                 vuetify.VIcon("mdi-refresh", small=True)
-        with html.Div(classes="capability-summary mb-2"):
+        with html.Div(
+            classes="capability-summary mb-2",
+            role="status",
+            aria_live="polite",
+            aria_atomic="true",
+        ):
             vuetify.VProgressCircular(
                 v_if="capability_scanning",
                 indeterminate=True,
@@ -698,21 +951,29 @@ def build_run_log_drawer():
                 v_if="!capability_scanning && !capability_inspected",
             )
 
-        with vuetify.VList(dense=True, classes="case-workflow-list pa-0 mb-3"):
-            with vuetify.VListItem(
-                v_for="action in case_workflow_items",
-                key=("action.id",),
-                classes="case-workflow-item px-2",
-            ):
-                with vuetify.VListItemIcon(classes="mr-2 my-2"):
-                    vuetify.VIcon(
-                        "{{ action.available ? 'mdi-check-circle' : 'mdi-close-circle-outline' }}",
-                        small=True,
-                        color=("action.available ? 'teal darken-2' : 'grey'",),
-                    )
-                with vuetify.VListItemContent(classes="py-1"):
-                    vuetify.VListItemTitle("{{ action.label }}", classes="text-caption font-weight-bold")
-                    vuetify.VListItemSubtitle("{{ action.reason }}", classes="case-action-reason")
+        with vuetify.VBtn(
+            block=True,
+            small=True,
+            outlined=True,
+            color="cyan darken-3",
+            classes="available-actions-btn mb-3",
+            click="available_actions_dialog = true",
+            disabled=("capability_scanning || !capability_inspected",),
+            aria_haspopup="dialog",
+            aria_label=(
+                "'Available action(s), ' + capability_available_count + ' available'",
+            ),
+        ):
+            vuetify.VIcon("mdi-format-list-checks", small=True, left=True)
+            html.Span("Available action(s)")
+            vuetify.VSpacer()
+            vuetify.VChip(
+                "{{ capability_available_count }}",
+                x_small=True,
+                color="cyan darken-3",
+                text_color="white",
+                classes="ml-2",
+            )
 
         html.Div("Workflow", classes="text-overline text--secondary mb-1")
         capability_button(
@@ -733,29 +994,43 @@ def build_run_log_drawer():
         )
 
         html.Div("Detected Commands", classes="text-overline text--secondary mt-3 mb-1")
-        capability_button("surfaceFeatureExtract")
-        capability_button("blockMesh")
-        capability_button("snappyHexMesh")
-        capability_button("topoSet")
-        capability_button("setFields")
-        capability_button(
-            "solver",
-            classes="theme-btn-info mb-2",
-            color="cyan darken-3",
-            outlined=False,
-        )
-        capability_button("decomposePar")
-        capability_button("reconstructPar")
-        capability_button("foamToVTK", color="secondary")
+        with html.Div(
+            classes="run-action-grid",
+            role="group",
+            aria_label="Detected commands",
+        ):
+            capability_button("surfaceFeatureExtract", classes="theme-btn-outlined")
+            capability_button("blockMesh", classes="theme-btn-outlined")
+            capability_button("snappyHexMesh", classes="theme-btn-outlined")
+            capability_button("topoSet", classes="theme-btn-outlined")
+            capability_button("setFields", classes="theme-btn-outlined")
+            capability_button(
+                "solver",
+                classes="theme-btn-info",
+                color="cyan darken-3",
+                outlined=False,
+            )
+            capability_button("decomposePar", classes="theme-btn-outlined")
+            capability_button("reconstructPar", classes="theme-btn-outlined")
+            capability_button(
+                "foamToVTK", classes="theme-btn-outlined", color="secondary"
+            )
 
         html.Div("Cleanup", classes="text-overline text--secondary mt-3 mb-1")
-        capability_button(
-            "allclean",
-            classes="theme-btn-error mb-2",
-            color="error",
-            outlined=False,
-        )
-        capability_button("safe_clean", color="warning")
+        with html.Div(
+            classes="run-action-grid run-action-grid--cleanup",
+            role="group",
+            aria_label="Cleanup actions",
+        ):
+            capability_button(
+                "allclean",
+                classes="theme-btn-error",
+                color="error",
+                outlined=False,
+            )
+            capability_button(
+                "safe_clean", classes="theme-btn-outlined", color="warning"
+            )
 
         vuetify.VDivider(classes="my-3")
 
@@ -768,11 +1043,114 @@ def build_run_log_drawer():
             disabled=("!is_running",),
         )
 
+    with vuetify.VDialog(
+        v_model=("available_actions_dialog", False),
+        max_width="720",
+        aria_labelledby="available-actions-title",
+    ):
+        with vuetify.VCard(classes="glass-card capability-dialog"):
+            with html.Div(classes="capability-dialog__header pa-5"):
+                with html.Div(classes="d-flex align-center"):
+                    with html.Div(classes="capability-dialog__icon mr-3"):
+                        vuetify.VIcon("mdi-format-list-checks", color="white")
+                    with html.Div():
+                        html.H3(
+                            "Case Actions",
+                            id="available-actions-title",
+                            classes="text-h6 font-weight-bold mb-0",
+                        )
+                        html.P(
+                            "{{ capability_available_count }} available · fixed, validated commands",
+                            classes="text-caption mb-0",
+                        )
+                    vuetify.VSpacer()
+                    with vuetify.VBtn(
+                        icon=True,
+                        small=True,
+                        click="available_actions_dialog = false",
+                        title="Close available action(s)",
+                        aria_label="Close available action(s)",
+                    ):
+                        vuetify.VIcon("mdi-close")
+            with vuetify.VCardText(classes="pa-4"):
+                with vuetify.VList(
+                    dense=True,
+                    classes="case-workflow-list capability-dialog__list pa-0",
+                ):
+                    with vuetify.VListItem(
+                        v_for="action in case_workflow_items",
+                        key=("action.id",),
+                        classes="case-workflow-item px-3",
+                    ):
+                        with vuetify.VListItemIcon(classes="mr-3 my-3"):
+                            vuetify.VIcon(
+                                "{{ action.available ? 'mdi-check-circle' : 'mdi-close-circle-outline' }}",
+                                small=True,
+                                color=("action.available ? 'teal darken-2' : 'grey'",),
+                            )
+                        with vuetify.VListItemContent(classes="py-2"):
+                            vuetify.VListItemTitle(
+                                "{{ action.label }}",
+                                classes="text-body-2 font-weight-bold",
+                            )
+                            vuetify.VListItemSubtitle(
+                                "{{ action.reason }}", classes="case-action-reason"
+                            )
+                        with vuetify.VListItemAction(
+                            classes="capability-status-action"
+                        ):
+                            vuetify.VChip(
+                                "{{ action.available ? 'Available' : 'Unavailable' }}",
+                                x_small=True,
+                                outlined=True,
+                                color=("action.available ? 'teal darken-2' : 'grey'",),
+                                text_color=(
+                                    "action.available ? 'teal darken-3' : 'grey darken-2'",
+                                ),
+                                classes="capability-status-chip",
+                            )
+
 
 def build_run_log_content():
     from trame.app import get_server
+
     server = get_server()
+    assert server is not None
     ctrl = server.controller
+
+    with vuetify.VSnackbar(
+        v_model=("run_notification_visible", False),
+        timeout=12000,
+        color=("run_notification_color", "blue-grey darken-3"),
+        multi_line=True,
+        right=True,
+        top=True,
+        classes="run-notification",
+        role="alert",
+        aria_live="assertive",
+    ):
+        with html.Span(v_if="run_notification_kind === 'skipped'"):
+            html.Span(
+                "Allrun skipped {{ run_notification_skipped_count }} completed stage(s) and performed no new work. Review "
+            )
+            html.Strong("Allclean", classes="run-notification__action")
+            html.Span(" or ")
+            html.Strong(
+                "Safe Clean Generated Outputs",
+                classes="run-notification__action",
+            )
+            html.Span(" before rerunning. Existing results were preserved.")
+        html.Span(
+            "Allrun completed with {{ run_notification_skipped_count }} existing stage(s) skipped. See Console Log Output for details.",
+            v_else=True,
+        )
+        with vuetify.VBtn(
+            text=True,
+            color="white",
+            click="run_notification_visible = false",
+            aria_label="Dismiss run notification",
+        ):
+            html.Span("Dismiss")
 
     with vuetify.VContainer(
         fluid=True,
@@ -784,15 +1162,23 @@ def build_run_log_content():
             with vuetify.VCol(cols="12", lg="10"):
                 # Header & Status Card
                 with vuetify.VCard(classes="pa-4 mb-4 glass-card"):
-                    with vuetify.VRow(align="center", justify="space-between", no_gutters=True):
-                        with vuetify.VCol(cols="12", sm="8"):
-                            with vuetify.VCardTitle(classes="headline font-weight-bold pa-0"):
+                    with vuetify.VRow(
+                        align="center", justify="space-between", no_gutters=True
+                    ):
+                        with vuetify.VCol(cols="12", sm="7"):
+                            with vuetify.VCardTitle(
+                                classes="headline font-weight-bold pa-0"
+                            ):
                                 html.Span("Run & Console Logs")
                             html.P(
                                 "Execute OpenFOAM simulation commands and view output logs in real-time.",
                                 classes="text-caption text-secondary mb-0",
                             )
-                        with vuetify.VCol(cols="12", sm="4", classes="d-flex justify-sm-end align-center mt-2 mt-sm-0"):
+                        with vuetify.VCol(
+                            cols="12",
+                            sm="5",
+                            classes="d-flex flex-wrap justify-sm-end align-center mt-2 mt-sm-0 run-status-area",
+                        ):
                             vuetify.VChip(
                                 "{{ queued_run_count }} queued",
                                 v_if="queued_run_count > 0",
@@ -804,11 +1190,13 @@ def build_run_log_content():
                             )
                             vuetify.VChip(
                                 "{{ run_status }}",
-                                color=("is_running ? 'warning' : 'success'", "info"),
+                                color=("run_status_color", "success"),
                                 text_color="white",
                                 label=True,
                                 small=True,
-                                classes="font-weight-bold my-0",
+                                classes="font-weight-bold my-0 run-status-chip",
+                                role="status",
+                                aria_live="polite",
                             )
 
                 # FIFO queue. The active job is first; pending jobs can be cancelled.
@@ -849,21 +1237,28 @@ def build_run_log_content():
                                 vuetify.VListItemSubtitle(
                                     "{{ item.status }} · queued {{ item.queued_at }}"
                                 )
-                            with vuetify.VListItemAction(v_if="item.status === 'Queued'"):
+                            with vuetify.VListItemAction(
+                                v_if="item.status === 'Queued'"
+                            ):
                                 with vuetify.VBtn(
                                     icon=True,
                                     small=True,
                                     color="error",
                                     title="Cancel queued simulation",
+                                    aria_label="Cancel queued simulation",
                                     click=(ctrl.cancel_queued_run, "[item.id]"),
                                 ):
                                     vuetify.VIcon("mdi-close")
 
                 # Console Output Log Box Card
                 with vuetify.VCard(classes="pa-4 mb-4 glass-card"):
-                    with vuetify.VCardTitle(classes="subtitle-1 font-weight-bold d-flex align-center justify-space-between py-1"):
+                    with vuetify.VCardTitle(
+                        classes="subtitle-1 font-weight-bold d-flex align-center justify-space-between py-1"
+                    ):
                         with html.Div(classes="d-flex align-center"):
-                            vuetify.VIcon("mdi-console", classes="mr-2", color="primary")
+                            vuetify.VIcon(
+                                "mdi-console", classes="mr-2", color="primary"
+                            )
                             html.Span("Console Log Output")
                         vuetify.VBtn(
                             "Clear",
@@ -876,7 +1271,12 @@ def build_run_log_content():
 
                     with vuetify.VCardText():
                         html.Pre(
-                            "{{ run_log_text }}",
+                            v_html=("run_log_html", ""),
+                            role="log",
+                            aria_label="Simulation console output",
+                            aria_live="polite",
+                            aria_relevant="additions text",
+                            tabindex="0",
                             style=(
                                 "background: #0f172a; color: #38bdf8; font-family: monospace; "
                                 "padding: 16px; border-radius: 12px; height: 360px; overflow-y: auto; "
@@ -890,7 +1290,9 @@ def build_run_log_content():
                         vuetify.VIcon("mdi-history", classes="mr-2", color="primary")
                         html.Span("Simulation Run History")
                     with vuetify.VCardText():
-                        with vuetify.VSimpleTable(dense=True):
+                        with vuetify.VSimpleTable(
+                            dense=True, aria_label="Simulation run history"
+                        ):
                             with html.Thead():
                                 with html.Tr():
                                     html.Th("Run ID", classes="text-left")
@@ -900,33 +1302,53 @@ def build_run_log_content():
                                     html.Th("Start Time", classes="text-left")
                                     html.Th("Duration", classes="text-left")
                             with html.Tbody():
-                                with html.Tr(v_for="item in run_history", key="item.id"):
+                                with html.Tr(
+                                    v_for="item in run_history", key="item.id"
+                                ):
                                     html.Td("{{ item.id }}")
                                     html.Td("{{ item.case_name }}")
                                     html.Td("{{ item.command }}")
-                                    with html.Td():
+                                    with html.Td(classes="run-history-status-cell"):
                                         vuetify.VChip(
                                             "{{ item.status }}",
-                                            color=("item.status === 'Completed' ? 'success' : (item.status === 'Running' ? 'warning' : (item.status === 'Queued' ? 'cyan darken-3' : 'error'))",),
+                                            color=(
+                                                "item.status === 'Completed' ? 'success' : (item.status === 'Skipped' ? 'blue-grey' : (item.status === 'Running' ? 'warning' : (item.status === 'Queued' ? 'cyan darken-3' : 'error')))",
+                                            ),
                                             x_small=True,
                                             label=True,
                                             text_color="white",
+                                            classes="run-history-status-chip",
                                         )
-                                    html.Td("{{ item.start_time || ('Queued ' + (item.queued_at || '')) }}")
+                                    html.Td(
+                                        "{{ item.start_time || ('Queued ' + (item.queued_at || '')) }}"
+                                    )
                                     html.Td("{{ item.duration || '-' }}")
 
-    with vuetify.VDialog(v_model=("action_confirm_dialog", False), max_width="620"):
-        with vuetify.VCard(classes="glass-card pa-2"):
-            vuetify.VCardTitle("{{ pending_action_title }}", classes="headline font-weight-bold")
-            with vuetify.VCardText():
-                html.P("{{ pending_action_message }}", classes="mb-3")
+    with vuetify.VDialog(
+        v_model=("action_confirm_dialog", False),
+        max_width="620",
+        aria_labelledby="action-confirm-title",
+    ):
+        with vuetify.VCard(classes="glass-card action-confirm-card pa-2"):
+            vuetify.VCardTitle(
+                "{{ pending_action_title }}",
+                id="action-confirm-title",
+                classes="headline font-weight-bold action-confirm-title",
+            )
+            with vuetify.VCardText(classes="action-confirm-body"):
+                html.P(
+                    "{{ pending_action_message }}",
+                    classes="mb-3 action-confirm-message",
+                )
                 with vuetify.VAlert(
                     type="warning",
                     text=True,
                     dense=True,
-                    classes="mb-3",
+                    classes="mb-3 action-confirm-warning",
                 ):
-                    html.Span("This operation changes or removes case data and cannot be undone by FOAMTrame.")
+                    html.Span(
+                        "This operation changes or removes case data and cannot be undone by FOAMTrame."
+                    )
                 with vuetify.VList(
                     dense=True,
                     outlined=True,
@@ -938,11 +1360,18 @@ def build_run_log_content():
                         key=("target",),
                     ):
                         with vuetify.VListItemIcon(classes="mr-2"):
-                            vuetify.VIcon("mdi-file-remove-outline", small=True, color="warning")
+                            vuetify.VIcon(
+                                "mdi-file-remove-outline", small=True, color="warning"
+                            )
                         vuetify.VListItemTitle("{{ target }}", classes="text-body-2")
-            with vuetify.VCardActions():
+            with vuetify.VCardActions(classes="action-confirm-actions"):
                 vuetify.VSpacer()
-                vuetify.VBtn("Cancel", text=True, click="action_confirm_dialog = false")
+                vuetify.VBtn(
+                    "Cancel",
+                    text=True,
+                    color="blue-grey darken-3",
+                    click="action_confirm_dialog = false",
+                )
                 vuetify.VBtn(
                     "Confirm",
                     color="error",
@@ -958,7 +1387,9 @@ def build_run_log_content():
                     "No Allrun script was supplied. FOAMTrame detected the following suggested sequence. Review it before execution because case-specific ordering may differ.",
                     classes="mb-3",
                 )
-                with vuetify.VList(dense=True, outlined=True, classes="guided-run-list"):
+                with vuetify.VList(
+                    dense=True, outlined=True, classes="guided-run-list"
+                ):
                     with vuetify.VListItem(
                         v_for="(label, index) in guided_action_labels",
                         key=("label",),
@@ -967,7 +1398,9 @@ def build_run_log_content():
                             color="cyan darken-3",
                             size="28",
                         ):
-                            html.Span("{{ index + 1 }}", classes="white--text text-caption")
+                            html.Span(
+                                "{{ index + 1 }}", classes="white--text text-caption"
+                            )
                         vuetify.VListItemTitle("{{ label }}")
             with vuetify.VCardActions():
                 vuetify.VSpacer()

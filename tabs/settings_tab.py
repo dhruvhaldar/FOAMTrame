@@ -45,7 +45,8 @@ def _uploaded_bytes(file_value: Any) -> tuple[str, bytes]:
     if isinstance(content, str):
         encoded = content.split(",", 1)[-1] if content.startswith("data:") else content
         try:
-            return name, base64.b64decode(encoded, validate=True)
+            # Trame transports uploads as Base64; this is not encryption.
+            return name, base64.b64decode(encoded, validate=True)  # nosec
         except Exception:
             return name, content.encode("utf-8")
     if isinstance(content, (list, tuple)):
@@ -63,9 +64,7 @@ def setup_settings_tab(server):
     state.setdefault("app_state_settings_status", "Your app state is ready to back up.")
     state.setdefault("app_state_settings_status_color", "info")
     security_preferences = load_security_preferences()
-    state.setdefault(
-        "security_enabled", security_preferences["security_enabled"]
-    )
+    state.setdefault("security_enabled", security_preferences["security_enabled"])
     state.setdefault(
         "security_allow_network", security_preferences["bind_mode"] == "network"
     )
@@ -125,16 +124,12 @@ def setup_settings_tab(server):
         state.security_websocket_max_message_mb = preferences[
             "websocket_max_message_mb"
         ]
-        state.security_session_timeout_enabled = preferences[
-            "session_timeout_enabled"
-        ]
-        state.security_session_timeout_minutes = preferences[
-            "session_timeout_minutes"
-        ]
+        state.security_session_timeout_enabled = preferences["session_timeout_enabled"]
+        state.security_session_timeout_minutes = preferences["session_timeout_minutes"]
 
     @state.change("active_tab")
     def refresh_backup_preview(active_tab, **_):
-        if int(active_tab) == 6:
+        if int(active_tab) == 7:
             state.app_state_backup_json = export_app_state_json()
             state.dirty("app_state_backup_json")
             state.flush()
@@ -179,11 +174,24 @@ def setup_settings_tab(server):
         try:
             restored = restore_app_state_json(state.app_state_restore_pending)
             config = restored["case_config"]
+            geometry_preferences = restored["geometry_preferences"]
+            if hasattr(ctrl, "apply_restored_geometry_preferences"):
+                ctrl.apply_restored_geometry_preferences(
+                    geometry_preferences, config["ACTIVE_CASE"]
+                )
             state.case_root = config["CASE_ROOT"]
             state.docker_image = config["DOCKER_IMAGE"]
             state.openfoam_version = config["OPENFOAM_VERSION"]
             state.active_case = config["ACTIVE_CASE"]
             state.run_history = restored["run_history"]
+            restored_geometry_mode = geometry_preferences["preferred_mode"]
+            if not config["ACTIVE_CASE"] and restored_geometry_mode != "custom":
+                restored_geometry_mode = "custom"
+            state.geometry_mode = restored_geometry_mode
+            state.geometry_library_selection = geometry_preferences["library_selection"]
+            state.geometry_case_selection = geometry_preferences.get(
+                "case_geometry_selections", {}
+            ).get(config["ACTIVE_CASE"], "")
             publish_security_preferences(restored["security_preferences"])
             state.app_state_backup_json = json.dumps(restored, indent=2) + "\n"
             state.app_state_restore_pending = ""
@@ -203,9 +211,7 @@ def setup_settings_tab(server):
 
     def generate_api_key():
         state.security_api_key_new = secrets.token_urlsafe(32)
-        state.security_settings_status = (
-            "A new API key was generated. Copy it before saving; it is stored only as a hash."
-        )
+        state.security_settings_status = "A new API key was generated. Copy it before saving; it is stored only as a hash."
         state.security_settings_status_color = "warning"
         state.flush()
 
@@ -236,12 +242,8 @@ def setup_settings_tab(server):
                     "websocket_max_message_mb": (
                         state.security_websocket_max_message_mb
                     ),
-                    "session_timeout_enabled": (
-                        state.security_session_timeout_enabled
-                    ),
-                    "session_timeout_minutes": (
-                        state.security_session_timeout_minutes
-                    ),
+                    "session_timeout_enabled": (state.security_session_timeout_enabled),
+                    "session_timeout_minutes": (state.security_session_timeout_minutes),
                 }
             )
             if not update_security_preferences(preferences):
@@ -267,12 +269,7 @@ def setup_settings_tab(server):
 
 
 def build_settings_drawer():
-    from trame.app import get_server
-
-    server = get_server()
-    state = server.state
-
-    with html.Div(v_show="active_tab === 6", classes="pa-4"):
+    with html.Div(v_show="active_tab === 7", classes="pa-4"):
         with html.Div(classes="d-flex align-center mb-3"):
             vuetify.VIcon("mdi-cog-outline", color="cyan darken-3", classes="mr-2")
             html.Div("Settings", classes="text-subtitle-1 font-weight-bold")
@@ -293,6 +290,7 @@ def build_settings_content():
     from trame.app import get_server
 
     server = get_server()
+    assert server is not None
     state, ctrl = server.state, server.controller
 
     download_exec = client.JSEval(
@@ -326,13 +324,16 @@ def build_settings_content():
     with vuetify.VContainer(
         fluid=True,
         classes="fill-height pa-6 settings-page",
-        v_if="active_tab === 6",
+        v_if="active_tab === 7",
     ):
         with vuetify.VRow(justify="center", classes="settings-page-row"):
             with vuetify.VCol(cols="12", md="10", lg="8", xl="7"):
                 with vuetify.VCard(classes="glass-card settings-glass-card pa-6"):
                     with html.Div(classes="d-flex align-center mb-2"):
-                        vuetify.VIcon("mdi-database-cog-outline", classes="settings-title-icon mr-3")
+                        vuetify.VIcon(
+                            "mdi-database-cog-outline",
+                            classes="settings-title-icon mr-3",
+                        )
                         html.H2("App State", classes="settings-title")
                     html.P(
                         "Back up and restore your case configuration and Run/Log history as one versioned JSON file.",
@@ -342,7 +343,9 @@ def build_settings_content():
                     with vuetify.VCard(classes="settings-action-card pa-5 mb-5"):
                         with html.Div(classes="settings-action-layout"):
                             with html.Div(classes="settings-action-copy"):
-                                html.H3("Backup App State", classes="settings-action-title")
+                                html.H3(
+                                    "Backup App State", classes="settings-action-title"
+                                )
                                 html.P(
                                     "Download the current configuration and up to 100 recent run-history entries.",
                                     classes="settings-action-description",
@@ -426,7 +429,9 @@ def build_settings_content():
                         classes="settings-action-card pa-5 mb-4",
                         disabled=("!security_enabled",),
                     ):
-                        html.H3("Network & Browser Access", classes="settings-action-title")
+                        html.H3(
+                            "Network & Browser Access", classes="settings-action-title"
+                        )
                         html.P(
                             "Loopback-only access is safest. Network access and CORS changes require a restart.",
                             classes="settings-action-description mb-3",

@@ -10,7 +10,6 @@ import logging
 import os
 import mmap
 import array
-import itertools
 from pathlib import Path
 from typing import List, Optional, Tuple, Dict, Union, Any
 
@@ -151,7 +150,7 @@ class OpenFOAMFieldParser:
         self.case_dir_str = str(self.case_dir)
         self.is_parallel = False
         self.data_root = self.case_dir
-        
+
         # Check for parallel case
         # ⚡ Bolt Optimization: Prioritize processor0 if it exists, as it's the source of truth for parallel runs.
         proc0 = self.case_dir / "processor0"
@@ -165,7 +164,6 @@ class OpenFOAMFieldParser:
     def get_data_root(self) -> Path:
         """Expose the data root (e.g. processor0 for parallel runs)."""
         return self.data_root
-
 
     def get_time_directories(self, known_mtime: Optional[float] = None) -> List[str]:
         """Get all time directories sorted numerically."""
@@ -203,7 +201,6 @@ class OpenFOAMFieldParser:
         except OSError as e:
             logger.error(f"Error listing directories in {self.data_root}: {e}")
             return []
-
 
         # Sort based on pre-calculated float value
         time_dirs.sort(key=lambda x: x[0])
@@ -284,7 +281,7 @@ class OpenFOAMFieldParser:
 
             field_type = None
             is_binary = b"format binary" in header[:512]
-            
+
             # ⚡ Bolt Optimization: Use simple byte substring search instead of regex for ~40% faster type detection
             if b"class" in header:
                 if b"volScalarField" in header:
@@ -307,7 +304,7 @@ class OpenFOAMFieldParser:
                 _CASE_FIELD_TYPES[case_path_str][filename] = field_type
 
             return field_type
-        except Exception as e:
+        except Exception:
             # print(f"DEBUG: _get_field_type failed for {field_entry}: {e}")
             return None
 
@@ -353,7 +350,11 @@ class OpenFOAMFieldParser:
                         )
                         if field_type and field_type.startswith("scalar"):
                             scalar_fields.append(entry.name)
-                        elif field_type and field_type.startswith("vector") and entry.name == "U":
+                        elif (
+                            field_type
+                            and field_type.startswith("vector")
+                            and entry.name == "U"
+                        ):
                             has_U = True
 
             # Sort for consistency
@@ -474,7 +475,7 @@ class OpenFOAMFieldParser:
                     if store_cache:
                         _FILE_CACHE[path_str] = (mtime, val)
                     return val
-                except Exception as e:
+                except Exception:
                     # Fallback to Python if Rust fails (unlikely)
                     pass
 
@@ -488,26 +489,36 @@ class OpenFOAMFieldParser:
                         with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
                             # 0. Check for binary
                             is_binary = b"format binary" in mm[:512]
-                            
+
                             if is_binary:
                                 idx = mm.find(b"internalField")
                                 if idx != -1:
                                     # Find nonuniform and the size
-                                    nonuniform_idx = mm.find(b"nonuniform", idx, idx + 200)
+                                    nonuniform_idx = mm.find(
+                                        b"nonuniform", idx, idx + 200
+                                    )
                                     if nonuniform_idx != -1:
                                         # Size is usually on the next line or after List<scalar>
-                                        size_match = re.search(rb"List<scalar>\s*(\d+)", mm[nonuniform_idx:nonuniform_idx+200])
+                                        size_match = re.search(
+                                            rb"List<scalar>\s*(\d+)",
+                                            mm[nonuniform_idx : nonuniform_idx + 200],
+                                        )
                                         if size_match:
                                             size = int(size_match.group(1))
                                             # Binary data starts after a newline and optional '('
                                             # We search for the start of binary block
                                             # In binary files, there is usually a '(' followed by the data.
                                             # Or it might just be the bytes.
-                                            data_start = mm.find(b"(", nonuniform_idx + size_match.end())
+                                            data_start = mm.find(
+                                                b"(", nonuniform_idx + size_match.end()
+                                            )
                                             if data_start == -1:
                                                 # If no '(', data usually starts after the size + \n
-                                                data_start = mm.find(b"\n", nonuniform_idx + size_match.end())
-                                            
+                                                data_start = mm.find(
+                                                    b"\n",
+                                                    nonuniform_idx + size_match.end(),
+                                                )
+
                                             if data_start != -1:
                                                 # OpenFOAM binary data is usually float64 (8 bytes) or float32 (4 bytes)
                                                 # Most modern runs are double precision (8 bytes)
@@ -515,20 +526,34 @@ class OpenFOAMFieldParser:
                                                 # but 8 bytes is the safe default for simulations.
                                                 try:
                                                     # Offset by 1 if we found '('
-                                                    actual_start = data_start + 1 if mm[data_start] == ord('(') else data_start + 1
-                                                    
+                                                    actual_start = (
+                                                        data_start + 1
+                                                        if mm[data_start] == ord("(")
+                                                        else data_start + 1
+                                                    )
+
                                                     # Read from buffer
                                                     # np.frombuffer is zero-copy and extremely fast
-                                                    arr = np.frombuffer(mm, dtype='float64', count=size, offset=actual_start)
+                                                    arr = np.frombuffer(
+                                                        mm,
+                                                        dtype="float64",
+                                                        count=size,
+                                                        offset=actual_start,
+                                                    )
                                                     if arr.size > 0:
                                                         val = float(np.mean(arr))
                                                 except (ValueError, IndexError):
                                                     # Try float32 if float64 failed or returned garbage
                                                     try:
-                                                        arr = np.frombuffer(mm, dtype='float32', count=size, offset=actual_start)
+                                                        arr = np.frombuffer(
+                                                            mm,
+                                                            dtype="float32",
+                                                            count=size,
+                                                            offset=actual_start,
+                                                        )
                                                         if arr.size > 0:
                                                             val = float(np.mean(arr))
-                                                    except:
+                                                    except Exception:
                                                         pass
 
                             # 1. Check for nonuniform list (ASCII)
@@ -536,7 +561,9 @@ class OpenFOAMFieldParser:
                                 idx = mm.find(b"internalField")
                                 if idx != -1:
                                     # Verify "nonuniform" follows
-                                    nonuniform_idx = mm.find(b"nonuniform", idx, idx + 200)
+                                    nonuniform_idx = mm.find(
+                                        b"nonuniform", idx, idx + 200
+                                    )
 
                                     if nonuniform_idx != -1:
                                         # Locate list start '('
@@ -546,7 +573,10 @@ class OpenFOAMFieldParser:
                                             boundary_idx = mm.rfind(b"boundaryField")
 
                                             end_paren = -1
-                                            if boundary_idx != -1 and boundary_idx > start_paren:
+                                            if (
+                                                boundary_idx != -1
+                                                and boundary_idx > start_paren
+                                            ):
                                                 end_paren = mm.rfind(
                                                     b")", start_paren, boundary_idx
                                                 )
@@ -554,9 +584,13 @@ class OpenFOAMFieldParser:
                                                 end_paren = mm.rfind(b")")
 
                                             if end_paren != -1:
-                                                data_block = mm[start_paren + 1 : end_paren]
+                                                data_block = mm[
+                                                    start_paren + 1 : end_paren
+                                                ]
                                                 try:
-                                                    numbers = np.fromstring(data_block, sep=" ")
+                                                    numbers = np.fromstring(
+                                                        data_block, sep=" "
+                                                    )
                                                     if numbers.size > 0:
                                                         val = float(np.mean(numbers))
                                                 except ValueError:
@@ -601,7 +635,7 @@ class OpenFOAMFieldParser:
                                             except ValueError:
                                                 pass
 
-            except (FileNotFoundError, OSError, ValueError) as e:
+            except (FileNotFoundError, OSError, ValueError):
                 # If mmap fails or file issues, we fall back or return None
                 pass
 
@@ -617,7 +651,9 @@ class OpenFOAMFieldParser:
                             numbers_list = _RE_NUMBERS_FINDALL.findall(field_data)
                             if numbers_list:
                                 # ⚡ Bolt Optimization: Use sum/len generator to avoid O(N) list allocation and NumPy C-API overhead
-                                val = sum(float(n) for n in numbers_list) / len(numbers_list)
+                                val = sum(float(n) for n in numbers_list) / len(
+                                    numbers_list
+                                )
                 except (FileNotFoundError, OSError):
                     pass
 
@@ -676,7 +712,7 @@ class OpenFOAMFieldParser:
                     if store_cache:
                         _FILE_CACHE[path_str] = (mtime, val)
                     return val
-                except Exception as e:
+                except Exception:
                     pass
 
             try:
@@ -687,31 +723,54 @@ class OpenFOAMFieldParser:
                         with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
                             # 0. Check for binary
                             is_binary = b"format binary" in mm[:512]
-                            
+
                             if is_binary:
                                 idx = mm.find(b"internalField")
                                 if idx != -1:
-                                    nonuniform_idx = mm.find(b"nonuniform", idx, idx + 200)
+                                    nonuniform_idx = mm.find(
+                                        b"nonuniform", idx, idx + 200
+                                    )
                                     if nonuniform_idx != -1:
                                         # Size is usually after List<vector>
-                                        size_match = re.search(rb"List<vector>\s*(\d+)", mm[nonuniform_idx:nonuniform_idx+200])
+                                        size_match = re.search(
+                                            rb"List<vector>\s*(\d+)",
+                                            mm[nonuniform_idx : nonuniform_idx + 200],
+                                        )
                                         if size_match:
                                             size = int(size_match.group(1))
-                                            data_start = mm.find(b"(", nonuniform_idx + size_match.end())
+                                            data_start = mm.find(
+                                                b"(", nonuniform_idx + size_match.end()
+                                            )
                                             if data_start == -1:
-                                                data_start = mm.find(b"\n", nonuniform_idx + size_match.end())
-                                            
+                                                data_start = mm.find(
+                                                    b"\n",
+                                                    nonuniform_idx + size_match.end(),
+                                                )
+
                                             if data_start != -1:
                                                 try:
-                                                    actual_start = data_start + 1 if mm[data_start] == ord('(') else data_start + 1
+                                                    actual_start = (
+                                                        data_start + 1
+                                                        if mm[data_start] == ord("(")
+                                                        else data_start + 1
+                                                    )
                                                     # Vector data has 3 components (float64)
-                                                    arr = np.frombuffer(mm, dtype='float64', count=size*3, offset=actual_start)
+                                                    arr = np.frombuffer(
+                                                        mm,
+                                                        dtype="float64",
+                                                        count=size * 3,
+                                                        offset=actual_start,
+                                                    )
                                                     if arr.size > 0:
                                                         arr = arr.reshape(-1, 3)
                                                         mean_vec = np.mean(arr, axis=0)
-                                                        val = (float(mean_vec[0]), float(mean_vec[1]), float(mean_vec[2]))
+                                                        val = (
+                                                            float(mean_vec[0]),
+                                                            float(mean_vec[1]),
+                                                            float(mean_vec[2]),
+                                                        )
                                                         # Successfully parsed binary, skip to uniform check if val still (0,0,0)
-                                                except:
+                                                except Exception:
                                                     pass
 
                             # 1. Check for nonuniform (ASCII)
@@ -719,7 +778,9 @@ class OpenFOAMFieldParser:
                                 idx = mm.find(b"internalField")
                                 if idx != -1:
                                     # ⚡ Bolt Optimization: Avoid read() and decode() by searching buffer directly
-                                    nonuniform_idx = mm.find(b"nonuniform", idx, idx + 200)
+                                    nonuniform_idx = mm.find(
+                                        b"nonuniform", idx, idx + 200
+                                    )
 
                                     if nonuniform_idx != -1:
                                         start_paren = mm.find(b"(", nonuniform_idx)
@@ -728,7 +789,10 @@ class OpenFOAMFieldParser:
                                             boundary_idx = mm.rfind(b"boundaryField")
 
                                             end_paren = -1
-                                            if boundary_idx != -1 and boundary_idx > start_paren:
+                                            if (
+                                                boundary_idx != -1
+                                                and boundary_idx > start_paren
+                                            ):
                                                 end_paren = mm.rfind(
                                                     b")", start_paren, boundary_idx
                                                 )
@@ -737,14 +801,18 @@ class OpenFOAMFieldParser:
 
                                             if end_paren != -1:
                                                 # Slice data
-                                                data_block = mm[start_paren + 1 : end_paren]
+                                                data_block = mm[
+                                                    start_paren + 1 : end_paren
+                                                ]
                                                 try:
                                                     # replace(b'(', b' ') is fast on bytes
                                                     # ⚡ Bolt Optimization: Use translate() for bytes to avoid intermediate copies (~15% faster)
                                                     clean_data = data_block.translate(
                                                         _PARENS_TRANS_BYTES
                                                     )
-                                                    arr = np.fromstring(clean_data, sep=" ")
+                                                    arr = np.fromstring(
+                                                        clean_data, sep=" "
+                                                    )
 
                                                     if arr.size > 0:
                                                         arr = arr.reshape(-1, 3)
@@ -788,7 +856,7 @@ class OpenFOAMFieldParser:
                                                     float(vec_match.group(3)),
                                                 )
 
-            except (FileNotFoundError, OSError, ValueError) as e:
+            except (FileNotFoundError, OSError, ValueError):
                 pass
 
             # Fallback
@@ -1051,9 +1119,7 @@ class OpenFOAMFieldParser:
                         cached_data["Uy"].append(uy)
                         cached_data["Uz"].append(uz)
                         # ⚡ Bolt Optimization: Use math.hypot for ~2.5x faster scalar euclidean norm
-                        cached_data["U_mag"].append(
-                            float(math.hypot(ux, uy, uz))
-                        )
+                        cached_data["U_mag"].append(float(math.hypot(ux, uy, uz)))
 
                     # ⚡ Bolt Optimization: Clear directory scan cache for this stable step
                     # We don't need to re-scan this directory as data is now archived in _TIME_SERIES_CACHE
@@ -1266,79 +1332,34 @@ class OpenFOAMFieldParser:
                 # ⚡ Bolt Optimization: Avoid intermediate buffer allocation
                 # Append directly to residuals to save memory and avoid copying.
                 # If parsing fails, the cache entry is cleared anyway, so partial updates are safe.
-                # We capture initial length to support backfilling new fields.
-                initial_steps_count = len(residuals["time"])
-
-                # ⚡ Bolt Optimization: Use mmap + find() instead of line-by-line streaming
-                # This skips ~90% of parsing overhead by jumping directly to tokens.
                 if size == 0:
                     os.close(fd)
                     fd = None
                     return residuals
 
-                with mmap.mmap(fd, 0, access=mmap.ACCESS_READ) as mm:
-                    # ⚡ Bolt Optimization: Use memoryview to allow zero-copy slicing for float parsing.
-                    # float() in Python 3.x accepts memoryview, avoiding intermediate bytes objects.
-
-                    if start_offset > 0:
-                        mm.seek(start_offset)
-
-                    pos = start_offset
-
-                    # Initial search
-                    # Handle "Time" at start of file or chunk
-                    if pos == 0 or (pos < mm.size() and mm[pos : pos + 4] == TIME_PREFIX):
-                        if pos == 0 and mm[0:4] == TIME_PREFIX:
-                            next_time = 0
-                        elif mm[pos : pos + 4] == TIME_PREFIX:
-                            next_time = pos
-                        else:
-                            next_time = mm.find(b"\nTime", pos)
-                    else:
-                        next_time = mm.find(b"\nTime", pos)
-
-                    next_solving = mm.find(SOLVING_FOR_TOKEN, pos)
-
+                # Buffered iteration performs one C-level newline search per record.
+                # It is faster here than repeatedly searching an mmap for each token,
+                # while retaining the append-only offset used by incremental polling.
+                with os.fdopen(fd, "rb", closefd=False) as stream:
+                    stream.seek(start_offset)
                     while True:
-                        if next_time == -1 and next_solving == -1:
-                            # Avoid skipping partial tokens at the end
-                            # Advance only to the last newline found
-                            last_newline = mm.rfind(b"\n", pos)
-                            if last_newline != -1:
-                                new_offset = last_newline + 1
-                            else:
-                                new_offset = pos
+                        line_start = new_offset
+                        line = stream.readline()
+                        if not line:
                             break
+                        if not line.endswith(b"\n"):
+                            # Keep an incomplete final record for the next poll.
+                            new_offset = line_start
+                            break
+                        new_offset += len(line)
 
-                        # Determine which token comes first
-                        if next_time != -1 and (
-                            next_solving == -1 or next_time < next_solving
-                        ):
-                            # Handle Time
-                            # next_time points to start of "\nTime" or "Time"
-                            # If it was "\nTime", the content starts at next_time + 1
-                            if mm[next_time : next_time + 1] == b"\n":
-                                content_start = next_time + 1
-                            else:
-                                content_start = next_time
-
-                            # Find end of line
-                            eol = mm.find(b"\n", content_start)
-                            if eol == -1:
-                                # Partial line, stop and wait for more data
-                                break
-
-                            # Manual parse "Time = <val>"
-                            # ⚡ Bolt Optimization: Search directly in mmap buffer to avoid line copy
-                            eq_idx = mm.find(b"=", content_start, eol)
+                        if line.startswith(TIME_PREFIX):
+                            eq_idx = line.find(b"=")
                             if eq_idx != -1:
-                                # ⚡ Bolt Optimization: Use mmap slicing directly to avoid memoryview buffer errors while keeping it fast
                                 try:
-                                    t_val = float(mm[eq_idx + 1 : eol])
-                                    residuals["time"].append(t_val)
+                                    residuals["time"].append(float(line[eq_idx + 1 :]))
                                 except ValueError:
-                                    # Fallback to regex
-                                    time_match = TIME_REGEX_BYTES.search(mm, content_start, eol)
+                                    time_match = TIME_REGEX_BYTES.search(line)
                                     if time_match:
                                         try:
                                             residuals["time"].append(
@@ -1346,68 +1367,41 @@ class OpenFOAMFieldParser:
                                             )
                                         except ValueError:
                                             pass
+                            continue
 
-                            pos = eol + 1
-                            new_offset = pos
-                            next_time = mm.find(b"\nTime", pos)
-                        else:
-                            # Handle Solving for
-                            # next_solving points to "Solving for"
-                            field_start = next_solving + 12
+                        solving_idx = line.find(SOLVING_FOR_TOKEN)
+                        if solving_idx == -1:
+                            continue
+                        field_start = solving_idx + len(SOLVING_FOR_TOKEN)
+                        res_idx = line.find(INITIAL_RESIDUAL_TOKEN, field_start)
+                        if res_idx == -1:
+                            continue
+                        raw_field_end = line.find(b",", field_start, res_idx)
+                        if raw_field_end == -1:
+                            raw_field_end = res_idx
+                        field_bytes = line[field_start:raw_field_end].strip()
+                        field = _FIELD_NAME_CACHE.get(field_bytes)
+                        if field is None:
+                            field = field_bytes.decode("utf-8")
+                            _FIELD_NAME_CACHE[field_bytes] = field
 
-                            # Limit search to next newline
-                            eol = mm.find(b"\n", field_start)
-                            if eol == -1:
-                                # Partial line, stop and wait for more data
-                                break
-
-                            res_idx = mm.find(INITIAL_RESIDUAL_TOKEN, field_start, eol)
-
-                            if res_idx != -1:
-                                # Extract field
-                                # ⚡ Bolt Optimization: Avoid creating chunk copy and splitting
-                                comma_in_field = mm.find(b",", field_start, res_idx)
-                                if comma_in_field != -1:
-                                    raw_field_end = comma_in_field
-                                else:
-                                    raw_field_end = res_idx
-
-                                # Note: Dictionary lookups require hashable keys (bytes), not memoryview.
-                                # So we still create a bytes object here.
-                                field_bytes = mm[field_start:raw_field_end].strip()
-
-                                # Cache field name
-                                field = _FIELD_NAME_CACHE.get(field_bytes)
-                                if field is None:
-                                    field = field_bytes.decode("utf-8")
-                                    _FIELD_NAME_CACHE[field_bytes] = field
-
-                                # Extract value
-                                val_start = res_idx + len(INITIAL_RESIDUAL_TOKEN)
-                                comma_pos = mm.find(b",", val_start, eol)
-
-                                if comma_pos != -1:
-                                    val_str = mm[val_start:comma_pos]
-                                else:
-                                    val_str = mm[val_start:eol]
-
-                                try:
-                                    val = float(val_str)
-                                    if field not in residuals:
-                                        # Backfill with zeros for previous steps to maintain alignment
-                                        # ⚡ Bolt Optimization: Use list multiplication instead of itertools.repeat
-                                        # array.array("d", [0.0] * N) is ~1.7x faster than itertools.repeat(0.0, N)
-                                        # because it avoids Python iterating over the generator.
-                                        residuals[field] = array.array(
-                                            "d", [0.0] * initial_steps_count
-                                        )
-                                    residuals[field].append(val)
-                                except ValueError:
-                                    pass
-
-                            pos = eol + 1
-                            new_offset = pos
-                            next_solving = mm.find(SOLVING_FOR_TOKEN, pos)
+                        val_start = res_idx + len(INITIAL_RESIDUAL_TOKEN)
+                        val_end = line.find(b",", val_start)
+                        if val_end == -1:
+                            val_end = -1
+                        try:
+                            val = float(line[val_start:val_end])
+                            if field not in residuals:
+                                # The residual belongs to the most recent Time
+                                # record. Backfill every earlier record parsed in
+                                # this read as well as records from the cache.
+                                prior_steps_count = max(len(residuals["time"]) - 1, 0)
+                                residuals[field] = array.array(
+                                    "d", [0.0] * prior_steps_count
+                                )
+                            residuals[field].append(val)
+                        except ValueError:
+                            pass
 
             finally:
                 if fd is not None:
@@ -1445,9 +1439,16 @@ def get_available_fields(case_dir: str) -> List[str]:
     return sorted(all_files)
 
 
-def clear_cache(case_dir: str = None) -> None:
+def clear_cache(case_dir: str | None = None) -> None:
     """Clear internal caches. If case_dir is provided, clear only for that case."""
-    global _FILE_CACHE, _RESIDUALS_CACHE, _FIELD_TYPE_CACHE, _TIME_DIRS_CACHE, _TIME_SERIES_CACHE, _DIR_SCAN_CACHE, _CASE_FIELD_TYPES
+    global \
+        _FILE_CACHE, \
+        _RESIDUALS_CACHE, \
+        _FIELD_TYPE_CACHE, \
+        _TIME_DIRS_CACHE, \
+        _TIME_SERIES_CACHE, \
+        _DIR_SCAN_CACHE, \
+        _CASE_FIELD_TYPES
 
     if case_dir is None:
         _FILE_CACHE.clear()

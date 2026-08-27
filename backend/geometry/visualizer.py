@@ -1,7 +1,7 @@
 import logging
 import pyvista as pv
 from pathlib import Path
-from typing import Optional, Union, Dict, Any, BinaryIO
+from typing import Optional, Union, Dict, Any
 import multiprocessing
 import tempfile
 import os
@@ -18,6 +18,7 @@ logger = logging.getLogger("FOAMTrame")
 # Stores (path, mtime) -> mesh_info_dict
 _MESH_INFO_CACHE = LRUCache(maxsize=100)
 
+
 def _get_cache_dir() -> Path:
     """Get the cache directory, creating it if it doesn't exist."""
     cache_dir = Path(tempfile.gettempdir()) / "FOAMTrame_geometry_cache"
@@ -33,7 +34,7 @@ def _get_cache_dir() -> Path:
     # Ensure permissions are set (mkdir mode might be ignored or modified by umask)
     # We do this always to ensure security even if directory already existed
     try:
-        os.chmod(cache_dir, 0o700)
+        os.chmod(cache_dir, 0o700)  # nosec: restricts access to the current user
     except OSError as e:
         # If we can't chmod (e.g. not owner), we'll catch it in the ownership check below
         logger.debug(f"Security: Failed to set permissions on cache dir: {e}")
@@ -59,7 +60,9 @@ def _get_cache_dir() -> Path:
                     "Attempting to fix."
                 )
                 try:
-                    os.chmod(cache_dir, 0o700)
+                    os.chmod(  # nosec: repairs overly broad cache permissions
+                        cache_dir, 0o700
+                    )
                 except OSError as e:
                     logger.warning(f"Security: Failed to fix permissions: {e}")
                     return Path(tempfile.mkdtemp(prefix="FOAMTrame_geo_"))
@@ -69,7 +72,9 @@ def _get_cache_dir() -> Path:
 
     return cache_dir
 
+
 CACHE_SIZE_LIMIT_MB = 500  # Limit cache to 500MB
+
 
 def _cleanup_cache():
     """
@@ -110,7 +115,10 @@ def _cleanup_cache():
     except Exception as e:
         logger.warning(f"Error during cache cleanup: {e}")
 
-def _generate_html_process(file_path: str, output_path: str, color: str, opacity: float, optimize: bool):
+
+def _generate_html_process(
+    file_path: str, output_path: str, color: str, opacity: float, optimize: bool
+):
     """
     Helper function to be run in a separate process to generate the HTML.
     Uses BaseVisualizer logic.
@@ -134,7 +142,7 @@ def _generate_html_process(file_path: str, output_path: str, color: str, opacity
         plotter.add_mesh(mesh, color=color, opacity=opacity, show_edges=False)
         plotter.show_grid()
         plotter.show_axes()
-        plotter.camera_position = 'iso'
+        plotter.camera_position = "iso"
         plotter.export_html(output_path)
         plotter.close()
 
@@ -145,13 +153,20 @@ def _generate_html_process(file_path: str, output_path: str, color: str, opacity
         except OSError:
             pass
 
+
 class GeometryVisualizer(BaseVisualizer):
     """Visualizes geometry files (STL) using PyVista with caching and multiprocessing."""
 
     def __init__(self):
-        super().__init__() # Use default extensions
+        super().__init__()  # Use default extensions
 
-    def get_interactive_html(self, file_path: Union[str, Path], color: str = "lightblue", opacity: float = 1.0, optimize: bool = False) -> Optional[str]:
+    def get_interactive_html(
+        self,
+        file_path: Union[str, Path],
+        color: str = "lightblue",
+        opacity: float = 1.0,
+        optimize: bool = False,
+    ) -> Optional[str]:
         """
         Generates an interactive HTML representation of the STL file.
         Uses multiprocessing for robustness.
@@ -191,7 +206,7 @@ class GeometryVisualizer(BaseVisualizer):
             # Run generation in a separate process
             p = multiprocessing.Process(
                 target=_generate_html_process,
-                args=(str(path), temp_output_path, color, opacity, optimize)
+                args=(str(path), temp_output_path, color, opacity, optimize),
             )
             p.start()
             p.join(timeout=120)
@@ -216,15 +231,15 @@ class GeometryVisualizer(BaseVisualizer):
 
             try:
                 if os.path.getsize(temp_output_path) == 0:
-                     logger.error("HTML output file is empty")
-                     try:
+                    logger.error("HTML output file is empty")
+                    try:
                         os.remove(temp_output_path)
-                     except OSError:
+                    except OSError:
                         pass
-                     return None
+                    return None
             except OSError:
-                 logger.error("HTML output file is missing")
-                 return None
+                logger.error("HTML output file is missing")
+                return None
 
             with open(temp_output_path, "r", encoding="utf-8") as f:
                 html_content = f.read()
@@ -275,7 +290,7 @@ class GeometryVisualizer(BaseVisualizer):
                 "bounds": list(mesh.bounds),
                 "center": list(mesh.center),
                 "n_points": mesh.n_points,
-                "n_cells": mesh.n_cells
+                "n_cells": mesh.n_cells,
             }
 
             try:
@@ -288,6 +303,7 @@ class GeometryVisualizer(BaseVisualizer):
         except Exception as e:
             logger.error(f"Error getting mesh info: {e}")
             return {"success": False, "error": str(e)}
+
 
 # Global instance for use as a singleton
 # Note: In previous code it wasn't a singleton explicitly, but just a class with static methods

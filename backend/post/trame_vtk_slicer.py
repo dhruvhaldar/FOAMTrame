@@ -20,7 +20,9 @@ class SliceVisualizer:
     def __init__(self):
         self._visualizer = TrameVisualizer()
 
-    def process(self, case_path: str, params: Dict[str, Any], parent_id: Optional[str] = None) -> Dict[str, Any]:
+    def process(
+        self, case_path: str, params: Dict[str, Any], parent_id: Optional[str] = None
+    ) -> Dict[str, Any]:
         target_file = self._resolve_target_file(case_path)
         if not target_file:
             return {"status": "error", "message": "No suitable VTK or mesh file found"}
@@ -47,7 +49,9 @@ class IsosurfaceVisualizer:
             cls._instance = cls()
         return cls._instance
 
-    def start_visualization(self, case_or_file_path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def start_visualization(
+        self, case_or_file_path: str, params: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         target_file = self._resolve_target_file(case_or_file_path)
         if not target_file:
             return {"status": "error", "message": "No suitable VTK or mesh file found"}
@@ -65,6 +69,7 @@ class IsosurfaceVisualizer:
     def load_mesh(self, file_path: str) -> Dict[str, Any]:
         """Simple metadata extractor for mesh loading compatibility."""
         import pyvista as pv
+
         try:
             mesh = pv.read(file_path)
             if isinstance(mesh, pv.MultiBlock):
@@ -78,7 +83,7 @@ class IsosurfaceVisualizer:
                 "n_cells": mesh.n_cells,
                 "point_arrays": point_arrays,
                 "cell_arrays": cell_arrays,
-                "bounds": list(mesh.bounds)
+                "bounds": list(mesh.bounds),
             }
         except Exception as e:
             logger.error(f"Error reading mesh metadata in IsosurfaceVisualizer: {e}")
@@ -99,7 +104,9 @@ class StreamlineVisualizer:
     def __init__(self):
         self._visualizer = TrameVisualizer()
 
-    def process(self, case_path: str, params: Dict[str, Any], parent_id: Optional[str] = None) -> Dict[str, Any]:
+    def process(
+        self, case_path: str, params: Dict[str, Any], parent_id: Optional[str] = None
+    ) -> Dict[str, Any]:
         params = dict(params or {})
         params["operation"] = "Streamlines"
         return self._visualizer.start_visualization(case_path, params)
@@ -111,7 +118,9 @@ class SurfaceProjectionVisualizer:
     def __init__(self):
         self._visualizer = TrameVisualizer()
 
-    def process(self, case_path: str, params: Dict[str, Any], parent_id: Optional[str] = None) -> Dict[str, Any]:
+    def process(
+        self, case_path: str, params: Dict[str, Any], parent_id: Optional[str] = None
+    ) -> Dict[str, Any]:
         params = dict(params or {})
         params["operation"] = "Slice"
         return self._visualizer.start_visualization(case_path, params)

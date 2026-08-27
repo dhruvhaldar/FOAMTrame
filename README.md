@@ -13,6 +13,9 @@
 
 <p align="center">
   <a href="https://www.python.org/downloads/"><img alt="Python 3.10+" src="https://img.shields.io/badge/Python-3.10%2B-0c6e87?logo=python&logoColor=white"></a>
+  <a href="https://github.com/dhruvhaldar/FOAMTrame/actions/workflows/ci.yml"><img alt="CodeAudit status" src="https://img.shields.io/github/actions/workflow/status/dhruvhaldar/FOAMTrame/ci.yml?branch=main&label=CodeAudit&logo=githubactions&logoColor=white"></a>
+  <a href="https://github.com/dhruvhaldar/FOAMTrame/actions/workflows/ci.yml"><img alt="Ruff status" src="https://img.shields.io/github/actions/workflow/status/dhruvhaldar/FOAMTrame/ci.yml?branch=main&label=Ruff&logo=ruff&logoColor=white"></a>
+  <a href="https://docs.astral.sh/uv/"><img alt="uv locked" src="https://img.shields.io/badge/uv-locked-DE5FE9?logo=uv&logoColor=white"></a>
   <a href="https://kitware.github.io/trame/"><img alt="Trame 3" src="https://img.shields.io/badge/Trame-3-069ab5"></a>
   <a href="https://www.docker.com/"><img alt="Docker required" src="https://img.shields.io/badge/Docker-required-2496ED?logo=docker&logoColor=white"></a>
   <a href="#offline-installation"><img alt="Runs offline" src="https://img.shields.io/badge/Runs_offline-supported-069ab5"></a>
@@ -23,6 +26,7 @@ FOAMTrame brings case selection, tutorial import, OpenFOAM command execution, li
 
 ## Table of contents
 
+- [Start here](#start-here)
 - [Features](#features)
 - [Application workflow](#application-workflow)
 - [Architecture](#architecture)
@@ -37,9 +41,44 @@ FOAMTrame brings case selection, tutorial import, OpenFOAM command execution, li
 - [Project structure](#project-structure)
 - [Caching and performance](#caching-and-performance)
 - [Development checks](#development-checks)
+- [Documentation maintenance](#documentation-maintenance)
+- [Extension roadmap](#extension-roadmap)
+- [Contributing](#contributing)
 - [Troubleshooting](#troubleshooting)
 - [Security notes](#security-notes)
 - [License](#license)
+
+## Start here
+
+Choose the shortest route for what you want to do. Every command in this README
+is intended to be run from the repository root.
+
+| I want to… | Start with | Then read |
+| --- | --- | --- |
+| Use FOAMTrame on Windows | [Windows installation](#windows-powershell) | [Running FOAMTrame](#running-foamtrame) |
+| Use FOAMTrame on Linux | [Linux installation](#linux) | [Using the application](#using-the-application) |
+| Run an unattended installation | [Automated silent-install examples](#automated-silent-install-examples) | [Runtime configuration](#runtime-configuration) |
+| Develop or review a change | [Project structure](#project-structure) | [Development checks](#development-checks) |
+| Diagnose a problem | [Troubleshooting](#troubleshooting) | [Security notes](#security-notes) |
+| Extend the product | [Extension roadmap](#extension-roadmap) | [Contributing](#contributing) |
+
+Quick start on Windows:
+
+```powershell
+.\install.ps1
+.\start.ps1
+```
+
+Quick start on Linux:
+
+```bash
+./install.sh
+./start.sh
+```
+
+The default URL is [http://localhost:8087](http://localhost:8087). Docker may be
+unavailable while the UI starts, but tutorial import and OpenFOAM execution need
+a reachable Docker daemon and configured image.
 
 ## Features
 
@@ -47,8 +86,11 @@ FOAMTrame brings case selection, tutorial import, OpenFOAM command execution, li
 
 - Verifies the Trame server, Docker daemon, and configured OpenFOAM image.
 - Detects `WM_PROJECT_VERSION` from the configured Docker image and displays it
-  in the footer, with an explicitly labelled configured-version fallback when
-  the container runtime cannot be inspected.
+  in the always-visible Setup sidebar footer, with an explicitly labelled
+  configured-version fallback when the container runtime cannot be inspected.
+- Shows a dynamic `Build YYYY-MM-DD` value in that footer. Packaged and CI builds
+  may set `FOAMTRAME_BUILD_DATE`; local source runs fall back to the `app.py`
+  modification date.
 - Scans a configurable case-root directory and restores the last active case.
 - Creates a blank OpenFOAM case with `0`, `constant`, and `system` directories.
 - Discovers official tutorials inside the Docker image.
@@ -59,12 +101,25 @@ Implementation: [tabs/setup_tab.py](./tabs/setup_tab.py)
 
 ### Geometry
 
-- Loads the newest supported geometry or VTK file found in the active case.
-- Accepts browser uploads for moderate-sized datasets.
-- Displays dataset type, point count, and cell count.
+- Opens on **Case** when an active case exists and renders every supported native
+  surface under `constant/geometry` when present, otherwise under
+  `constant/triSurface`. The **Active geometry** dropdown switches between that
+  default and individual imported triSurface files. **Reload case geometry**
+  resets the selector to the default before reloading it.
+- Falls back to **Custom** when no case is selected; case-dependent **Case** and
+  **Library** controls remain visible but disabled.
+- Clears the case render before switching to a session-only custom VTK or surface
+  dataset.
+- Browses `$FOAM_TUTORIALS/resources/geometry` inside the configured OpenFOAM
+  image and safely imports a selected resource into the active case.
+- Displays dataset type, aggregate point count, and aggregate cell count.
 - Uses server-side VTK rendering with camera reset and interactive controls.
+- Persists the preferred geometry mode, library selection, and per-case active
+  geometry choice in SQLite and the portable JSON backup. Geometry files and
+  uploaded datasets remain on disk and are not embedded in the database or backup.
 
-Implementation: [tabs/geometry_tab.py](./tabs/geometry_tab.py)
+Implementation: [tabs/geometry_tab.py](./tabs/geometry_tab.py) and
+[backend/geometry/library.py](./backend/geometry/library.py)
 
 ### Meshing
 
@@ -82,6 +137,9 @@ Placeholder: [tabs/meshing_tab.py](./tabs/meshing_tab.py)
   exact missing prerequisite.
 - Prefers a case-provided `Allrun`; otherwise offers a reviewable guided sequence
   containing only confidently detected preprocessing, meshing, and solver steps.
+- Keeps WORKFLOW, DETECTED COMMANDS, and CLEANUP visible in the wider Run/Log
+  sidebar. The compact command grid remains directly actionable, while the
+  detailed capability list and unavailable reasons open from **Available actions**.
 - Derives the solver application and optional solver module from
   `system/controlDict` instead of assuming `simpleFoam` or `pimpleFoam`.
 - Detects `surfaceFeatureExtract`, `blockMesh`, `snappyHexMesh`, `topoSet`,
@@ -92,6 +150,16 @@ Placeholder: [tabs/meshing_tab.py](./tabs/meshing_tab.py)
   `postProcessing`, `VTK`, and `log.*` files. The initial `0` directory and
   `constant/polyMesh` are preserved.
 - Streams console output and supports stopping the active process.
+- Archives FOAMTrame console output separately from case-owned solver logs. A
+  case-provided `Allrun` remains responsible for `log.foamRun`, so launching or
+  observing a run never truncates an existing residual log.
+- Recognizes OpenFOAM's “already run” output. If every `Allrun` stage is skipped,
+  records the run as **Skipped**, uses a warning status instead of success, and
+  shows a dismissible warning notification with reviewed cleanup guidance. Partial
+  skips retain **Completed** status but are identified in both the console and an
+  informational notification. Cleanup choices are emphasized, while safely escaped
+  console output uses distinct command, information, warning, error, and ordinary
+  output colors. Existing results are never deleted automatically.
 - Accepts additional validated runs while a simulation is active, executes them
   one at a time in FIFO order, and allows waiting jobs to be cancelled or cleared.
   Each submission retains the case and runtime configuration selected when it was
@@ -150,6 +218,21 @@ Implementation: [tabs/visualizer_tab.py](./tabs/visualizer_tab.py) and
 
 Implementation: [tabs/settings_tab.py](./tabs/settings_tab.py) and [app_state.py](./app_state.py). Database schema and transactions are implemented in [database.py](./database.py).
 
+### Documentation
+
+- Reads this `README.md` directly from the repository; there is no second copy to
+  become stale.
+- Splits level-two headings into a persistent, keyboard-accessible section list in
+  the drawer; all section names remain discoverable without a dropdown.
+- Renders headings, lists, tables, links, quotes, and fenced code blocks locally,
+  without a CDN or browser-side Markdown dependency.
+- Converts the supported fenced Mermaid `flowchart LR` subset into accessible
+  inline SVG and safely displays unsupported Mermaid syntax as escaped code.
+- Sanitizes README content before it reaches Vue and provides **Reload README** for
+  reviewing edits without restarting FOAMTrame.
+
+Implementation: [tabs/documentation_tab.py](./tabs/documentation_tab.py)
+
 ## Application workflow
 
 1. Open **Setup** and wait for both health checks.
@@ -158,7 +241,9 @@ Implementation: [tabs/settings_tab.py](./tabs/settings_tab.py) and [app_state.py
 4. Run meshing, solver, conversion, or case scripts from **Run/Log**.
 5. Monitor solver data under **Plots**.
 6. Inspect VTK results under **Post**.
-7. Download periodic state backups from the gear-shaped **Settings** tab.
+7. Consult the in-app **Documentation** page for setup, operating, and development
+   guidance sourced from this README.
+8. Download periodic state backups from the gear-shaped **Settings** tab.
 
 ## Architecture
 
@@ -309,7 +394,9 @@ provided with those platform-specific packages, an already synchronized `.venv`,
 or a populated `uv` cache. Docker-based OpenFOAM operations additionally require
 Docker and the configured image to already be installed locally. Once these assets
 are present, `start.ps1` and `start.sh` are independent of global Python and `uv`
-installations.
+installations. The launchers use the installed `.venv` directly on normal starts;
+the verified Python and `uv` bootstrap path is retained as a fallback when that
+environment is absent.
 
 ### Automated silent-install examples
 
@@ -443,6 +530,7 @@ uv run --locked python manage.py init-db
 | `FOAMTRAME_LOG_DIR` | `<data-dir>/logs` | Base directory for date-grouped application logs |
 | `FOAMTRAME_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL` |
 | `FOAMTRAME_FRAMEWORK_LOG_LEVEL` | `WARNING` | Trame/wslink verbosity; set to `INFO` only for framework diagnostics |
+| `FOAMTRAME_STARTUP_TIMING` | Disabled | Set to `1` to log timed import, controller, layout, and server-ready checkpoints |
 | `FOAMTRAME_PORT` | Installer selection (`8087` when skipped) | Override the installed port when `--port` is omitted |
 
 Operational logs are grouped by the local start date using `YYYYMMDD` folders.
@@ -452,6 +540,16 @@ verbatim to `logs/YYYYMMDD/run.log`, including child stdout, stderr, the invoked
 command, timestamps, and exit code. Silent installer output uses
 `logs/YYYYMMDD/install.log`. CLI `--host` and `--port` override runtime defaults. When `--host` is
 omitted, the Trame host comes from **Settings → Security** (`127.0.0.1` by default).
+
+Measure first-HTTP-response startup time without changing real settings:
+
+```powershell
+.\.venv\Scripts\python.exe benchmarks\benchmark_startup.py --runs 3
+```
+
+Add `--verbose` to include the internal startup checkpoints for bottleneck
+diagnosis. The benchmark uses a temporary database, log directory, and free
+loopback port for every run.
 
 ### Load a dataset at startup
 
@@ -487,10 +585,15 @@ Tutorial discovery and import use the configured Docker image. The tutorial is c
 1. Choose an active case under **Setup**.
 2. Open **Run/Log**.
 3. Set the desired process count if parallel execution is required.
-4. Select a command from the drawer.
+4. Select a workflow or detected command from the drawer. Use **Available actions**
+   to review the complete capability list and unavailable reasons.
 5. Follow output in **Console Log Output**.
+6. If `Allrun` is reported as **Skipped**, review **Allclean** or **Safe Clean
+   Generated Outputs** before rerunning. Cleanup is always explicit and confirmed.
 
-Run history records command, case, status, timestamps, and duration.
+Run history records command, case, status, timestamps, and duration. The main
+status chip and run history distinguish completed, skipped, failed, and running
+states using matching success, warning, error, and progress treatments.
 
 ## App-state persistence
 
@@ -506,14 +609,25 @@ JSON is now an interchange format only. A portable backup schema example remains
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "case_config": {
     "CASE_ROOT": "/path/to/tutorial_cases",
     "DOCKER_IMAGE": "haldardhruv/ubuntu_noble_openfoam:v12",
     "OPENFOAM_VERSION": "12",
     "ACTIVE_CASE": "aerofoilNACA0012"
   },
+  "geometry_preferences": {
+    "preferred_mode": "case",
+    "library_selection": "",
+    "case_geometry_selections": {}
+  },
   "run_history": [],
+  "plot_preferences": {
+    "font": "roboto",
+    "background": "glass",
+    "logo_mode": "foamtrame",
+    "custom_logo_data": ""
+  },
   "security_preferences": {
     "security_enabled": false,
     "bind_mode": "loopback",
@@ -539,7 +653,8 @@ The initial schema contains:
 | `schema_metadata` | Schema version and initialization markers |
 | `app_config` | Typed JSON values for case root, active case, Docker image, and OpenFOAM version |
 | `simulation_runs` | Indexed command, case, status, timestamps, duration, and complete compatible run record |
-| `plot_preferences` | Plot typography, background, and logo preferences |
+| `app_preferences` | Plot typography, background, and logo preferences |
+| `geometry_preferences` | Preferred Geometry subpage and library selection |
 | `security_preferences` | Validated network, CORS, header, size-limit, session-timeout, and API-key policy |
 | `cases` | Relational case catalogue ready for workspace synchronization |
 | `automation_actions` | Future chatbot/automation command queue and audit trail |
@@ -559,9 +674,9 @@ The initial schema contains:
 3. Wait for validation to succeed.
 4. Select **Restore App State**.
 
-Restore replaces the persisted case configuration, plot and security preferences,
-and run history. It does **not** copy case directories, simulation results,
-uploaded VTK datasets, or Docker images. If a backup references a case root that
+Restore replaces the persisted case configuration, plot, geometry, and security
+preferences, and run history. It does **not** copy case directories, imported case
+geometry, simulation results, uploaded VTK datasets, or Docker images. If a backup references a case root that
 does not exist on the new machine, update **Advanced Settings** after restoring.
 Security preferences containing an API-key hash are transferable, but the original
 plain-text key cannot be recovered from a backup.
@@ -654,6 +769,7 @@ CORS policy. The companion API remains loopback-bound by default.
     ├── run_log_tab.py
     ├── plots_tab.py
     ├── visualizer_tab.py
+    ├── documentation_tab.py
     └── settings_tab.py
 ```
 
@@ -720,6 +836,29 @@ uv run --locked python -m py_compile \
   tabs/setup_tab.py tabs/run_log_tab.py tabs/settings_tab.py
 ```
 
+Lint and type-check the Python code with the locked Ruff and `ty` versions:
+
+```bash
+uv run --locked ruff check .
+uv run --locked ruff format --check .
+uv run --locked ty check
+```
+
+Ruff enforces the core Pyflakes and critical pycodestyle lint rules plus its
+deterministic formatter. Run `uv run --locked ruff format .` to apply formatting
+before committing. `ty` targets every supported platform and checks application
+code, tests, and benchmarks while excluding scratch diagnostics. A narrow `ty`
+override covers cachebox decorator-generated methods, and optional PyVista and
+native accelerator imports remain valid when those components are not installed.
+
+On Python 3.11 or newer, run the CodeAudit SAST gate as well. Reviewed false
+positives use inline `# nosec` comments with a reason; new medium, high, or
+critical findings fail the command and CI:
+
+```bash
+uv run --locked python scripts/codeaudit_gate.py .
+```
+
 Validate database initialization and the persisted state schema:
 
 ```bash
@@ -751,6 +890,78 @@ uv run --locked pytest -m smoke
 The smoke test starts the complete application on an ephemeral loopback port, waits for an HTTP 200 HTML response, and always terminates the child process. It skips only when Trame/VTK are absent from the selected interpreter. The [CI workflow](./.github/workflows/ci.yml) installs the full runtime and runs all tests on both Windows and Linux.
 
 For UI changes, check at least one desktop and one constrained viewport. Confirm that navigation remains reachable, cards do not overflow, and controls retain visible focus states.
+
+## Documentation maintenance
+
+This README is both the repository landing page and the source for FOAMTrame's
+in-app **Documentation** page. Keep it useful to both audiences:
+
+1. Add major topics as level-two (`##`) sections. Each one automatically becomes
+   a selectable in-app section.
+2. Use level-three headings for tasks within a topic and keep heading names unique
+   so anchor links remain predictable.
+3. Put the outcome and common command first, followed by constraints, alternatives,
+   and implementation detail.
+4. Prefer relative repository links and fenced code blocks with a language label.
+   Use fenced `mermaid` with `flowchart LR` for architecture diagrams; the in-app
+   renderer converts the supported node-and-edge subset into accessible inline SVG.
+5. Update the table of contents, relevant feature description, project tree, and
+   troubleshooting guidance when a change affects them.
+6. Keep machine-local paths, credentials, API keys, databases, logs, and case
+   results out of examples.
+
+The in-app renderer deliberately supports a stable Markdown subset: headings,
+paragraphs, emphasis, links, ordered and unordered lists, blockquotes, tables,
+fenced code, and left-to-right Mermaid flowcharts. Unsupported or malformed
+Mermaid syntax is displayed safely as code instead of being executed. Raw HTML is
+not trusted in the application view. Repository-hosted Markdown can still use
+presentation HTML for badges and the centered logo.
+
+When a topic grows large enough to obscure the main workflow, add a concise
+summary here and move deep reference material into `docs/<topic>.md`. Link the new
+guide from **Start here**, the table of contents, and the relevant feature section.
+This keeps the README comprehensive as an index while allowing future material to
+grow without turning one page into an unstructured manual.
+
+## Extension roadmap
+
+The current service boundaries are intended to support future additions without
+duplicating validation or coupling new surfaces directly to UI buttons.
+
+| Addition | Preferred extension point | Required safeguards |
+| --- | --- | --- |
+| Meshing workflows | `backend/meshing/` plus `tabs/meshing_tab.py` | Resolve fixed action IDs and verify case prerequisites |
+| New case commands | `backend/case/capabilities.py` | Keep unavailable actions visible with reasons; never accept arbitrary shell text |
+| Plot types and parsers | `backend/plots/realtime_plots.py` and `tabs/plots_tab.py` | Preserve incremental reads, non-overlap layout, and white PNG export |
+| Dataset readers or filters | `backend/post/` and the owning UI tab | Keep processing server-side and document accepted extensions |
+| Automation or chatbot tools | Shared application/service actions | Require typed parameters, confirmation where needed, and durable audit state |
+| Persistence fields | `database.py`, `app_state.py`, and backup normalization | Add a migration, preserve transactions, and update `app_state.json.example` |
+| Optional security controls | `security.py` and `tabs/settings_tab.py` | Remain disabled by default and validate restored values before use |
+| Additional documentation | A new `##` section or focused `docs/*.md` guide | Update navigation links and keep the in-app subset readable |
+
+These are extension options, not promises of schedule or scope. New work should
+follow the same local-first behavior: Docker-dependent features may degrade, but
+the application shell and documentation should continue to start.
+
+## Contributing
+
+Before changing code, read [AGENTS.md](./AGENTS.md), inspect the nearest tests, and
+preserve unrelated workspace changes. Keep each change focused and compatible with
+Python 3.10 or newer.
+
+A contribution is ready for review when it includes:
+
+- the user-visible implementation and proportionate automated tests;
+- documentation for changed behavior, configuration, or supported formats;
+- schema and portable-backup updates for persistence changes;
+- focused verification results and, for UI changes, desktop plus constrained-width
+  visual checks;
+- no machine-local databases, logs, ports, virtual environments, case results, or
+  credentials.
+
+Use the commands under [Development checks](#development-checks). A pull request or
+handoff should summarize behavior, compatibility or migration impact, and the exact
+commands that passed.
 
 ## Troubleshooting
 

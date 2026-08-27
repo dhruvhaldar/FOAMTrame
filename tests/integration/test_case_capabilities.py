@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -142,7 +143,10 @@ def test_missing_docker_executable_disables_command_with_reason(tmp_path):
 
     assert result.actions["blockMesh"].available is True
     assert result.actions["solver"].available is False
-    assert "not available in the configured Docker image" in result.actions["solver"].reason
+    assert (
+        "not available in the configured Docker image"
+        in result.actions["solver"].reason
+    )
     with pytest.raises(ValueError, match="unavailable"):
         service.resolve_actions(result, ["solver"])
 
@@ -177,6 +181,22 @@ def test_safe_clean_removes_only_reviewed_generated_outputs(tmp_path):
     assert (case / "constant" / "polyMesh").is_dir()
     assert (case / "system" / "controlDict").is_file()
     assert all(not path.exists() for path in generated)
+
+
+def test_safe_clean_rejects_normalized_path_outside_case(tmp_path):
+    service = CaseActionService()
+    case = build_case(tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    marker = outside / "result"
+    marker.write_text("keep", encoding="utf-8")
+    inspection = inspect(service, case, {"foamRun", "blockMesh", "setFields"})
+    escaped_target = case / "postProcessing" / ".." / ".." / outside.name
+
+    with pytest.raises(ValueError, match="escaped the active case"):
+        service.clean_case(replace(inspection, clean_targets=(escaped_target,)))
+
+    assert marker.read_text(encoding="utf-8") == "keep"
 
 
 def test_shared_runner_launches_only_resolved_fixed_id_actions(tmp_path):

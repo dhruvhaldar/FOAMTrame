@@ -1,16 +1,15 @@
-
 import os
 import platform
 import logging
 import uuid
-import time
 import shutil
 import docker
 import docker.errors
 from pathlib import Path
-from typing import Dict, Any, Callable, Tuple, Optional
+from typing import Dict, Any, Callable, Optional
 
 logger = logging.getLogger("FOAMTrame")
+
 
 def run_initial_setup_checks(
     get_docker_client_func: Callable[[], Any],
@@ -18,7 +17,7 @@ def run_initial_setup_checks(
     docker_image: str,
     save_config_func: Callable[[Dict[str, Any]], bool],
     config: Dict[str, Any],
-    status_callback: Optional[Callable[[str], None]] = None
+    status_callback: Optional[Callable[[str], None]] = None,
 ) -> Dict[str, Any]:
     """
     Performs comprehensive startup checks:
@@ -74,14 +73,24 @@ def run_initial_setup_checks(
                     logger.error(f"[FOAMTrame] {msg}")
                     return {"status": "failed", "message": msg}
                 else:
-                    if "createfile" in err_str and "system cannot find the file specified" in err_str:
+                    if (
+                        "createfile" in err_str
+                        and "system cannot find the file specified" in err_str
+                    ):
                         msg = "Docker Desktop is NOT running. Please launch Docker Desktop from your Start Menu and wait for the 'running' status."
                     else:
                         msg = f"Docker is installed but not running or not accessible: {e}"
                     if os.environ.get("FOAMTrame_SANDBOX_MODE"):
-                        logger.warning(f"[FOAMTrame] Sandbox Mode: {msg} Still proceeding...")
-                        save_config_func({"initial_setup_done": True, "sandbox_mode": True})
-                        return {"status": "completed", "message": "Sandbox Mode: Docker unavailable, but proceeding anyway."}
+                        logger.warning(
+                            f"[FOAMTrame] Sandbox Mode: {msg} Still proceeding..."
+                        )
+                        save_config_func(
+                            {"initial_setup_done": True, "sandbox_mode": True}
+                        )
+                        return {
+                            "status": "completed",
+                            "message": "Sandbox Mode: Docker unavailable, but proceeding anyway.",
+                        }
                     else:
                         logger.error(f"[FOAMTrame] {msg}")
                         return {"status": "failed", "message": msg}
@@ -92,7 +101,7 @@ def run_initial_setup_checks(
 
     # 4. Check if image exists, pull if not
     try:
-        client = get_docker_client_func() # Should be valid now
+        client = get_docker_client_func()  # Should be valid now
         try:
             client.images.get(docker_image)
             logger.info(f"[FOAMTrame] Image {docker_image} found.")
@@ -111,7 +120,7 @@ def run_initial_setup_checks(
                 # Build from Dockerfile
                 # We use fileobj to avoid sending build context, as the Dockerfile only has a FROM instruction
                 try:
-                    with open(dockerfile_path, 'rb') as f:
+                    with open(dockerfile_path, "rb") as f:
                         client.images.build(fileobj=f, tag=docker_image, rm=True)
                     logger.info(f"[FOAMTrame] Image {docker_image} built successfully.")
                 except Exception as build_err:
@@ -125,41 +134,44 @@ def run_initial_setup_checks(
             else:
                 msg = f"Docker image '{docker_image}' not found.\nPulling now... (Warning: Large download, check for metered connection)"
                 logger.info(f"[FOAMTrame] {msg}")
-                print(f"INFO::[FOAMTrame] {msg}") # Console output
+                print(f"INFO::[FOAMTrame] {msg}")  # Console output
 
                 if status_callback:
                     status_callback(msg)
 
-                import json
                 # Use the lower-level API to get progress updates
                 logger.info(f"[FOAMTrame] Starting pull for {docker_image}")
                 last_progress_update = 0
                 for line in client.api.pull(docker_image, stream=True, decode=True):
-                    status = line.get('status')
-                    progress = line.get('progress')
-                    
-                    if status == 'Downloading' or status == 'Extracting':
+                    status = line.get("status")
+                    progress = line.get("progress")
+
+                    if status == "Downloading" or status == "Extracting":
                         # Throttle updates to avoid flooding the frontend/logs
                         import time
+
                         current_time = time.time()
-                        if current_time - last_progress_update > 2: # Every 2 seconds
+                        if current_time - last_progress_update > 2:  # Every 2 seconds
                             msg = f"Docker Image: {status}... {progress or ''}"
                             if status_callback:
                                 status_callback(msg)
                             last_progress_update = current_time
-                    elif status == 'Pull complete' or status == 'Already exists':
-                         msg = f"Docker Image: {status}"
-                         if status_callback: status_callback(msg)
+                    elif status == "Pull complete" or status == "Already exists":
+                        msg = f"Docker Image: {status}"
+                        if status_callback:
+                            status_callback(msg)
 
                 logger.info(f"[FOAMTrame] Image {docker_image} pulled successfully.")
 
     except Exception as e:
-         msg = f"Failed to check/pull Docker image: {e}"
-         logger.error(f"[FOAMTrame] {msg}")
-         return {"status": "failed", "message": msg}
+        msg = f"Failed to check/pull Docker image: {e}"
+        logger.error(f"[FOAMTrame] {msg}")
+        return {"status": "failed", "message": msg}
 
     # 5. Run file permission checks
-    return check_docker_permissions(get_docker_client_func, case_root, docker_image, save_config_func, config)
+    return check_docker_permissions(
+        get_docker_client_func, case_root, docker_image, save_config_func, config
+    )
 
 
 def check_docker_permissions(
@@ -167,7 +179,7 @@ def check_docker_permissions(
     case_root: str,
     docker_image: str,
     save_config_func: Callable[[Dict[str, Any]], bool],
-    config: Dict[str, Any]
+    config: Dict[str, Any],
 ) -> Dict[str, Any]:
     """
     Checks if Docker creates files with root permissions and attempts to fix it.
@@ -183,7 +195,10 @@ def check_docker_permissions(
     if not is_linux:
         # On Windows/Mac (Docker Desktop), permissions are usually handled by the VM
         save_config_func({"initial_setup_done": True, "docker_run_as_user": False})
-        return {"status": "completed", "message": "Non-Linux system, skipping permission check"}
+        return {
+            "status": "completed",
+            "message": "Non-Linux system, skipping permission check",
+        }
 
     client = get_docker_client_func()
     if not client:
@@ -201,15 +216,10 @@ def check_docker_permissions(
     # Generate a unique test file name
     test_filename = f".permission_test_{uuid.uuid4().hex}"
     host_test_file = case_dir_path / test_filename
-    container_run_path = "/tmp/foam_flask_check" # nosec B108
+    container_run_path = "/tmp/foam_flask_check"  # nosec B108
 
     # Volume mapping
-    volumes = {
-        str(case_dir_path): {
-            "bind": container_run_path,
-            "mode": "rw"
-        }
-    }
+    volumes = {str(case_dir_path): {"bind": container_run_path, "mode": "rw"}}
 
     # Attempt 1: Default run (usually root)
     try:
@@ -217,28 +227,38 @@ def check_docker_permissions(
         # Command to touch a file
         cmd = f"touch {container_run_path}/{test_filename}"
 
-        container = client.containers.run(
+        client.containers.run(
             docker_image,
             f"bash -c '{cmd}'",
             volumes=volumes,
             remove=True,
-            detach=False # Wait for it to finish
+            detach=False,  # Wait for it to finish
         )
 
         # Check if file exists
         if not host_test_file.exists():
-            return {"status": "failed", "message": "Docker container failed to write test file"}
+            return {
+                "status": "failed",
+                "message": "Docker container failed to write test file",
+            }
 
         # Try to delete it
         try:
             host_test_file.unlink()
             # Success! No permission issues.
-            logger.info("[FOAMTrame] Permission Check: Default write success. No permission issues.")
+            logger.info(
+                "[FOAMTrame] Permission Check: Default write success. No permission issues."
+            )
             save_config_func({"initial_setup_done": True, "docker_run_as_user": False})
-            return {"status": "completed", "message": "Permission check passed (default)"}
+            return {
+                "status": "completed",
+                "message": "Permission check passed (default)",
+            }
 
         except PermissionError:
-            logger.warning("[FOAMTrame] Permission Check: Default write caused PermissionError. Trying fix...")
+            logger.warning(
+                "[FOAMTrame] Permission Check: Default write caused PermissionError. Trying fix..."
+            )
             # We cannot delete the file. It's likely owned by root.
             # We need to clean it up later or try to use sudo (not possible here).
             # But let's try the fix now.
@@ -251,14 +271,16 @@ def check_docker_permissions(
                     docker_image,
                     f"bash -c '{cleanup_cmd}'",
                     volumes=volumes,
-                    remove=True
+                    remove=True,
                 )
             except Exception as e:
                 logger.error(f"[FOAMTrame] Failed to cleanup root file: {e}")
 
     except Exception as e:
         logger.warning(f"[FOAMTrame] Permission Check: Default write caused error: {e}")
-        logger.warning("[FOAMTrame] Default permission check failed. Attempting automatic fix by switching to user mapping...")
+        logger.warning(
+            "[FOAMTrame] Default permission check failed. Attempting automatic fix by switching to user mapping..."
+        )
         # Proceed to Attempt 2
 
     # Attempt 2: Run as user
@@ -267,7 +289,9 @@ def check_docker_permissions(
         gid = os.getgid()
         user_str = f"{uid}:{gid}"
 
-        logger.info(f"[FOAMTrame] Permission Check: Attempting write as user {user_str}...")
+        logger.info(
+            f"[FOAMTrame] Permission Check: Attempting write as user {user_str}..."
+        )
 
         cmd = f"touch {container_run_path}/{test_filename}"
 
@@ -277,25 +301,36 @@ def check_docker_permissions(
             volumes=volumes,
             user=user_str,
             remove=True,
-            detach=False
+            detach=False,
         )
 
         if not host_test_file.exists():
-             return {"status": "failed", "message": "Docker container failed to write test file as user"}
+            return {
+                "status": "failed",
+                "message": "Docker container failed to write test file as user",
+            }
 
         # Try to delete it
         host_test_file.unlink()
 
         # Success!
         logger.info("[FOAMTrame] Permission Check: User write success.")
-        save_config_func({
-            "initial_setup_done": True,
-            "docker_run_as_user": True,
-            "docker_uid": uid,
-            "docker_gid": gid
-        })
-        return {"status": "completed", "message": "Permission check passed (using host user)"}
+        save_config_func(
+            {
+                "initial_setup_done": True,
+                "docker_run_as_user": True,
+                "docker_uid": uid,
+                "docker_gid": gid,
+            }
+        )
+        return {
+            "status": "completed",
+            "message": "Permission check passed (using host user)",
+        }
 
     except Exception as e:
         logger.error(f"[FOAMTrame] Permission Check: Error during Attempt 2: {e}")
-        return {"status": "failed", "message": f"Permission check failed even with user mapping: {e}"}
+        return {
+            "status": "failed",
+            "message": f"Permission check failed even with user mapping: {e}",
+        }

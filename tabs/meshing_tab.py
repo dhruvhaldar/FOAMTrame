@@ -4,8 +4,8 @@ from trame.widgets import html, vuetify
 
 
 def setup_meshing_tab(server):
-    state, ctrl = server.state, server.controller
     # State defaults or handlers for Meshing tab can be placed here
+    pass
 
 
 def build_meshing_drawer():

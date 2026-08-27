@@ -66,9 +66,8 @@ class SequentialSimulationQueue:
     def enqueue(self, job: SimulationJob) -> None:
         worker_to_start = None
         with self._lock:
-            if (
-                (self._active is not None and self._active.id == job.id)
-                or any(item.id == job.id for item in self._pending)
+            if (self._active is not None and self._active.id == job.id) or any(
+                item.id == job.id for item in self._pending
             ):
                 raise ValueError(f"Simulation job {job.id} is already queued")
             self._pending.append(job)

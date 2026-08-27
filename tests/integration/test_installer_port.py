@@ -1,17 +1,68 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 from datetime import datetime
 from io import StringIO
 import socket
 import sys
+from types import SimpleNamespace
+from typing import Any
 
 import pytest
+from aiohttp.client_exceptions import ClientConnectionResetError
 
 import install
 import runtime
 from log_paths import dated_log_directory
 from runtime import installed_server_port
+
+
+class _PendingWslinkSend:
+    def get_coro(self):
+        return SimpleNamespace(
+            __qualname__="WslinkHandler.sendWrappedMessage",
+        )
+
+
+def test_expected_wslink_disconnect_is_not_reported_as_asyncio_error():
+    loop = asyncio.new_event_loop()
+    forwarded = []
+    loop.set_exception_handler(lambda active_loop, context: forwarded.append(context))
+    try:
+        runtime.install_asyncio_exception_handler(loop)
+        handler = loop.get_exception_handler()
+        assert handler is not None
+        handler(
+            loop,
+            {
+                "message": "Task exception was never retrieved",
+                "exception": ClientConnectionResetError(
+                    "Cannot write to closing transport"
+                ),
+                "future": _PendingWslinkSend(),
+            },
+        )
+    finally:
+        loop.close()
+
+    assert forwarded == []
+
+
+def test_asyncio_handler_forwards_unrelated_failures():
+    loop = asyncio.new_event_loop()
+    forwarded = []
+    loop.set_exception_handler(lambda active_loop, context: forwarded.append(context))
+    context = {"message": "Task exception was never retrieved", "exception": OSError()}
+    try:
+        runtime.install_asyncio_exception_handler(loop)
+        handler = loop.get_exception_handler()
+        assert handler is not None
+        handler(loop, context)
+    finally:
+        loop.close()
+
+    assert forwarded == [context]
 
 
 def test_auto_port_is_reserved_until_installer_releases_it():
@@ -49,7 +100,9 @@ def test_missing_installer_selection_uses_8087(tmp_path):
 
 def test_environment_port_overrides_installer_selection(monkeypatch):
     def unexpected_installer_read():
-        raise AssertionError("installer port should not be read when env override exists")
+        raise AssertionError(
+            "installer port should not be read when env override exists"
+        )
 
     monkeypatch.setattr(runtime, "installed_server_port", unexpected_installer_read)
     settings = runtime.load_runtime_settings({"FOAMTRAME_PORT": "5087"})
@@ -116,7 +169,12 @@ def test_silent_main_completes_without_console_and_persists_port(
             self.closed = True
 
     reservation = Reservation()
-    recorded = {"commands": [], "port": None}
+    commands: list[tuple[list[str], dict[str, Any]]] = []
+    saved_ports: list[int] = []
+
+    def record_run(command: list[str], **kwargs: Any) -> None:
+        commands.append((command, kwargs))
+
     args = argparse.Namespace(
         dev=False,
         silent=True,
@@ -131,27 +189,29 @@ def test_silent_main_completes_without_console_and_persists_port(
         "reserve_server_port",
         lambda requested, *, auto_assign: (reservation, 52123),
     )
-    monkeypatch.setattr(install, "venv_python", lambda _path: install.Path(sys.executable))
+    monkeypatch.setattr(
+        install, "venv_python", lambda _path: install.Path(sys.executable)
+    )
     monkeypatch.setattr(install, "resolve_uv", lambda: install.Path("uv"))
     monkeypatch.setattr(
         install,
         "run",
-        lambda command, **kwargs: recorded["commands"].append((command, kwargs)),
+        record_run,
     )
     monkeypatch.setattr(
         install,
         "save_server_port",
-        lambda port: recorded.update(port=port),
+        saved_ports.append,
     )
     monkeypatch.setattr(install, "INSTALL_LOG", tmp_path / "logs" / "install.log")
 
     assert install.main() == 0
     assert reservation.closed is True
-    assert recorded["port"] == 52123
-    assert recorded["commands"]
-    sync_command, sync_options = recorded["commands"][0]
+    assert saved_ports == [52123]
+    assert commands
+    sync_command, sync_options = commands[0]
     assert sync_command[:3] == ["uv", "sync", "--locked"]
     assert "--no-dev" in sync_command
     assert sync_options["env"]["UV_PYTHON_DOWNLOADS"] == "never"
-    assert all(kwargs["silent"] is True for _, kwargs in recorded["commands"])
+    assert all(kwargs["silent"] is True for _, kwargs in commands)
     assert capsys.readouterr() == ("", "")

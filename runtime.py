@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import logging.handlers
@@ -31,13 +32,17 @@ def installed_server_port(
     except FileNotFoundError:
         return fallback
     except OSError as exc:
-        raise ValueError(f"Could not read installed server port from {path}: {exc}") from exc
+        raise ValueError(
+            f"Could not read installed server port from {path}: {exc}"
+        ) from exc
     try:
         port = int(value)
     except ValueError as exc:
         raise ValueError(f"Installed server port in {path} is not an integer.") from exc
     if not 1 <= port <= 65535:
-        raise ValueError(f"Installed server port in {path} must be between 1 and 65535.")
+        raise ValueError(
+            f"Installed server port in {path} must be between 1 and 65535."
+        )
     return port
 
 
@@ -85,9 +90,9 @@ def load_runtime_settings(env: Mapping[str, str] | None = None) -> RuntimeSettin
     log_level = values.get("FOAMTRAME_LOG_LEVEL", "INFO").strip().upper()
     if log_level not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
         raise ValueError("FOAMTRAME_LOG_LEVEL is not a valid Python logging level.")
-    framework_log_level = values.get(
-        "FOAMTRAME_FRAMEWORK_LOG_LEVEL", "WARNING"
-    ).strip().upper()
+    framework_log_level = (
+        values.get("FOAMTRAME_FRAMEWORK_LOG_LEVEL", "WARNING").strip().upper()
+    )
     if framework_log_level not in {
         "DEBUG",
         "INFO",
@@ -115,6 +120,49 @@ def load_runtime_settings(env: Mapping[str, str] | None = None) -> RuntimeSettin
 
 
 settings = load_runtime_settings()
+
+
+def _is_expected_wslink_disconnect(context: Mapping[str, Any]) -> bool:
+    """Return whether wslink lost a browser while an async send was pending."""
+    exception = context.get("exception")
+    if (
+        exception is None
+        or type(exception).__name__ != "ClientConnectionResetError"
+        or type(exception).__module__ != "aiohttp.client_exceptions"
+        or str(exception) != "Cannot write to closing transport"
+    ):
+        return False
+
+    future = context.get("future") or context.get("task")
+    get_coro = getattr(future, "get_coro", None)
+    coroutine = get_coro() if callable(get_coro) else None
+    coroutine_name = getattr(coroutine, "__qualname__", "")
+    return coroutine_name.endswith("WslinkHandler.sendWrappedMessage")
+
+
+def install_asyncio_exception_handler(
+    loop: asyncio.AbstractEventLoop,
+) -> None:
+    """Ignore the harmless wslink send race when a browser disconnects."""
+    previous_handler = loop.get_exception_handler()
+    if getattr(previous_handler, "_foamtrame_disconnect_handler", False):
+        return
+
+    def handle_exception(
+        active_loop: asyncio.AbstractEventLoop, context: dict[str, Any]
+    ) -> None:
+        if _is_expected_wslink_disconnect(context):
+            logging.getLogger(__name__).debug(
+                "Browser disconnected while a pending wslink message was being sent"
+            )
+            return
+        if previous_handler is not None:
+            previous_handler(active_loop, context)
+        else:
+            active_loop.default_exception_handler(context)
+
+    setattr(handle_exception, "_foamtrame_disconnect_handler", True)
+    loop.set_exception_handler(handle_exception)
 
 
 def ensure_runtime_directories(config: RuntimeSettings = settings) -> None:
@@ -153,7 +201,7 @@ def configure_logging(config: RuntimeSettings = settings) -> None:
     root.setLevel(level)
     root.addHandler(console)
     root.addHandler(rotating_file)
-    root._foamtrame_configured = True  # type: ignore[attr-defined]
+    setattr(root, "_foamtrame_configured", True)
 
     # Trame emits very detailed expression/namespace translation records at
     # INFO. They are useful for framework debugging but obscure application
@@ -201,7 +249,7 @@ def run_preflight(
     elif docker_executable:
         add("docker_cli", "pass", docker_executable)
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # nosec: fixed Docker diagnostic argv
                 [docker_executable, "info", "--format", "{{.ServerVersion}}"],
                 capture_output=True,
                 text=True,
@@ -211,7 +259,9 @@ def run_preflight(
             if result.returncode == 0:
                 add("docker_daemon", "pass", result.stdout.strip() or "reachable")
             else:
-                detail = result.stderr.strip() or result.stdout.strip() or "not reachable"
+                detail = (
+                    result.stderr.strip() or result.stdout.strip() or "not reachable"
+                )
                 add("docker_daemon", "warn", detail)
         except (OSError, subprocess.SubprocessError) as exc:
             add("docker_daemon", "warn", str(exc))

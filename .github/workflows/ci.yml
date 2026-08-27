@@ -32,5 +32,16 @@ jobs:
         run: uv run --locked python manage.py doctor --skip-docker
       - name: Compile Python modules
         run: uv run --locked python -m compileall -q app.py app_state.py database.py flask_server.py security.py runtime.py manage.py run.py install.py uv_bootstrap.py tabs backend
+      - name: Lint Python modules
+        run: uv run --locked ruff check .
+      - name: Check Python formatting
+        run: uv run --locked ruff format --check .
+      - name: Type check Python modules
+        run: uv run --locked ty check
+      - name: Audit Python security findings
+        if: runner.os == 'Linux' && matrix.python-version == '3.12'
+        env:
+          PYTHONUTF8: "1"
+        run: uv run --locked python scripts/codeaudit_gate.py .
       - name: Run integration and smoke tests
         run: uv run --locked pytest -q

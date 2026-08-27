@@ -74,6 +74,10 @@ Useful non-interactive and diagnostic commands:
 ```powershell
 .\install.ps1 --silent --auto-port
 uv run --locked python manage.py doctor --skip-docker
+uv run --locked ruff check .
+uv run --locked ruff format --check .
+uv run --locked ty check
+uv run --locked python scripts/codeaudit_gate.py .  # Python 3.11+
 uv run --locked pytest -q
 ```
 
@@ -124,7 +128,8 @@ The top-level tabs are:
 4. Run/Log
 5. Plots
 6. Post
-7. Settings (gear icon)
+7. Documentation (book icon, rendered from `README.md`)
+8. Settings (gear icon)
 
 `app.py` composes the tabs and owns the shared layout/CSS. Tab-specific state,
 controllers, drawer content, and main content live under `tabs/`. Backend services
@@ -150,11 +155,11 @@ can be invoked by all three surfaces.
 - SQLite (`foamtrame.db`) is the operational source of truth.
 - `database.py` owns the schema and transactions.
 - `app_state.py` is the stable application-facing persistence API.
-- Current schema/app-state version: `2`. When changing persisted structure, update
+- Current schema/app-state version: `3`. When changing persisted structure, update
   both schema migration behavior and backup normalization; never only bump a
   constant.
 - Persisted state includes case configuration, run history, plot preferences, and
-  security preferences.
+  geometry and security preferences.
 - JSON is an interchange/migration format only. Do not reintroduce separate
   `case_config.json`, `run_history.json`, or other operational JSON files.
 - `app_state.json.example` must track the current portable backup schema.
@@ -183,6 +188,10 @@ it. Database and machine-local state files stay ignored by Git.
   animated pill slider. Hover styling must not add a blur layer over that pill.
 - Preserve visible focus states, keyboard accessibility, disabled semantics, and
   sufficient color contrast.
+- Icon-only controls require meaningful accessible names. Dynamic status and log
+  output should use appropriate live-region semantics, dialogs must have accessible
+  titles, and the shared shell must retain its skip-to-content link and visible
+  `:focus-visible` treatment.
 - Use responsive layout rules instead of fixed dimensions that only match one
   screenshot. At narrow widths, stack or scroll navigation and action rows without
   clipping content.
@@ -190,10 +199,13 @@ it. Database and machine-local state files stay ignored by Git.
   where practical, while maintaining stable positions between Setup modes.
 - Selective fading is intentional on Setup: when the user engages one creation or
   import workflow, unrelated cards may de-emphasize without becoming unreadable.
-- Footer content should remain balanced and include FOAMTrame copyright, GPLv3,
-  Docker/Trame attribution, and the detected OpenFOAM version with the correct logo
-  from `static/icons/` (the `vXX` and `vXXXX` OpenFOAM families use different
-  assets).
+- Footer content belongs in an always-visible compact block at the bottom of the
+  Setup sidebar, not below the scrollable Setup cards. It must include FOAMTrame
+  copyright, GPLv3, Docker/Trame attribution, and the detected OpenFOAM version
+  with the correct logo from `static/icons/` (the `vXX` and `vXXXX` OpenFOAM
+  families use different assets). Show the dynamic ISO build date as well;
+  validated `FOAMTRAME_BUILD_DATE` metadata takes precedence over the `app.py`
+  modification-date fallback.
 
 Most global styling is embedded in `app.py`; avoid scattering conflicting CSS
 unless a component truly owns it.
@@ -217,8 +229,25 @@ unless a component truly owns it.
   import action. It must fit inside its glass card at every supported viewport.
 - Changing between Create and Import must not move the Active Case card upward or
   otherwise cause the top layout to jump.
-- Setup footer OpenFOAM version detection should use the configured container when
-  Docker is available and clearly label a configured fallback when it is not.
+- Setup sidebar footer OpenFOAM version detection should use the configured
+  container when Docker is available and clearly label a configured fallback when
+  it is not.
+
+## Geometry behavior
+
+- Case Geometry is the default when an active case exists and renders supported
+  native surfaces from `constant/geometry` when present, otherwise from
+  `constant/triSurface`. Its Active geometry selector includes the default case
+  geometry and individual imported triSurface files; it must not select arbitrary
+  result datasets elsewhere in the case. Reload case geometry resets that selector
+  to the default case geometry before rendering.
+- Custom Dataset is the default when no case exists. Keep Case Geometry and the
+  OpenFOAM Library visible but disabled until a case is active.
+- The OpenFOAM Library lists `$FOAM_TUTORIALS/resources/geometry` from the
+  configured image and imports only a validated filename into the active case.
+- Geometry preferences participate in SQLite persistence and portable backup/
+  restore. Geometry files stay in case directories and custom uploads remain
+  session-only; neither belongs in SQLite or JSON backups.
 
 ## Run/Log behavior
 
@@ -231,6 +260,21 @@ exist.
 - Prefer `Allrun` when supplied by the case author.
 - Do not invent a generic `Allrun`; OpenFOAM tutorials can require ordered,
   case-specific preprocessing.
+- Case-supplied `Allrun` owns case log files such as `log.foamRun`. FOAMTrame must
+  archive console output separately and must never truncate or replace an existing
+  solver log merely to display streamed output.
+- OpenFOAM `runApplication` may exit successfully while reporting that stages were
+  “already run” because their `log.*` files exist. When every `Allrun` stage is
+  skipped, record the run as `Skipped` and explain how to use a reviewed cleanup
+  action before rerunning. When only some stages are skipped, retain successful
+  completion but identify the skipped stages. Never delete results automatically.
+- Surface full and partial `Allrun` skips in both Console Log Output and an
+  accessible, dismissible Run/Log notification. The notification must distinguish
+  a complete no-op from partial skips and remain readable on constrained viewports.
+- Emphasize the reviewed cleanup choices (`Allclean` and `Safe Clean Generated
+  Outputs`) in skip notifications. Console highlighting must HTML-escape all
+  container output before applying distinct information, command, warning, error,
+  and ordinary-output colors.
 - Detect solver behavior from `system/controlDict`. Support modern `foamRun` solver
   modules and legacy dedicated solver executables.
 - Gate commands by their real prerequisites, including dictionaries, processor
@@ -238,11 +282,25 @@ exist.
 - `Allclean` requires confirmation.
 - The generated safe-clean action must preview the exact generated paths and remove
   only reviewed targets inside the active case. Never broaden its deletion scope.
+- Destructive-action confirmation cards must remain visibly glass-styled while
+  using a near-opaque surface, high-contrast warning treatment, and clearly
+  separated reviewed paths and actions.
 - UI and future chatbot calls must execute resolved fixed action IDs, not arbitrary
   shell strings.
-- The Run/Log drawer is intentionally wider than other drawers because it contains
-  workflow diagnostics. Keep its inner workflow scrollbar visually consistent with
-  the outer sidebar scrollbar and flush with card corner radii.
+- The Run/Log drawer is intentionally wider than other drawers (430 px on desktop,
+  with the normal compact width retained on small viewports). It must not develop a
+  horizontal scrollbar or clip action labels.
+- Keep the workflow summary, WORKFLOW, DETECTED COMMANDS, and CLEANUP controls
+  visible without requiring initial vertical scrolling. Use the compact two-column
+  command grid; give the longer safe-clean action more width in its cleanup row.
+- The detailed capability list belongs behind the single `Available actions`
+  button. Its Case Actions dialog uses a near-opaque list surface, retains concise
+  unavailable reasons, and presents Available/Unavailable as equal-width,
+  consistently outlined, high-contrast status chips.
+- Status labels must not change geometry with their text. Keep Case Actions
+  Available/Unavailable chips and run-history Completed/Skipped chips fixed-width,
+  equal-height, centered, and aligned in fixed status columns; vary semantic color,
+  not shape or position.
 - Capability summaries should be readable prose, e.g. “Detected 6 available
   action(s) · solver: **foamRun — fluid**”. Important solver labels should retain
   emphasis.
@@ -292,6 +350,20 @@ changing plot layout.
 - Reset Camera remains in the Post sidebar.
 - Preserve responsive viewer controls and do not move large dataset payloads into
   SQLite or JSON backups.
+
+## Documentation behavior
+
+- Documentation is rendered from `README.md` and split by level-two headings.
+- Supported fenced `mermaid` `flowchart LR` diagrams are rendered server-side as
+  accessible inline SVG without a CDN dependency. Unsupported Mermaid syntax must
+  fall back to escaped code rather than executing client-side content.
+- The Documentation drawer uses a persistent, compact section list with all README
+  section headers represented on the left; do not replace it with a dropdown.
+- The selected section needs an obvious active state and accessible current-page
+  semantics. Keep the list keyboard navigable and allow vertical scrolling only
+  when viewport height makes it unavoidable.
+- Keep README reload status available as a polite live region and preserve the
+  accessible name on the icon-only reload control.
 
 ## Optional security
 
@@ -382,8 +454,23 @@ Primary commands from the repository root:
 
 ```powershell
 uv run --locked python -m compileall -q app.py app_state.py database.py flask_server.py security.py tabs backend
+uv run --locked ruff check .
+uv run --locked ruff format --check .
+uv run --locked ty check
 uv run --locked pytest -q
 ```
+
+After every source change and before handing work back, always run both
+repository-wide Ruff gates exactly as CI does:
+
+```powershell
+uv run --locked ruff check .
+uv run --locked ruff format --check .
+```
+
+Focused lint checks are useful during development but do not replace these final
+repository-wide checks. If the format gate reports files, apply Ruff formatting
+to those files and rerun both commands before declaring the change ready.
 
 On Windows, the system pytest temp root may be inaccessible. In that environment,
 use a unique workspace-local base temp and remove it after the run:
@@ -428,6 +515,8 @@ settings merely to test conditional UI.
 - Prefer `rg` / `rg --files` for discovery.
 - Use `apply_patch` for targeted source edits.
 - Keep documentation, schema examples, runtime behavior, and tests synchronized.
+- Keep the CodeAudit CI gate clean at medium severity and above. Use inline
+  `# nosec` only for reviewed false positives and include the reason.
 - Do not claim a fix is complete solely because code compiles. Run proportionate
   tests and visually verify layout changes.
 - If Docker is unavailable, keep the UI functional and report the limitation
@@ -470,6 +559,7 @@ backend/simulation_queue.py    Single-worker FIFO simulation scheduling
 tabs/plots_tab.py              Plot state, rendering, styling, export, maximization
 backend/plots/realtime_plots.py OpenFOAM field and residual parsing/cache
 tabs/visualizer_tab.py         Post-processing state and VTK controls
+tabs/documentation_tab.py      README-backed in-app documentation
 tabs/settings_tab.py           Backup/restore and optional security UI
 static/icons/                  Product/vendor/OpenFOAM version assets
 tests/integration/             Focused behavior and regression tests

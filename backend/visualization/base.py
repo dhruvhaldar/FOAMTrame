@@ -10,11 +10,12 @@ import os
 import tempfile
 import gzip
 from pathlib import Path
-from typing import Optional, Union, Dict, Any, List
+from typing import Optional, Union, List
 import pyvista as pv
 from backend.utils import safe_decompress
 
 logger = logging.getLogger("FOAMTrame")
+
 
 class BaseVisualizer:
     """Base class for PyVista-based visualizers.
@@ -31,7 +32,17 @@ class BaseVisualizer:
                 Defaults to common mesh formats if None.
         """
         if allowed_extensions is None:
-            self.allowed_extensions = {'.stl', '.obj', '.obj.gz', '.stl.gz', '.ply', '.vtp', '.vtu', '.g', '.vtk'}
+            self.allowed_extensions = {
+                ".stl",
+                ".obj",
+                ".obj.gz",
+                ".stl.gz",
+                ".ply",
+                ".vtp",
+                ".vtu",
+                ".g",
+                ".vtk",
+            }
         else:
             self.allowed_extensions = allowed_extensions
 
@@ -52,7 +63,7 @@ class BaseVisualizer:
             # Handle multi-part extensions like .obj.gz and .stl.gz
             if len(suffixes) >= 2:
                 combined_ext = suffixes[-2] + suffixes[-1]
-                if combined_ext in {'.obj.gz', '.stl.gz'}:
+                if combined_ext in {".obj.gz", ".stl.gz"}:
                     ext = combined_ext
                 else:
                     ext = path.suffix.lower()
@@ -88,11 +99,12 @@ class BaseVisualizer:
                 if len(suffixes) >= 2:
                     suffix = suffixes[-2]
                 else:
-                    suffix = ".vtk" # Default fallback
+                    suffix = ".vtk"  # Default fallback
 
                 with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
                     temp_read_path = tmp.name
-                    with gzip.open(read_path_str, "rb") as f_in:
+                    # safe_decompress enforces the decompressed-size ceiling.
+                    with gzip.open(read_path_str, "rb") as f_in:  # nosec
                         safe_decompress(f_in, tmp)
                     read_path_str = temp_read_path
 
@@ -110,7 +122,9 @@ class BaseVisualizer:
                 except OSError:
                     pass
 
-    def decimate_mesh(self, mesh: pv.DataSet, target_faces: int = 100000, optimize: bool = False) -> pv.DataSet:
+    def decimate_mesh(
+        self, mesh: pv.DataSet, target_faces: int = 100000, optimize: bool = False
+    ) -> pv.DataSet:
         """Decimate mesh to reduce size for web visualization.
 
         Args:
@@ -141,17 +155,23 @@ class BaseVisualizer:
                 # Ensure reduction is valid
                 reduction = max(0.0, min(0.95, reduction))
 
-                logger.info(f"Decimating mesh from {mesh_poly.n_cells} to ~{target_faces} cells (reduction={reduction:.2f})")
+                logger.info(
+                    f"Decimating mesh from {mesh_poly.n_cells} to ~{target_faces} cells (reduction={reduction:.2f})"
+                )
 
                 # ⚡ Bolt Optimization: Use fast decimate_pro if available (topology preserving, faster)
                 if hasattr(mesh_poly, "decimate_pro"):
-                        try:
-                            mesh_poly = mesh_poly.decimate_pro(reduction, preserve_topology=True)
-                        except Exception as e:
-                            logger.warning(f"decimate_pro failed ({e}), falling back to standard decimate")
-                            mesh_poly = mesh_poly.decimate(reduction)
-                else:
+                    try:
+                        mesh_poly = mesh_poly.decimate_pro(
+                            reduction, preserve_topology=True
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            f"decimate_pro failed ({e}), falling back to standard decimate"
+                        )
                         mesh_poly = mesh_poly.decimate(reduction)
+                else:
+                    mesh_poly = mesh_poly.decimate(reduction)
 
             return mesh_poly
         except Exception as e:
@@ -164,7 +184,7 @@ class BaseVisualizer:
         color: str = "lightblue",
         opacity: float = 1.0,
         show_edges: bool = False,
-        window_size: Optional[List[int]] = None
+        window_size: Optional[List[int]] = None,
     ) -> Optional[str]:
         """Generate HTML content for interactive viewer using PyVista.
 
@@ -184,11 +204,19 @@ class BaseVisualizer:
             with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as tmp:
                 temp_output_path = tmp.name
 
-            plotter = pv.Plotter(notebook=False, off_screen=True, window_size=window_size or [1024, 768])
-            plotter.add_mesh(mesh, color=color, opacity=opacity, show_edges=show_edges, smooth_shading=True)
+            plotter = pv.Plotter(
+                notebook=False, off_screen=True, window_size=window_size or [1024, 768]
+            )
+            plotter.add_mesh(
+                mesh,
+                color=color,
+                opacity=opacity,
+                show_edges=show_edges,
+                smooth_shading=True,
+            )
             plotter.show_grid()
             plotter.show_axes()
-            plotter.camera_position = 'iso'
+            plotter.camera_position = "iso"
 
             # Export
             plotter.export_html(temp_output_path)
@@ -212,7 +240,7 @@ class BaseVisualizer:
         finally:
             if plotter is not None:
                 plotter.close()
-            if 'temp_output_path' in locals():
+            if "temp_output_path" in locals():
                 try:
                     os.remove(temp_output_path)
                 except OSError:

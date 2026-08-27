@@ -41,8 +41,12 @@ def safe_decompress(
 _RE_QUOTED_UNIX_PATH = re.compile(r"(['\"])(/.*?)\1")
 _RE_QUOTED_WIN_PATH = re.compile(r"(['\"])([a-zA-Z]:\\\\?.*?)\1")
 _CHARS = r"\w\.\-@+=%~#"
-_RE_UNIX_PATH = re.compile(rf"(?<!\w)(?<!://)(?<!:/)(/(?:[{_CHARS}][{_CHARS} ]*/)*[{_CHARS}][{_CHARS} ]*)")
-_RE_WIN_PATH = re.compile(rf"([a-zA-Z]:\\\\?(?:[{_CHARS}][{_CHARS} ]*\\\\?)*[{_CHARS}][{_CHARS} ]*)")
+_RE_UNIX_PATH = re.compile(
+    rf"(?<!\w)(?<!://)(?<!:/)(/(?:[{_CHARS}][{_CHARS} ]*/)*[{_CHARS}][{_CHARS} ]*)"
+)
+_RE_WIN_PATH = re.compile(
+    rf"([a-zA-Z]:\\\\?(?:[{_CHARS}][{_CHARS} ]*\\\\?)*[{_CHARS}][{_CHARS} ]*)"
+)
 
 
 def sanitize_error(e: Exception) -> str:

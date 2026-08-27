@@ -1,8 +1,9 @@
 import logging
 import platform
 from pathlib import Path
-from typing import Dict, Any, Tuple, Optional
+from typing import Dict, Any
 import docker
+from docker.errors import ContainerError
 import posixpath
 
 from .blockmesh import BlockMeshGenerator
@@ -10,6 +11,7 @@ from .snappyhexmesh import SnappyHexMeshGenerator
 from backend.utils import is_safe_command
 
 logger = logging.getLogger("FOAMTrame")
+
 
 class MeshingRunner:
     """
@@ -39,10 +41,15 @@ class MeshingRunner:
             cells = tuple(config.get("cells", [10, 10, 10]))
             grading = tuple(config.get("grading", [1, 1, 1]))
 
-            success = BlockMeshGenerator.generate_dict(case_path, min_point, max_point, cells, grading)
+            success = BlockMeshGenerator.generate_dict(
+                case_path, min_point, max_point, cells, grading
+            )
 
             if success:
-                return {"success": True, "message": "blockMeshDict generated successfully"}
+                return {
+                    "success": True,
+                    "message": "blockMeshDict generated successfully",
+                }
             else:
                 return {"success": False, "message": "Failed to generate blockMeshDict"}
         except Exception as e:
@@ -50,26 +57,36 @@ class MeshingRunner:
             return {"success": False, "message": str(e)}
 
     @staticmethod
-    def configure_snappyhexmesh(case_path: Path, config: Dict[str, Any], openfoam_version: str = "12") -> Dict[str, Any]:
+    def configure_snappyhexmesh(
+        case_path: Path, config: Dict[str, Any], openfoam_version: str = "12"
+    ) -> Dict[str, Any]:
         """
         Configures snappyHexMeshDict.
- 
+
         Args:
             case_path: Path to the case directory.
             config: Configuration dictionary (new complex structure or legacy).
             openfoam_version: OpenFOAM version string.
- 
+
         Returns:
             Dict with success status and message.
         """
         try:
             # Pass the full config to the generator
-            success = SnappyHexMeshGenerator.generate_dict(case_path, config, openfoam_version)
+            success = SnappyHexMeshGenerator.generate_dict(
+                case_path, config, openfoam_version
+            )
 
             if success:
-                return {"success": True, "message": "snappyHexMeshDict generated successfully"}
+                return {
+                    "success": True,
+                    "message": "snappyHexMeshDict generated successfully",
+                }
             else:
-                return {"success": False, "message": "Failed to generate snappyHexMeshDict"}
+                return {
+                    "success": False,
+                    "message": "Failed to generate snappyHexMeshDict",
+                }
         except Exception as e:
             logger.error(f"Error configuring snappyHexMesh: {e}")
             return {"success": False, "message": str(e)}
@@ -81,21 +98,24 @@ class MeshingRunner:
         docker_client: docker.DockerClient,
         docker_image: str,
         openfoam_version: str,
-        user_config: Dict[str, str] = {}
+        user_config: Dict[str, str] = {},
     ) -> Dict[str, Any]:
         """
         Runs a meshing command (blockMesh, snappyHexMesh) in the Docker container.
         """
         try:
             if not docker_client:
-                 return {"success": False, "message": "Docker client not available"}
+                return {"success": False, "message": "Docker client not available"}
 
             # Security: Validate command input to prevent shell injection
             if not is_safe_command(command):
-                 return {"success": False, "message": "Invalid command detected. Potential security risk."}
+                return {
+                    "success": False,
+                    "message": "Invalid command detected. Potential security risk.",
+                }
 
             # Setup paths
-            container_run_path = "/tmp/FOAM_Run" # nosec B108
+            container_run_path = "/tmp/FOAM_Run"  # nosec B108
 
             case_name = case_path.name
             container_case_path = posixpath.join(container_run_path, case_name)
@@ -120,18 +140,19 @@ class MeshingRunner:
             # Source bashrc, cd to case, run command
             # Security: Use list format with arguments to prevent shell injection and handle paths securely
             docker_cmd = [
-                "bash", "-c",
-                "source \"$1\" && cd \"$2\" && $3",
+                "bash",
+                "-c",
+                'source "$1" && cd "$2" && $3',
                 "meshing_runner",  # $0
-                bashrc,           # $1
-                container_case_path, # $2
-                command           # $3
+                bashrc,  # $1
+                container_case_path,  # $2
+                command,  # $3
             ]
 
             logger.info(f"Running meshing command: {command} in {container_case_path}")
 
             run_kwargs = {
-                "detach": False, # Wait for it
+                "detach": False,  # Wait for it
                 "tty": False,
                 "stdout": True,
                 "stderr": True,
@@ -142,19 +163,21 @@ class MeshingRunner:
 
             # Run
             result = docker_client.containers.run(
-                docker_image,
-                docker_cmd,
-                **run_kwargs
+                docker_image, docker_cmd, **run_kwargs
             )
 
             output = result.decode("utf-8")
-            logger.info(f"Meshing output: {output[:200]}...") # Log first 200 chars
+            logger.info(f"Meshing output: {output[:200]}...")  # Log first 200 chars
 
             return {"success": True, "output": output}
 
-        except docker.errors.ContainerError as e:
+        except ContainerError as e:
             # Container exited with non-zero code
-            return {"success": False, "message": f"Command failed", "output": e.stderr.decode('utf-8') if e.stderr else str(e)}
+            return {
+                "success": False,
+                "message": "Command failed",
+                "output": e.stderr.decode("utf-8") if e.stderr else str(e),
+            }
         except Exception as e:
             logger.error(f"Error running meshing command: {e}")
             return {"success": False, "message": str(e)}

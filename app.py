@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+import asyncio
+import logging
+import os
 import sys
+import time
 
-from runtime import configure_logging, settings
+_STARTUP_STARTED = time.perf_counter()
+
+from runtime import configure_logging, install_asyncio_exception_handler, settings
 from app_state import load_security_preferences
 from security import (
     apply_trame_security,
@@ -11,15 +17,39 @@ from security import (
 )
 
 configure_logging()
+logger = logging.getLogger("FOAMTrame")
+_STARTUP_TIMING_ENABLED = os.environ.get("FOAMTRAME_STARTUP_TIMING", "").strip() in {
+    "1",
+    "true",
+    "yes",
+}
+
+
+def _startup_checkpoint(step: str) -> None:
+    level = logging.INFO if _STARTUP_TIMING_ENABLED else logging.DEBUG
+    logger.log(
+        level,
+        "Startup +%.3fs: %s",
+        time.perf_counter() - _STARTUP_STARTED,
+        step,
+    )
+
 
 from trame.app import get_server
 from trame.ui.vuetify import SinglePageWithDrawerLayout
 from trame.widgets import vuetify, html, client
 
+_startup_checkpoint("Trame imports complete")
+
 from tabs.geometry_tab import (
     build_geometry_content,
     build_geometry_drawer,
     setup_geometry_tab,
+)
+from tabs.documentation_tab import (
+    build_documentation_content,
+    build_documentation_drawer,
+    setup_documentation_tab,
 )
 from tabs.meshing_tab import (
     build_meshing_content,
@@ -52,12 +82,22 @@ from tabs.visualizer_tab import (
     setup_visualizer_tab,
 )
 
+_startup_checkpoint("tab imports complete")
+
 server = get_server(client_type="vue2")
+assert server is not None
 server.cli.add_argument("--data", help="Optional dataset to load at startup")
 server.serve["static"] = "static"
 state, ctrl = server.state, server.controller
 startup_security_preferences = load_security_preferences()
 apply_trame_security(server, startup_security_preferences)
+
+
+@ctrl.add("on_server_ready")
+def install_runtime_asyncio_exception_handler(**_):
+    install_asyncio_exception_handler(asyncio.get_running_loop())
+    _startup_checkpoint("server ready")
+
 
 # Set browser page title and favicon
 state.trame__title = "FOAMTrame"
@@ -71,24 +111,32 @@ setup_run_log_tab(server)
 setup_plots_tab(server)
 load_dataset = setup_visualizer_tab(server)
 setup_settings_tab(server)
+setup_documentation_tab(server)
+
+_startup_checkpoint("tab controllers initialized")
 
 state.setdefault("active_tab", 0)
 
 with SinglePageWithDrawerLayout(server) as layout:
     layout.title.set_text("")
     with layout.title:
+        html.A(
+            "Skip to main content",
+            href="#main-content",
+            classes="foamtrame-skip-link",
+        )
         with html.Div(classes="d-flex align-center"):
             html.Img(
                 src="/static/icons/logo.svg",
-                alt="App Logo",
+                alt="FOAMTrame logo",
                 height="34",
                 classes="mr-2",
                 style="object-fit: contain;",
             )
             html.H1("FOAMTrame", classes="foamtrame-brand")
-    layout.title.style = "min-width: 206px; overflow: visible;"
+    layout.title.style = "min-width: 180px; overflow: visible;"
     layout.icon.hide()
-    
+
     # Inject CSS style sheet into the HTML head using client.Style
     client.Style("""
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
@@ -100,6 +148,33 @@ with SinglePageWithDrawerLayout(server) as layout:
             margin: 0 !important;
             padding: 0 !important;
             line-height: 1.2 !important;
+        }
+        .foamtrame-skip-link {
+            position: fixed;
+            top: 6px;
+            left: 8px;
+            z-index: 10001;
+            padding: 9px 13px;
+            color: #ffffff !important;
+            background: #075f75;
+            border-radius: 8px;
+            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.3);
+            transform: translateY(-150%);
+            transition: transform 120ms ease;
+        }
+        .foamtrame-skip-link:focus {
+            transform: translateY(0);
+        }
+        .v-application :is(
+            button,
+            [href],
+            input,
+            select,
+            textarea,
+            [tabindex]:not([tabindex="-1"])
+        ):focus-visible {
+            outline: 3px solid rgba(6, 154, 181, 0.78) !important;
+            outline-offset: 2px !important;
         }
 
         .v-application {
@@ -354,21 +429,24 @@ with SinglePageWithDrawerLayout(server) as layout:
         .v-application .setup-advanced-card .v-expansion-panel-header__icon {
             transition: none !important;
         }
-        .v-application .setup-footer-card {
-            padding: 14px 20px !important;
-            overflow: hidden;
+        .v-application .setup-drawer {
+            display: flex;
+            flex-direction: column;
+            min-height: calc(100vh - 48px);
+            overflow-y: auto;
         }
-        .v-application .setup-footer-layout {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) auto;
-            align-items: center;
-            column-gap: 18px;
-            row-gap: 10px;
-            width: 100%;
+        .v-application .setup-sidebar-footer {
+            margin-top: auto;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.58);
+            border: 1px solid rgba(6, 154, 181, 0.18);
+            border-radius: 14px;
+            box-shadow: 0 8px 22px rgba(12, 110, 135, 0.1);
         }
         .v-application .setup-footer-identity {
             min-width: 0;
-            text-align: left;
+            margin-top: 10px;
+            text-align: center;
         }
         .v-application .setup-footer-title {
             color: #0f172a;
@@ -377,6 +455,7 @@ with SinglePageWithDrawerLayout(server) as layout:
             line-height: 1.3;
         }
         .v-application .setup-footer-license,
+        .v-application .setup-footer-build,
         .v-application .setup-footer-label {
             color: #64748b;
             font-size: 0.76rem;
@@ -386,16 +465,28 @@ with SinglePageWithDrawerLayout(server) as layout:
         .v-application .setup-footer-license {
             margin-top: 2px;
         }
+        .v-application .setup-footer-build {
+            margin-top: 3px;
+            color: #0c6e87;
+            font-variant-numeric: tabular-nums;
+        }
         .v-application .setup-footer-powered {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            margin-top: 9px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(100, 116, 139, 0.14);
+            white-space: nowrap;
+        }
+        .v-application .setup-footer-powered-logos {
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 10px;
-            grid-column: 1 / -1;
-            grid-row: 2;
-            padding-top: 9px;
-            border-top: 1px solid rgba(100, 116, 139, 0.14);
-            white-space: nowrap;
+            gap: 9px;
+            max-width: 100%;
         }
         .v-application .setup-footer-docker-logo {
             width: auto;
@@ -583,14 +674,11 @@ with SinglePageWithDrawerLayout(server) as layout:
             min-height: 280px;
             justify-content: flex-start;
         }
-        .v-application .setup-advanced-card,
-        .v-application .setup-footer-card {
+        .v-application .setup-advanced-card {
             flex: 0 0 auto;
         }
         .v-application .footer-openfoam-version {
-            grid-column: 2;
-            grid-row: 1;
-            justify-self: end;
+            justify-content: center;
             gap: 7px;
             min-height: 30px;
             padding: 4px 10px;
@@ -613,31 +701,10 @@ with SinglePageWithDrawerLayout(server) as layout:
             font-weight: 700;
             line-height: 1.2;
         }
-        @media (max-width: 900px) {
-            .v-application .setup-footer-layout {
-                grid-template-columns: 1fr;
-                justify-items: center;
-                gap: 11px;
-            }
-            .v-application .setup-footer-identity {
-                grid-column: 1;
-                grid-row: 1;
-                text-align: center;
-            }
-            .v-application .footer-openfoam-version {
-                grid-column: 1;
-                grid-row: 2;
-                justify-self: center;
-            }
-            .v-application .setup-footer-powered {
-                grid-column: 1;
-                grid-row: 3;
-                width: 100%;
-            }
-        }
         .v-application .run-log-drawer {
             max-height: calc(100vh - 48px);
             overflow-y: auto;
+            overflow-x: hidden;
             scrollbar-width: thin;
             scrollbar-color: rgba(71, 85, 105, 0.5) transparent;
         }
@@ -713,6 +780,150 @@ with SinglePageWithDrawerLayout(server) as layout:
             border: 1px solid rgba(255, 255, 255, 0.72);
             border-radius: 12px;
         }
+        .v-application .available-actions-btn .v-btn__content {
+            width: 100%;
+        }
+        .v-application .run-action-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 7px;
+        }
+        .v-application .run-action-grid .v-btn {
+            min-width: 0 !important;
+            margin: 0 !important;
+            padding-inline: 8px !important;
+        }
+        .v-application .run-action-grid .v-btn__content {
+            min-width: 0;
+            font-size: 0.68rem;
+            letter-spacing: 0.02em;
+        }
+        .v-application .run-action-grid--cleanup {
+            grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr);
+        }
+        .v-application .run-action-grid--cleanup .v-btn__content {
+            font-size: 0.66rem;
+            letter-spacing: 0.01em;
+        }
+        .v-application .capability-dialog {
+            overflow: hidden;
+            background: rgba(248, 252, 253, 0.98) !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+        }
+        .v-application .capability-dialog__header {
+            color: #063f50;
+            background: linear-gradient(
+                135deg,
+                rgba(207, 250, 254, 0.96),
+                rgba(255, 255, 255, 0.9)
+            );
+            border-bottom: 1px solid rgba(6, 154, 181, 0.22);
+        }
+        .v-application .capability-dialog__icon {
+            display: grid;
+            width: 42px;
+            height: 42px;
+            place-items: center;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #069ab5, #0c6e87);
+            box-shadow: 0 8px 20px rgba(6, 110, 135, 0.24);
+        }
+        .v-application .capability-dialog__list {
+            max-height: min(56vh, 480px);
+            background: rgba(255, 255, 255, 0.98) !important;
+            border-color: rgba(12, 110, 135, 0.2);
+            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+        }
+        .v-application .capability-dialog__list .case-workflow-item {
+            background: rgba(255, 255, 255, 0.96);
+        }
+        .v-application .capability-dialog__list .case-workflow-item:nth-child(even) {
+            background: rgba(241, 248, 250, 0.96);
+        }
+        .v-application .capability-status-chip {
+            width: 116px;
+            min-width: 116px;
+            max-width: 116px;
+            height: 22px;
+            justify-content: center;
+            font-weight: 600;
+        }
+        .v-application .capability-status-action {
+            flex: 0 0 116px;
+            width: 116px;
+            min-width: 116px;
+            margin-left: 12px;
+        }
+        .v-application .run-history-status-cell {
+            width: 116px;
+            min-width: 116px;
+            vertical-align: middle;
+        }
+        .v-application .run-history-status-chip {
+            width: 106px;
+            min-width: 106px;
+            max-width: 106px;
+            height: 22px;
+            justify-content: center;
+            font-weight: 600;
+        }
+        .v-application .run-notification {
+            max-width: min(520px, calc(100vw - 32px));
+        }
+        .v-application .run-notification .v-snack__content {
+            font-weight: 600;
+            line-height: 1.45;
+        }
+        .v-application .run-notification__action {
+            display: inline-block;
+            padding: 0 4px;
+            color: #ffffff;
+            background: rgba(15, 23, 42, 0.24);
+            border-radius: 4px;
+            font-weight: 800;
+        }
+        .v-application .run-status-area {
+            min-width: 0;
+            gap: 6px;
+        }
+        .v-application .run-status-chip {
+            max-width: 100%;
+            height: auto !important;
+            min-height: 26px;
+        }
+        .v-application .run-status-chip .v-chip__content {
+            max-width: 100%;
+            padding-block: 4px;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            line-height: 1.2;
+            text-align: center;
+        }
+        .v-application .console-line--info {
+            color: #38bdf8;
+        }
+        .v-application .console-line--command {
+            color: #a5b4fc;
+            font-weight: 700;
+        }
+        .v-application .console-line--warning {
+            color: #fbbf24;
+        }
+        .v-application .console-line--error {
+            color: #fca5a5;
+            font-weight: 700;
+        }
+        .v-application .console-line--output {
+            color: #dbeafe;
+        }
+        .v-application .console-action {
+            padding: 0 3px;
+            color: #0f172a;
+            background: #fde68a;
+            border-radius: 3px;
+            font-weight: 800;
+        }
         .v-application .case-workflow-item + .case-workflow-item {
             border-top: 1px solid rgba(100, 116, 139, 0.12);
         }
@@ -748,6 +959,55 @@ with SinglePageWithDrawerLayout(server) as layout:
             overflow-y: auto;
             background: rgba(255, 255, 255, 0.52) !important;
             border-radius: 12px;
+        }
+        .v-application .action-confirm-card {
+            color: #172033;
+            background: rgba(248, 252, 253, 0.92) !important;
+            backdrop-filter: blur(28px) saturate(135%) !important;
+            -webkit-backdrop-filter: blur(28px) saturate(135%) !important;
+            border: 1px solid rgba(255, 255, 255, 0.94) !important;
+            box-shadow:
+                0 24px 64px rgba(15, 23, 42, 0.28),
+                inset 0 1px 0 rgba(255, 255, 255, 0.88) !important;
+        }
+        .v-application .action-confirm-card:hover {
+            transform: none !important;
+        }
+        .v-application .action-confirm-title {
+            color: #172033;
+        }
+        .v-application .action-confirm-message {
+            color: #475569;
+            font-weight: 500;
+        }
+        .v-application .action-confirm-warning.v-alert--text {
+            color: #9a3412 !important;
+            background: rgba(255, 237, 213, 0.9) !important;
+            border: 1px solid rgba(234, 88, 12, 0.42) !important;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+        }
+        .v-application .action-confirm-warning .v-alert__icon,
+        .v-application .action-confirm-warning .v-alert__content {
+            color: #9a3412 !important;
+            font-weight: 650;
+        }
+        .v-application .action-confirm-card .clean-preview-list {
+            background: rgba(255, 255, 255, 0.88) !important;
+            border-color: rgba(100, 116, 139, 0.28) !important;
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.92),
+                0 8px 22px rgba(15, 23, 42, 0.08);
+        }
+        .v-application .action-confirm-card .clean-preview-list .v-list-item {
+            color: #1e293b;
+        }
+        .v-application .action-confirm-card .clean-preview-list .v-list-item + .v-list-item {
+            border-top: 1px solid rgba(100, 116, 139, 0.12);
+        }
+        .v-application .action-confirm-actions {
+            margin: 0 8px 4px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(100, 116, 139, 0.16);
         }
         .v-application .run-log-drawer .v-btn.v-btn--disabled {
             color: #64748b !important;
@@ -854,6 +1114,114 @@ with SinglePageWithDrawerLayout(server) as layout:
             -webkit-backdrop-filter: blur(24px) !important;
             border-right: 1px solid rgba(255, 255, 255, 0.5) !important;
         }
+        .v-application .geometry-mode-toggle {
+            display: flex;
+            width: 100%;
+            padding: 4px;
+            border: 1px solid rgba(6, 154, 181, 0.2);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.5);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+        }
+        .v-application .geometry-mode-toggle .v-btn {
+            flex: 1 1 0;
+            min-width: 0 !important;
+            padding: 0 8px !important;
+            border: 0 !important;
+            border-radius: 9px !important;
+            box-shadow: none !important;
+            font-size: 0.76rem;
+            letter-spacing: 0.02em;
+        }
+        .v-application .geometry-mode-toggle .v-btn--active {
+            color: white !important;
+            background: linear-gradient(135deg, #069ab5, #0c6e87) !important;
+        }
+        .v-application .geometry-mode-toggle .v-btn--disabled {
+            color: #64748b !important;
+            background: rgba(226, 232, 240, 0.65) !important;
+            opacity: 0.62;
+        }
+        .v-application .geometry-mode-panel {
+            padding: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.72);
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.44);
+            box-shadow: 0 10px 26px rgba(15, 23, 42, 0.07);
+        }
+        .v-application .geometry-library-description {
+            max-width: 100%;
+            overflow-wrap: anywhere;
+            word-break: normal;
+        }
+        .v-application .geometry-secondary-button {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            margin-right: 0 !important;
+            margin-left: 0 !important;
+            box-sizing: border-box !important;
+            color: #0c6e87 !important;
+            border-color: rgba(6, 154, 181, 0.5) !important;
+            background: rgba(255, 255, 255, 0.54) !important;
+        }
+        .v-application .geometry-clear-custom-button {
+            min-height: 40px;
+            height: auto !important;
+            padding: 7px 10px !important;
+        }
+        .v-application .geometry-clear-custom-button .v-btn__content {
+            width: 100%;
+            min-width: 0;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            text-align: center;
+            line-height: 1.2;
+        }
+        .v-application .geometry-mode-panel .geometry-select input:focus,
+        .v-application .geometry-mode-panel .geometry-select input:focus-visible {
+            outline: none !important;
+            outline-offset: 0 !important;
+        }
+        .v-application .geometry-select.v-input--is-focused .v-input__slot {
+            box-shadow: 0 0 0 3px rgba(6, 154, 181, 0.16) !important;
+        }
+        .v-application .geometry-select.v-input--is-focused fieldset {
+            border-color: #069ab5 !important;
+            border-width: 2px !important;
+        }
+        .v-application .geometry-dataset-summary {
+            overflow-wrap: anywhere;
+        }
+        .v-application .geometry-viewer {
+            position: relative;
+            height: calc(100vh - 48px);
+            min-height: 0;
+            overflow: hidden;
+            background: linear-gradient(
+                180deg,
+                hsla(192, 100%, 86%, 1) 0%,
+                hsla(292, 37%, 88%, 1) 100%
+            );
+        }
+        .v-application .geometry-empty-state {
+            position: absolute;
+            z-index: 2;
+            top: 50%;
+            left: 50%;
+            width: min(420px, calc(100% - 32px));
+            padding: 28px;
+            color: #334155;
+            text-align: center;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            border: 1px solid rgba(255, 255, 255, 0.72);
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.42);
+            backdrop-filter: blur(20px) saturate(135%);
+            -webkit-backdrop-filter: blur(20px) saturate(135%);
+            box-shadow: 0 18px 42px rgba(15, 23, 42, 0.12);
+        }
         .v-application .glass-navbar {
             background: rgba(255, 255, 255, 0.35) !important;
             backdrop-filter: blur(20px) !important;
@@ -867,9 +1235,9 @@ with SinglePageWithDrawerLayout(server) as layout:
             height: 48px !important;
             min-height: 48px !important;
             width: 100% !important;
-            max-width: 1520px !important;
-            margin: 0 auto !important;
-            padding: 0 18px !important;
+            max-width: none !important;
+            margin: 0 !important;
+            padding: 0 12px !important;
         }
         /* Navbar Project Title Visibility */
         .v-application .glass-navbar .v-toolbar__title {
@@ -881,13 +1249,14 @@ with SinglePageWithDrawerLayout(server) as layout:
         }
         /* Compact active-case badge next to the project title. */
         .v-application .active-case-chip {
-            max-width: 190px;
+            max-width: min(280px, 24vw);
             height: 24px !important;
             overflow: hidden !important;
             white-space: nowrap !important;
             flex: none !important;
             flex-shrink: 0 !important;
             margin-right: 14px !important;
+            margin-left: 0 !important;
             padding: 0 10px !important;
             border: 1px solid rgba(6, 154, 181, 0.14);
             font-size: 0.78rem !important;
@@ -980,7 +1349,7 @@ with SinglePageWithDrawerLayout(server) as layout:
         }
         @media (max-width: 1300px) {
             .v-application .active-case-chip {
-                max-width: 140px;
+                max-width: 180px;
             }
             .glass-navbar .v-tab {
                 padding-right: 13px !important;
@@ -1415,6 +1784,198 @@ with SinglePageWithDrawerLayout(server) as layout:
             }
         }
         /* Premium Scrollbar */
+        .v-application .documentation-page {
+            max-width: 1180px;
+            margin: 0 auto;
+        }
+        .v-application .documentation-drawer {
+            display: flex;
+            flex-direction: column;
+            max-height: calc(100vh - 48px);
+            overflow: hidden;
+        }
+        .v-application .documentation-section-list {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            border: 1px solid rgba(6, 154, 181, 0.16);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.4) !important;
+        }
+        .v-application .documentation-section-item {
+            min-height: 27px !important;
+            margin: 1px 3px !important;
+            border-radius: 7px;
+        }
+        .v-application .documentation-section-marker {
+            align-self: center;
+            min-width: 16px !important;
+            margin-block: 0 !important;
+        }
+        .v-application .documentation-section-title {
+            font-size: 0.72rem;
+            line-height: 1.15;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+        .v-application .documentation-section-item--active {
+            color: #075f75 !important;
+            background: linear-gradient(
+                90deg,
+                rgba(6, 154, 181, 0.16),
+                rgba(207, 250, 254, 0.42)
+            ) !important;
+            font-weight: 700;
+        }
+        .v-application .documentation-status {
+            flex: 0 0 auto;
+            color: #526274;
+            line-height: 1.25;
+        }
+        .v-application .documentation-card {
+            min-height: calc(100vh - 112px);
+        }
+        .v-application .documentation-content {
+            color: #1e293b;
+            font-size: 1rem;
+            line-height: 1.75;
+            overflow-wrap: anywhere;
+        }
+        .v-application .documentation-content h1,
+        .v-application .documentation-content h2,
+        .v-application .documentation-content h3,
+        .v-application .documentation-content h4 {
+            color: #0c6e87;
+            line-height: 1.25;
+            margin: 1.6em 0 0.65em;
+            scroll-margin-top: 72px;
+        }
+        .v-application .documentation-content h1:first-child,
+        .v-application .documentation-content h2:first-child {
+            margin-top: 0;
+        }
+        .v-application .documentation-content h2 {
+            border-bottom: 1px solid rgba(6, 154, 181, 0.22);
+            font-size: 1.75rem;
+            padding-bottom: 0.4em;
+        }
+        .v-application .documentation-content h3 { font-size: 1.3rem; }
+        .v-application .documentation-content p,
+        .v-application .documentation-content ul,
+        .v-application .documentation-content ol { margin-bottom: 1em; }
+        .v-application .documentation-content a {
+            color: #067f99;
+            font-weight: 600;
+        }
+        .v-application .documentation-content pre {
+            background: #0f172a;
+            border-radius: 12px;
+            color: #e2e8f0;
+            overflow-x: auto;
+            padding: 16px;
+        }
+        .v-application .documentation-content code {
+            background: rgba(6, 154, 181, 0.1);
+            border-radius: 5px;
+            color: #075d71;
+            font-size: 0.9em;
+            padding: 0.15em 0.35em;
+        }
+        .v-application .documentation-content pre code {
+            background: transparent;
+            color: inherit;
+            padding: 0;
+        }
+        .v-application .documentation-flowchart {
+            margin: 1.25rem 0 1.5rem;
+            padding: 16px;
+            overflow-x: auto;
+            background: linear-gradient(
+                145deg,
+                rgba(255, 255, 255, 0.94),
+                rgba(224, 247, 250, 0.78)
+            );
+            border: 1px solid rgba(6, 154, 181, 0.22);
+            border-radius: 16px;
+            box-shadow: 0 10px 28px rgba(12, 110, 135, 0.1);
+        }
+        .v-application .documentation-flowchart svg {
+            display: block;
+            min-width: 900px;
+            width: 100%;
+            height: auto;
+        }
+        .v-application .documentation-flowchart__node rect {
+            fill: rgba(255, 255, 255, 0.98);
+            stroke: #069ab5;
+            stroke-width: 2;
+            filter: drop-shadow(0 5px 8px rgba(12, 110, 135, 0.12));
+        }
+        .v-application .documentation-flowchart__node-title,
+        .v-application .documentation-flowchart__node-detail {
+            text-anchor: middle;
+            dominant-baseline: middle;
+            font-family: Inter, Roboto, sans-serif;
+        }
+        .v-application .documentation-flowchart__node-title {
+            fill: #075f75;
+            font-size: 15px;
+            font-weight: 700;
+        }
+        .v-application .documentation-flowchart__node-detail {
+            fill: #475569;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .v-application .documentation-flowchart__edge {
+            fill: none;
+            stroke: #0c6e87;
+            stroke-width: 2;
+        }
+        .v-application .documentation-flowchart marker path {
+            fill: #0c6e87;
+        }
+        .v-application .documentation-flowchart__edge-label {
+            fill: #334155;
+            stroke: rgba(248, 252, 253, 0.96);
+            stroke-width: 6px;
+            paint-order: stroke;
+            text-anchor: middle;
+            font-family: Inter, Roboto, sans-serif;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .v-application .documentation-flowchart figcaption {
+            margin-top: 8px;
+            color: #526274;
+            font-size: 0.75rem;
+            text-align: center;
+        }
+        .v-application .documentation-content blockquote {
+            border-left: 4px solid #069ab5;
+            color: #475569;
+            margin: 1em 0;
+            padding: 0.65em 1em;
+        }
+        .v-application .documentation-table-wrap {
+            margin: 1em 0;
+            overflow-x: auto;
+        }
+        .v-application .documentation-content table {
+            border-collapse: collapse;
+            min-width: 100%;
+        }
+        .v-application .documentation-content th,
+        .v-application .documentation-content td {
+            border: 1px solid rgba(12, 110, 135, 0.2);
+            padding: 10px 12px;
+            text-align: left;
+            vertical-align: top;
+        }
+        .v-application .documentation-content th {
+            background: rgba(6, 154, 181, 0.09);
+            color: #075d71;
+        }
         ::-webkit-scrollbar {
             width: 8px;
             height: 8px;
@@ -1450,6 +2011,7 @@ with SinglePageWithDrawerLayout(server) as layout:
             background_color="transparent",
             classes="ml-2 compact-navbar-tabs",
             show_arrows=True,
+            aria_label="Primary navigation",
         ):
             vuetify.VTab("Setup")
             vuetify.VTab("Geometry")
@@ -1457,6 +2019,12 @@ with SinglePageWithDrawerLayout(server) as layout:
             vuetify.VTab("Run/Log")
             vuetify.VTab("Plots")
             vuetify.VTab("Post")
+            with vuetify.VTab(
+                classes="settings-nav-tab",
+                title="Documentation",
+                aria_label="Documentation",
+            ):
+                vuetify.VIcon("mdi-book-open-page-variant-outline")
             with vuetify.VTab(
                 classes="settings-nav-tab",
                 title="Settings",
@@ -1476,7 +2044,8 @@ with SinglePageWithDrawerLayout(server) as layout:
     # more horizontal room. Keep the standard drawer on compact viewports so
     # the main content is not unnecessarily crowded.
     layout.drawer.width = (
-        "active_tab === 3 && !$vuetify.breakpoint.smAndDown ? 360 : 300",
+        "active_tab === 3 && !$vuetify.breakpoint.smAndDown ? 430 : "
+        "active_tab === 1 && !$vuetify.breakpoint.smAndDown ? 360 : 300",
     )
     with layout.drawer:
         build_setup_drawer()
@@ -1485,43 +2054,51 @@ with SinglePageWithDrawerLayout(server) as layout:
         build_run_log_drawer()
         build_plots_drawer()
         build_visualizer_drawer(ctrl)
+        build_documentation_drawer(ctrl)
         build_settings_drawer()
 
     with layout.content:
-        with vuetify.VOverlay(
-            v_model=("docker_checking", True),
-            absolute=True,
-            opacity=0.7,
-            color="#0f172a",
-            classes="d-flex flex-column align-center justify-center text-center",
-            style="z-index: 9999;",
-        ):
-            vuetify.VProgressCircular(
-                indeterminate=True,
-                size=64,
-                width=6,
-                color="cyan lighten-2",
-                classes="mb-4",
-            )
-            html.H3(
-                "{{ setup_status }}",
-                classes="white--text font-weight-medium mb-1",
-            )
-            html.P(
-                "Please wait while Docker integration is initialized...",
-                classes="cyan--text text--lighten-4 text-caption mb-0",
-            )
+        with html.Main(id="main-content", tabindex="-1"):
+            with vuetify.VOverlay(
+                v_model=("docker_checking", True),
+                absolute=True,
+                opacity=0.7,
+                color="#0f172a",
+                classes="d-flex flex-column align-center justify-center text-center",
+                style="z-index: 9999;",
+                aria_live="polite",
+                aria_label="Docker initialization status",
+            ):
+                vuetify.VProgressCircular(
+                    indeterminate=True,
+                    size=64,
+                    width=6,
+                    color="cyan lighten-2",
+                    classes="mb-4",
+                )
+                html.H3(
+                    "{{ setup_status }}",
+                    classes="white--text font-weight-medium mb-1",
+                )
+                html.P(
+                    "Please wait while Docker integration is initialized...",
+                    classes="cyan--text text--lighten-4 text-caption mb-0",
+                )
 
-        build_setup_content()
-        build_geometry_content()
-        build_meshing_content()
-        build_run_log_content()
-        build_plots_content()
-        build_visualizer_content(ctrl)
-        build_settings_content()
+            build_setup_content()
+            build_geometry_content()
+            build_meshing_content()
+            build_run_log_content()
+            build_plots_content()
+            build_visualizer_content(ctrl)
+            build_documentation_content()
+            build_settings_content()
+
+_startup_checkpoint("UI layout built")
 
 
 def main():
+    assert server is not None
     args, _ = server.cli.parse_known_args()
     if args.data:
         try:
@@ -1538,17 +2115,11 @@ def main():
     )
     port = None if explicit_port else settings.default_port
     explicit_host = any(
-        token == "--host" or token.startswith("--host=")
-        for token in sys.argv[1:]
+        token == "--host" or token.startswith("--host=") for token in sys.argv[1:]
     )
-    host = (
-        None
-        if explicit_host
-        else trame_bind_host(startup_security_preferences)
-    )
+    host = None if explicit_host else trame_bind_host(startup_security_preferences)
     explicit_timeout = any(
-        token == "--timeout" or token.startswith("--timeout=")
-        for token in sys.argv[1:]
+        token == "--timeout" or token.startswith("--timeout=") for token in sys.argv[1:]
     )
     timeout = (
         None

@@ -139,6 +139,7 @@ vector_arrays: dict[str, str] = {}
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _reader_for(path: str):
     extension = Path(path).suffix.lower()
     reader_type = READERS.get(extension)
@@ -205,6 +206,7 @@ def _set_mapper_coloring(mapper, selection: str) -> None:
 # Visualizer Tab Setup
 # ---------------------------------------------------------------------------
 
+
 def setup_visualizer_tab(server):
     state, ctrl = server.state, server.controller
 
@@ -213,9 +215,21 @@ def setup_visualizer_tab(server):
             return
 
         try:
-            tx, ty, tz = float(state.trans_x or 0), float(state.trans_y or 0), float(state.trans_z or 0)
-            rx, ry, rz = float(state.rot_x or 0), float(state.rot_y or 0), float(state.rot_z or 0)
-            sx, sy, sz = float(state.scale_x or 1), float(state.scale_y or 1), float(state.scale_z or 1)
+            tx, ty, tz = (
+                float(state.trans_x or 0),
+                float(state.trans_y or 0),
+                float(state.trans_z or 0),
+            )
+            rx, ry, rz = (
+                float(state.rot_x or 0),
+                float(state.rot_y or 0),
+                float(state.rot_z or 0),
+            )
+            sx, sy, sz = (
+                float(state.scale_x or 1),
+                float(state.scale_y or 1),
+                float(state.scale_z or 1),
+            )
         except (ValueError, TypeError):
             tx, ty, tz = 0.0, 0.0, 0.0
             rx, ry, rz = 0.0, 0.0, 0.0
@@ -252,7 +266,7 @@ def setup_visualizer_tab(server):
         bounds = transformed_output.GetBounds()
         axis = state.slice_axis
         axis_index = {"X": 0, "Y": 1, "Z": 2}[axis]
-        low, high = bounds[2 * axis_index: 2 * axis_index + 2]
+        low, high = bounds[2 * axis_index : 2 * axis_index + 2]
         position = low + state.slice_fraction * (high - low)
         center = list(transformed_output.GetCenter())
         center[axis_index] = position
@@ -301,12 +315,24 @@ def setup_visualizer_tab(server):
                 bz = bounds[5] - bounds[4]
                 eps = 1e-4
 
-                f_xmin = float(state.clip_box_xmin if state.clip_box_xmin is not None else 0.0)
-                f_xmax = float(state.clip_box_xmax if state.clip_box_xmax is not None else 1.0)
-                f_ymin = float(state.clip_box_ymin if state.clip_box_ymin is not None else 0.0)
-                f_ymax = float(state.clip_box_ymax if state.clip_box_ymax is not None else 1.0)
-                f_zmin = float(state.clip_box_zmin if state.clip_box_zmin is not None else 0.0)
-                f_zmax = float(state.clip_box_zmax if state.clip_box_zmax is not None else 1.0)
+                f_xmin = float(
+                    state.clip_box_xmin if state.clip_box_xmin is not None else 0.0
+                )
+                f_xmax = float(
+                    state.clip_box_xmax if state.clip_box_xmax is not None else 1.0
+                )
+                f_ymin = float(
+                    state.clip_box_ymin if state.clip_box_ymin is not None else 0.0
+                )
+                f_ymax = float(
+                    state.clip_box_ymax if state.clip_box_ymax is not None else 1.0
+                )
+                f_zmin = float(
+                    state.clip_box_zmin if state.clip_box_zmin is not None else 0.0
+                )
+                f_zmax = float(
+                    state.clip_box_zmax if state.clip_box_zmax is not None else 1.0
+                )
 
                 xmin = bounds[0] + f_xmin * bx - (eps * bx if f_xmin == 0.0 else 0.0)
                 xmax = bounds[0] + f_xmax * bx + (eps * bx if f_xmax == 1.0 else 0.0)
@@ -389,7 +415,9 @@ def setup_visualizer_tab(server):
             "Forward": vtk.vtkStreamTracer.FORWARD,
             "Backward": vtk.vtkStreamTracer.BACKWARD,
         }
-        direction = direction_map.get(state.stream_direction or "Both", vtk.vtkStreamTracer.BOTH)
+        direction = direction_map.get(
+            state.stream_direction or "Both", vtk.vtkStreamTracer.BOTH
+        )
         stream_tracer.SetIntegrationDirection(direction)
         stream_tracer.SetMaximumPropagation(float(state.stream_max_prop or 100.0))
         stream_tracer.SetInitialIntegrationStep(float(state.stream_step or 0.1))
@@ -423,7 +451,9 @@ def setup_visualizer_tab(server):
         reader.Update()
         output = reader.GetOutputDataObject(0)
         if output is None or not output.IsA("vtkDataSet"):
-            raise ValueError("The file did not contain a VTK surface or volume dataset.")
+            raise ValueError(
+                "The file did not contain a VTK surface or volume dataset."
+            )
         if output.GetNumberOfPoints() == 0:
             raise ValueError("The dataset contains no points.")
 
@@ -467,8 +497,14 @@ def setup_visualizer_tab(server):
         if isinstance(item, dict):
             name = item.get("name") or item.get("filename") or name
             content = item.get("content")
-        elif hasattr(item, "name") or hasattr(item, "content") or hasattr(item, "filename"):
-            name = getattr(item, "name", None) or getattr(item, "filename", None) or name
+        elif (
+            hasattr(item, "name")
+            or hasattr(item, "content")
+            or hasattr(item, "filename")
+        ):
+            name = (
+                getattr(item, "name", None) or getattr(item, "filename", None) or name
+            )
             content = getattr(item, "content", None)
         elif isinstance(item, (bytes, str)):
             content = item
@@ -483,9 +519,12 @@ def setup_visualizer_tab(server):
         if isinstance(content, bytes):
             return name, content
         if isinstance(content, str):
-            encoded = content.split(",", 1)[-1] if content.startswith("data:") else content
+            encoded = (
+                content.split(",", 1)[-1] if content.startswith("data:") else content
+            )
             try:
-                return name, base64.b64decode(encoded)
+                # Trame transports uploads as Base64; this is not encryption.
+                return name, base64.b64decode(encoded)  # nosec
             except Exception:
                 return name, content.encode("utf-8")
         if isinstance(content, (list, tuple)):
@@ -630,6 +669,7 @@ def setup_visualizer_tab(server):
 # ---------------------------------------------------------------------------
 # Visualizer Tab UI
 # ---------------------------------------------------------------------------
+
 
 def build_visualizer_drawer(ctrl):
     with vuetify.VContainer(classes="pa-4", v_show="active_tab === 5"):
@@ -914,25 +954,88 @@ def build_visualizer_drawer(ctrl):
             )
 
             html.Div("Translate X", classes="text-caption font-weight-bold mt-2 mb-n2")
-            vuetify.VSlider(v_model=("trans_x", 0.0), min=-50.0, max=50.0, step=0.1, dense=True, hide_details=True)
+            vuetify.VSlider(
+                v_model=("trans_x", 0.0),
+                min=-50.0,
+                max=50.0,
+                step=0.1,
+                dense=True,
+                hide_details=True,
+            )
             html.Div("Translate Y", classes="text-caption font-weight-bold mt-2 mb-n2")
-            vuetify.VSlider(v_model=("trans_y", 0.0), min=-50.0, max=50.0, step=0.1, dense=True, hide_details=True)
+            vuetify.VSlider(
+                v_model=("trans_y", 0.0),
+                min=-50.0,
+                max=50.0,
+                step=0.1,
+                dense=True,
+                hide_details=True,
+            )
             html.Div("Translate Z", classes="text-caption font-weight-bold mt-2 mb-n2")
-            vuetify.VSlider(v_model=("trans_z", 0.0), min=-50.0, max=50.0, step=0.1, dense=True, hide_details=True)
+            vuetify.VSlider(
+                v_model=("trans_z", 0.0),
+                min=-50.0,
+                max=50.0,
+                step=0.1,
+                dense=True,
+                hide_details=True,
+            )
 
             html.Div("Rotate X (°)", classes="text-caption font-weight-bold mt-3 mb-n2")
-            vuetify.VSlider(v_model=("rot_x", 0.0), min=-180.0, max=180.0, step=1.0, dense=True, hide_details=True)
+            vuetify.VSlider(
+                v_model=("rot_x", 0.0),
+                min=-180.0,
+                max=180.0,
+                step=1.0,
+                dense=True,
+                hide_details=True,
+            )
             html.Div("Rotate Y (°)", classes="text-caption font-weight-bold mt-2 mb-n2")
-            vuetify.VSlider(v_model=("rot_y", 0.0), min=-180.0, max=180.0, step=1.0, dense=True, hide_details=True)
+            vuetify.VSlider(
+                v_model=("rot_y", 0.0),
+                min=-180.0,
+                max=180.0,
+                step=1.0,
+                dense=True,
+                hide_details=True,
+            )
             html.Div("Rotate Z (°)", classes="text-caption font-weight-bold mt-2 mb-n2")
-            vuetify.VSlider(v_model=("rot_z", 0.0), min=-180.0, max=180.0, step=1.0, dense=True, hide_details=True)
+            vuetify.VSlider(
+                v_model=("rot_z", 0.0),
+                min=-180.0,
+                max=180.0,
+                step=1.0,
+                dense=True,
+                hide_details=True,
+            )
 
             html.Div("Scale X", classes="text-caption font-weight-bold mt-3 mb-n2")
-            vuetify.VSlider(v_model=("scale_x", 1.0), min=0.1, max=5.0, step=0.05, dense=True, hide_details=True)
+            vuetify.VSlider(
+                v_model=("scale_x", 1.0),
+                min=0.1,
+                max=5.0,
+                step=0.05,
+                dense=True,
+                hide_details=True,
+            )
             html.Div("Scale Y", classes="text-caption font-weight-bold mt-2 mb-n2")
-            vuetify.VSlider(v_model=("scale_y", 1.0), min=0.1, max=5.0, step=0.05, dense=True, hide_details=True)
+            vuetify.VSlider(
+                v_model=("scale_y", 1.0),
+                min=0.1,
+                max=5.0,
+                step=0.05,
+                dense=True,
+                hide_details=True,
+            )
             html.Div("Scale Z", classes="text-caption font-weight-bold mt-2 mb-n2")
-            vuetify.VSlider(v_model=("scale_z", 1.0), min=0.1, max=5.0, step=0.05, dense=True, hide_details=True)
+            vuetify.VSlider(
+                v_model=("scale_z", 1.0),
+                min=0.1,
+                max=5.0,
+                step=0.05,
+                dense=True,
+                hide_details=True,
+            )
 
             vuetify.VBtn(
                 "Reset Transform",

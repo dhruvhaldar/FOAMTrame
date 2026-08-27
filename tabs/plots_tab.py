@@ -7,6 +7,7 @@ import logging
 import os
 import threading
 import time
+from html import escape
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -16,14 +17,6 @@ from PIL import Image
 from trame.widgets import client, html, vuetify
 
 logger = logging.getLogger("FOAMTrame")
-
-# Matplotlib backend must be set before importing pyplot
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import matplotlib.ticker as mticker
-from matplotlib import font_manager
-from matplotlib.offsetbox import AnnotationBbox, OffsetImage
 
 from app_state import load_plot_preferences, update_plot_preferences
 
@@ -39,14 +32,64 @@ _LIBERATION_SERIF_FONT_PATH = (
     _PROJECT_ROOT / "static" / "fonts" / "LiberationSerif-Regular.ttf"
 )
 _FOAMFLASK_LOGO_PATH = _PROJECT_ROOT / "static" / "icons" / "foamflask-plot-logo.png"
+_matplotlib_lock = threading.Lock()
+_matplotlib_loaded = False
+matplotlib: Any = None
+plt: Any = None
+mticker: Any = None
+font_manager: Any = None
+AnnotationBbox: Any = None
+OffsetImage: Any = None
 
-for _font_path in (
-    _HEROS_FONT_PATH,
-    _ROBOTO_FONT_PATH,
-    _LIBERATION_SERIF_FONT_PATH,
-):
-    if _font_path.is_file():
-        font_manager.fontManager.addfont(str(_font_path))
+
+def _load_matplotlib() -> None:
+    """Load the plotting stack on first render, after the web server can start."""
+    global _matplotlib_loaded
+    global AnnotationBbox, OffsetImage, font_manager, matplotlib, mticker, plt
+    if _matplotlib_loaded:
+        return
+    with _matplotlib_lock:
+        if _matplotlib_loaded:
+            return
+        import matplotlib as matplotlib_module
+
+        matplotlib_module.use("Agg")
+        import matplotlib.pyplot as pyplot_module
+        import matplotlib.ticker as ticker_module
+        from matplotlib import font_manager as font_manager_module
+        from matplotlib.offsetbox import AnnotationBbox as annotation_bbox_class
+        from matplotlib.offsetbox import OffsetImage as offset_image_class
+
+        matplotlib = matplotlib_module
+        plt = pyplot_module
+        mticker = ticker_module
+        font_manager = font_manager_module
+        AnnotationBbox = annotation_bbox_class
+        OffsetImage = offset_image_class
+
+        for font_path in (
+            _HEROS_FONT_PATH,
+            _ROBOTO_FONT_PATH,
+            _LIBERATION_SERIF_FONT_PATH,
+        ):
+            if font_path.is_file():
+                font_manager.fontManager.addfont(str(font_path))
+        _matplotlib_loaded = True
+
+
+def _placeholder_chart(message: str) -> str:
+    """Return a cheap startup placeholder without importing Matplotlib."""
+    label = escape(message, quote=True)
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="840" height="392" '
+        'viewBox="0 0 840 392" role="img">'
+        '<rect width="100%" height="100%" fill="none"/>'
+        '<text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" '
+        'fill="#475569" font-family="Arial, sans-serif" font-size="20">'
+        f"{label}</text></svg>"
+    )
+    return "data:image/svg+xml;base64," + base64.b64encode(svg.encode()).decode()
+
 
 # Fields always attempted for residuals
 _RESIDUAL_FIELDS = ["Ux", "Uy", "Uz", "p", "k", "epsilon", "omega", "T", "rho"]
@@ -77,21 +120,29 @@ _CHARTS = {
 }
 
 _LIGHT_COLORS = [
-    "#007c91", "#b91c1c", "#15803d", "#a21caf", "#0369a1",
-    "#c2410c", "#6d28d9", "#7c2d12", "#be185d", "#334155", "#854d0e",
+    "#007c91",
+    "#b91c1c",
+    "#15803d",
+    "#a21caf",
+    "#0369a1",
+    "#c2410c",
+    "#6d28d9",
+    "#7c2d12",
+    "#be185d",
+    "#334155",
+    "#854d0e",
 ]
 
 
 def _font_properties(font_choice: str) -> font_manager.FontProperties:
+    _load_matplotlib()
     if font_choice == "helvetica_neue" and _HEROS_FONT_PATH.is_file():
         return font_manager.FontProperties(fname=str(_HEROS_FONT_PATH))
     if font_choice == "roboto" and _ROBOTO_FONT_PATH.is_file():
         return font_manager.FontProperties(fname=str(_ROBOTO_FONT_PATH))
     if font_choice == "times_new_roman":
         if _LIBERATION_SERIF_FONT_PATH.is_file():
-            return font_manager.FontProperties(
-                fname=str(_LIBERATION_SERIF_FONT_PATH)
-            )
+            return font_manager.FontProperties(fname=str(_LIBERATION_SERIF_FONT_PATH))
         return font_manager.FontProperties(family=["DejaVu Serif"])
     return font_manager.FontProperties(
         family=["Arial", "Liberation Sans", "DejaVu Sans"]
@@ -111,27 +162,49 @@ def _plot_style(
     effective_background = "white" if export else background
     backgrounds = {
         "glass": {
-            "figure": "none", "axes": "none", "text": "#0f172a",
-            "muted": "#475569", "grid": "#94a3b8", "spine": "#64748b",
-            "legend": (1.0, 1.0, 1.0, 0.62), "transparent": True,
+            "figure": "none",
+            "axes": "none",
+            "text": "#0f172a",
+            "muted": "#475569",
+            "grid": "#94a3b8",
+            "spine": "#64748b",
+            "legend": (1.0, 1.0, 1.0, 0.62),
+            "transparent": True,
         },
         "white": {
-            "figure": "#ffffff", "axes": "#ffffff", "text": "#111827",
-            "muted": "#475569", "grid": "#cbd5e1", "spine": "#94a3b8",
-            "legend": "#ffffff", "transparent": False,
+            "figure": "#ffffff",
+            "axes": "#ffffff",
+            "text": "#111827",
+            "muted": "#475569",
+            "grid": "#cbd5e1",
+            "spine": "#94a3b8",
+            "legend": "#ffffff",
+            "transparent": False,
         },
         "grey": {
-            "figure": "#e5e7eb", "axes": "#f1f5f9", "text": "#111827",
-            "muted": "#475569", "grid": "#94a3b8", "spine": "#64748b",
-            "legend": "#f8fafc", "transparent": False,
+            "figure": "#e5e7eb",
+            "axes": "#f1f5f9",
+            "text": "#111827",
+            "muted": "#475569",
+            "grid": "#94a3b8",
+            "spine": "#64748b",
+            "legend": "#f8fafc",
+            "transparent": False,
         },
         "black": {
-            "figure": "#0f172a", "axes": "#0f172a", "text": "#f8fafc",
-            "muted": "#cbd5e1", "grid": "#334155", "spine": "#64748b",
-            "legend": "#1e293b", "transparent": False,
+            "figure": "#0f172a",
+            "axes": "#0f172a",
+            "text": "#f8fafc",
+            "muted": "#cbd5e1",
+            "grid": "#334155",
+            "spine": "#64748b",
+            "legend": "#1e293b",
+            "transparent": False,
         },
     }
-    style = dict(backgrounds.get(effective_background, backgrounds["glass"]))
+    style: Dict[str, Any] = dict(
+        backgrounds.get(effective_background, backgrounds["glass"])
+    )
     style.update(
         {
             "background": effective_background,
@@ -164,13 +237,15 @@ def _plot_style(
 
 @cached(LRUCache(maxsize=4))
 def _logo_array(logo_mode: str, custom_logo_data: str = "") -> Optional[np.ndarray]:
+    _load_matplotlib()
     try:
         if logo_mode == "foamflask" and _FOAMFLASK_LOGO_PATH.is_file():
             with Image.open(_FOAMFLASK_LOGO_PATH) as image:
                 return np.asarray(image.convert("RGBA").copy())
         if logo_mode == "custom" and custom_logo_data:
             encoded = custom_logo_data.split(",", 1)[-1]
-            raw = base64.b64decode(encoded, validate=True)
+            # Trame transports uploads as Base64; this is not encryption.
+            raw = base64.b64decode(encoded, validate=True)  # nosec
             with Image.open(io.BytesIO(raw)) as image:
                 image = image.convert("RGBA")
                 image.thumbnail((240, 120), Image.Resampling.LANCZOS)
@@ -182,6 +257,7 @@ def _logo_array(logo_mode: str, custom_logo_data: str = "") -> Optional[np.ndarr
 
 def _add_plot_logo(ax, style: Dict[str, Any]):
     """Place the logo in a reserved right margin, never over plotted data."""
+    _load_matplotlib()
     logo = _logo_array(style["logo_mode"], style["custom_logo_data"])
     if logo is None:
         return None
@@ -233,8 +309,10 @@ def _add_non_overlapping_legend(ax, style: Dict[str, Any]):
 # Chart rendering helpers
 # ---------------------------------------------------------------------------
 
+
 def _fig_to_b64(fig: plt.Figure, style: Optional[Dict[str, Any]] = None) -> str:
     """Render a matplotlib figure to a base64-encoded PNG data URI."""
+    _load_matplotlib()
     style = style or _plot_style()
     buf = io.BytesIO()
     fig.savefig(
@@ -256,13 +334,20 @@ def _make_empty_chart(
 ) -> str:
     """Return a placeholder chart matching the selected presentation style."""
     style = style or _plot_style()
-    fig, ax = plt.subplots(figsize=style.get("figsize", (6, 2.5)), facecolor=style["figure"])
+    fig, ax = plt.subplots(
+        figsize=style.get("figsize", (6, 2.5)), facecolor=style["figure"]
+    )
     ax.set_facecolor(style["axes"])
     ax.text(
-        0.5, 0.5, message,
+        0.5,
+        0.5,
+        message,
         transform=ax.transAxes,
-        ha="center", va="center",
-        color=style["muted"], fontsize=10 * style.get("font_scale", 1.0), fontproperties=style["font"],
+        ha="center",
+        va="center",
+        color=style["muted"],
+        fontsize=10 * style.get("font_scale", 1.0),
+        fontproperties=style["font"],
         multialignment="center",
     )
     ax.set_xticks([])
@@ -286,7 +371,9 @@ def _build_line_chart(
     if not time_vals or not target_fields:
         return _make_empty_chart(f"No active fields for {title}", style)
 
-    fig, ax = plt.subplots(figsize=style.get("figsize", (6, 2.8)), facecolor=style["figure"])
+    fig, ax = plt.subplots(
+        figsize=style.get("figsize", (6, 2.8)), facecolor=style["figure"]
+    )
     ax.set_facecolor(style["axes"])
 
     plotted = False
@@ -298,7 +385,8 @@ def _build_line_chart(
         colors = style["colors"]
         color = colors[(i + color_offset) % len(colors)]
         ax.plot(
-            list(time_vals)[:n], list(values)[:n],
+            list(time_vals)[:n],
+            list(values)[:n],
             label=field,
             color=color,
             linewidth=1.5 * style.get("line_scale", 1.0),
@@ -311,8 +399,18 @@ def _build_line_chart(
         return _make_empty_chart(f"No data plotted for {title}", style)
 
     font_scale = style.get("font_scale", 1.0)
-    ax.set_xlabel("Time (s)", color=style["muted"], fontsize=8 * font_scale, fontproperties=style["font"])
-    ax.set_ylabel(y_label, color=style["muted"], fontsize=8 * font_scale, fontproperties=style["font"])
+    ax.set_xlabel(
+        "Time (s)",
+        color=style["muted"],
+        fontsize=8 * font_scale,
+        fontproperties=style["font"],
+    )
+    ax.set_ylabel(
+        y_label,
+        color=style["muted"],
+        fontsize=8 * font_scale,
+        fontproperties=style["font"],
+    )
     ax.tick_params(colors=style["muted"], labelsize=7 * font_scale)
     for label in (*ax.get_xticklabels(), *ax.get_yticklabels()):
         label.set_fontproperties(style["font"])
@@ -332,8 +430,7 @@ def _build_residuals_chart(
     """Render residuals on a log-scale chart."""
     style = style or _plot_style()
     active_fields = [
-        f for f in _RESIDUAL_FIELDS
-        if f in residuals and len(residuals[f]) > 0
+        f for f in _RESIDUAL_FIELDS if f in residuals and len(residuals[f]) > 0
     ]
 
     for f in residuals:
@@ -345,7 +442,9 @@ def _build_residuals_chart(
             "No solver residuals yet\n(waiting for log.foamRun output)", style
         )
 
-    fig, ax = plt.subplots(figsize=style.get("figsize", (6, 2.8)), facecolor=style["figure"])
+    fig, ax = plt.subplots(
+        figsize=style.get("figsize", (6, 2.8)), facecolor=style["figure"]
+    )
     ax.set_facecolor(style["axes"])
 
     for i, field in enumerate(active_fields):
@@ -356,7 +455,8 @@ def _build_residuals_chart(
         colors = style["colors"]
         color = colors[i % len(colors)]
         ax.semilogy(
-            range(1, n + 1), values,
+            range(1, n + 1),
+            values,
             label=field,
             color=color,
             linewidth=1.4 * style.get("line_scale", 1.0),
@@ -364,8 +464,18 @@ def _build_residuals_chart(
         )
 
     font_scale = style.get("font_scale", 1.0)
-    ax.set_xlabel("Solver iteration", color=style["muted"], fontsize=8 * font_scale, fontproperties=style["font"])
-    ax.set_ylabel("Residual", color=style["muted"], fontsize=8 * font_scale, fontproperties=style["font"])
+    ax.set_xlabel(
+        "Solver iteration",
+        color=style["muted"],
+        fontsize=8 * font_scale,
+        fontproperties=style["font"],
+    )
+    ax.set_ylabel(
+        "Residual",
+        color=style["muted"],
+        fontsize=8 * font_scale,
+        fontproperties=style["font"],
+    )
     # Plain scientific notation avoids Matplotlib's math-text parser. Besides
     # being clearer at small sizes, this removes a thread-sensitive parser path
     # that can fail on labels such as ``$\mathdefault{10^{-3}}$``.
@@ -391,32 +501,57 @@ def _render_chart(
     style: Dict[str, Any],
 ) -> str:
     time_vals = field_data.get("time", []) if field_data else []
-    available = {key for key, values in field_data.items() if key != "time" and len(values)}
+    available = {
+        key for key, values in field_data.items() if key != "time" and len(values)
+    }
     if chart_key == "scalar":
-        return _build_line_chart(time_vals, field_data, selected, "Scalar Fields", "Value", 0, style)
+        return _build_line_chart(
+            time_vals, field_data, selected, "Scalar Fields", "Value", 0, style
+        )
     if chart_key == "umag":
         return _build_line_chart(
-            time_vals, field_data, ["U_mag"] if "U_mag" in available else [],
-            "Velocity Magnitude", "Velocity (m/s)", 3, style,
+            time_vals,
+            field_data,
+            ["U_mag"] if "U_mag" in available else [],
+            "Velocity Magnitude",
+            "Velocity (m/s)",
+            3,
+            style,
         )
     if chart_key == "ucomponents":
         return _build_line_chart(
-            time_vals, field_data, [field for field in ("Ux", "Uy", "Uz") if field in available],
-            "Velocity Components", "Velocity (m/s)", 5, style,
+            time_vals,
+            field_data,
+            [field for field in ("Ux", "Uy", "Uz") if field in available],
+            "Velocity Components",
+            "Velocity (m/s)",
+            5,
+            style,
         )
     return _build_residuals_chart(residuals, style)
 
 
 def _uploaded_logo_data(file_value) -> str:
     """Validate an uploaded raster logo and normalize it to a PNG data URL."""
-    item = file_value[0] if isinstance(file_value, (list, tuple)) and file_value else file_value
-    content = item.get("content") if isinstance(item, dict) else getattr(item, "content", None)
+    item = (
+        file_value[0]
+        if isinstance(file_value, (list, tuple)) and file_value
+        else file_value
+    )
+    content = (
+        item.get("content")
+        if isinstance(item, dict)
+        else getattr(item, "content", None)
+    )
     if content is None:
         raise ValueError("The selected logo could not be read")
     if isinstance(content, bytes):
         raw = content
     elif isinstance(content, str):
-        raw = base64.b64decode(content.split(",", 1)[-1], validate=True)
+        # Trame transports uploads as Base64; this is not encryption.
+        raw = base64.b64decode(  # nosec
+            content.split(",", 1)[-1], validate=True
+        )
     elif isinstance(content, (list, tuple)):
         raw = bytes(content)
     else:
@@ -430,12 +565,15 @@ def _uploaded_logo_data(file_value) -> str:
         image.thumbnail((640, 320), Image.Resampling.LANCZOS)
         output = io.BytesIO()
         image.save(output, format="PNG", optimize=True)
-    return "data:image/png;base64," + base64.b64encode(output.getvalue()).decode("ascii")
+    return "data:image/png;base64," + base64.b64encode(output.getvalue()).decode(
+        "ascii"
+    )
 
 
 # ---------------------------------------------------------------------------
 # Tab setup
 # ---------------------------------------------------------------------------
+
 
 def setup_plots_tab(server):
     state, ctrl = server.state, server.controller
@@ -443,11 +581,11 @@ def setup_plots_tab(server):
 
     # --- State defaults ---
     initial_case = getattr(state, "active_case", "") or ""
-    loading_chart = _make_empty_chart("Loading...")
+    loading_chart = _placeholder_chart("Loading...")
     initial_chart = (
         loading_chart
         if initial_case
-        else _make_empty_chart("Select an active case to start")
+        else _placeholder_chart("Select an active case to start")
     )
     state.setdefault("plots_scalar_chart", initial_chart)
     state.setdefault("plots_umag_chart", initial_chart)
@@ -553,6 +691,7 @@ def setup_plots_tab(server):
 
     def _get_case_dir() -> Optional[Path]:
         from tabs.setup_tab import load_config
+
         config = load_config()
         case_root = config.get("CASE_ROOT", "")
         active_case = getattr(state, "active_case", "") or ""
@@ -627,7 +766,9 @@ def setup_plots_tab(server):
                 selected = list(getattr(state, "plots_selected_fields", []) or [])
                 selected = [f for f in selected if f in available]
                 if not selected and available:
-                    selected = [f for f in available if f not in ["Ux", "Uy", "Uz", "U_mag"]]
+                    selected = [
+                        f for f in available if f not in ["Ux", "Uy", "Uz", "U_mag"]
+                    ]
                     if not selected:
                         selected = available[:3]
                     state.plots_selected_fields = selected
@@ -643,8 +784,11 @@ def setup_plots_tab(server):
                     len(time_vals),
                     time_vals[-1] if time_vals else None,
                     tuple(
-                        (field, len(field_data.get(field, [])),
-                         field_data[field][-1] if field_data.get(field) else None)
+                        (
+                            field,
+                            len(field_data.get(field, [])),
+                            field_data[field][-1] if field_data.get(field) else None,
+                        )
                         for field in available
                     ),
                 )
@@ -653,7 +797,13 @@ def setup_plots_tab(server):
                 # the filesystem. Only redraw field charts when their data changed.
                 if _chart_signatures.get("series") != series_signature:
                     state.plots_scalar_chart = _build_line_chart(
-                        time_vals, field_data, selected, "Scalar Fields", "Value", color_offset=0, style=style
+                        time_vals,
+                        field_data,
+                        selected,
+                        "Scalar Fields",
+                        "Value",
+                        color_offset=0,
+                        style=style,
                     )
                     if first_load:
                         publish_plot_state()
@@ -661,20 +811,38 @@ def setup_plots_tab(server):
                     umag_fields = [f for f in ["U_mag"] if f in available]
                     ucomp_fields = [f for f in ["Ux", "Uy", "Uz"] if f in available]
                     state.plots_umag_chart = _build_line_chart(
-                        time_vals, field_data, umag_fields, "Velocity Magnitude", "Velocity (m/s)", color_offset=3, style=style
+                        time_vals,
+                        field_data,
+                        umag_fields,
+                        "Velocity Magnitude",
+                        "Velocity (m/s)",
+                        color_offset=3,
+                        style=style,
                     )
                     if first_load:
                         publish_plot_state()
                     state.plots_ucomponents_chart = _build_line_chart(
-                        time_vals, field_data, ucomp_fields, "Velocity Components", "Velocity (m/s)", color_offset=5, style=style
+                        time_vals,
+                        field_data,
+                        ucomp_fields,
+                        "Velocity Components",
+                        "Velocity (m/s)",
+                        color_offset=5,
+                        style=style,
                     )
                     if first_load:
                         publish_plot_state()
                     _chart_signatures["series"] = series_signature
             else:
-                state.plots_scalar_chart = _make_empty_chart("No time step data found", style)
-                state.plots_umag_chart = _make_empty_chart("No velocity data found", style)
-                state.plots_ucomponents_chart = _make_empty_chart("No velocity component data found", style)
+                state.plots_scalar_chart = _make_empty_chart(
+                    "No time step data found", style
+                )
+                state.plots_umag_chart = _make_empty_chart(
+                    "No velocity data found", style
+                )
+                state.plots_ucomponents_chart = _make_empty_chart(
+                    "No velocity component data found", style
+                )
 
             # 4. Solver Residuals Plot
             residuals = parser.get_residuals_from_log()
@@ -703,7 +871,9 @@ def setup_plots_tab(server):
 
             n_steps = len(time_vals)
             if mode == MODE_LIVE:
-                state.plots_status = f"LIVE · updating automatically · {n_steps} time steps"
+                state.plots_status = (
+                    f"LIVE · updating automatically · {n_steps} time steps"
+                )
                 state.plots_status_type = "success"
             else:
                 state.plots_status = f"CACHED · synchronized at {time.strftime('%H:%M:%S')} · {n_steps} time steps"
@@ -801,7 +971,9 @@ def setup_plots_tab(server):
         finally:
             _poll_lock.release()
         case_name = getattr(state, "active_case", "case") or "case"
-        safe_case = "".join(char if char.isalnum() or char in "-_" else "_" for char in case_name)
+        safe_case = "".join(
+            char if char.isalnum() or char in "-_" else "_" for char in case_name
+        )
         return {
             "url": image_uri,
             "name": f"{safe_case}-{key}.png",
@@ -843,7 +1015,9 @@ def setup_plots_tab(server):
         _chart_signatures.pop("series", None)
         request_refresh()
 
-    @state.change("plots_font", "plots_background", "plots_logo_mode", "plots_custom_logo_data")
+    @state.change(
+        "plots_font", "plots_background", "plots_logo_mode", "plots_custom_logo_data"
+    )
     def on_plot_appearance_change(**_):
         update_plot_preferences(
             {
@@ -869,7 +1043,7 @@ def setup_plots_tab(server):
             state.plots_custom_logo_data = _uploaded_logo_data(plots_logo_upload)
             state.plots_logo_mode = "custom"
             state.plots_logo_status = "Custom logo ready"
-            _logo_array.cache_clear()
+            _logo_array.cache_clear()  # ty: ignore[unresolved-attribute]
         except Exception as exc:
             state.plots_logo_status = str(exc)
         finally:
@@ -896,14 +1070,13 @@ def setup_plots_tab(server):
         state.flush()
         request_refresh()
 
+
 # ---------------------------------------------------------------------------
 # UI
 # ---------------------------------------------------------------------------
 
-def build_plots_drawer():
-    from trame.app import get_server
-    server = get_server()
 
+def build_plots_drawer():
     with html.Div(v_show="active_tab === 4", classes="pa-4"):
         html.Div("Automatic Updates", classes="text-overline text--secondary mb-1")
         with vuetify.VCard(classes="glass-card pa-3 mb-4", outlined=True):
@@ -925,7 +1098,9 @@ def build_plots_drawer():
         html.Div("Plot Appearance", classes="text-overline text--secondary mb-1")
         vuetify.VSelect(
             v_model=("plots_font", "helvetica_neue"),
-            items=("[{ text: 'Helvetica Neue', value: 'helvetica_neue' }, { text: 'Roboto', value: 'roboto' }, { text: 'Times New Roman', value: 'times_new_roman' }, { text: 'Arial', value: 'arial' }]",),
+            items=(
+                "[{ text: 'Helvetica Neue', value: 'helvetica_neue' }, { text: 'Roboto', value: 'roboto' }, { text: 'Times New Roman', value: 'times_new_roman' }, { text: 'Arial', value: 'arial' }]",
+            ),
             label="Font",
             outlined=True,
             dense=True,
@@ -938,7 +1113,9 @@ def build_plots_drawer():
         )
         vuetify.VSelect(
             v_model=("plots_background", "glass"),
-            items=("[{ text: 'Glass', value: 'glass' }, { text: 'White', value: 'white' }, { text: 'Black', value: 'black' }, { text: 'Grey', value: 'grey' }]",),
+            items=(
+                "[{ text: 'Glass', value: 'glass' }, { text: 'White', value: 'white' }, { text: 'Black', value: 'black' }, { text: 'Grey', value: 'grey' }]",
+            ),
             label="On-screen background",
             outlined=True,
             dense=True,
@@ -951,7 +1128,9 @@ def build_plots_drawer():
         )
         vuetify.VSelect(
             v_model=("plots_logo_mode", "none"),
-            items=("[{ text: 'No logo', value: 'none' }, { text: 'FOAMFlask logo', value: 'foamflask' }, { text: 'Custom logo', value: 'custom' }]",),
+            items=(
+                "[{ text: 'No logo', value: 'none' }, { text: 'FOAMFlask logo', value: 'foamflask' }, { text: 'Custom logo', value: 'custom' }]",
+            ),
             label="Plot logo",
             outlined=True,
             dense=True,
@@ -997,6 +1176,7 @@ def build_plots_content():
     from trame.app import get_server
 
     server = get_server()
+    assert server is not None
     state, ctrl = server.state, server.controller
     download_exec = client.JSEval(
         exec="""
@@ -1025,13 +1205,16 @@ def build_plots_content():
         title, state_key = _CHARTS[chart_key]
         with vuetify.VCol(cols="12", md="6", classes="pa-2"):
             with vuetify.VCard(classes="glass-card plot-card pa-3 h-100"):
-                with vuetify.VCardTitle(classes="subtitle-2 font-weight-bold pb-1 d-flex align-center"):
+                with vuetify.VCardTitle(
+                    classes="subtitle-2 font-weight-bold pb-1 d-flex align-center"
+                ):
                     html.Span(title)
                     vuetify.VSpacer()
                     with vuetify.VBtn(
                         icon=True,
                         small=True,
                         title="Save as PNG",
+                        aria_label=f"Save {title} as PNG",
                         disabled=("plots_loading",),
                         click=lambda key=chart_key: ctrl.plots_export_chart(key),
                     ):
@@ -1040,6 +1223,7 @@ def build_plots_content():
                         icon=True,
                         small=True,
                         title="Maximize plot",
+                        aria_label=f"Maximize {title} plot",
                         click=lambda key=chart_key: ctrl.plots_select_chart(key, True),
                     ):
                         vuetify.VIcon("mdi-arrow-expand-all", small=True)
@@ -1050,6 +1234,7 @@ def build_plots_content():
                         max_width="100%",
                         classes="plot-rendered-image",
                         style="border-radius: 8px;",
+                        alt=f"{title} plot",
                     )
 
     with vuetify.VContainer(
@@ -1065,6 +1250,8 @@ def build_plots_content():
                     text=True,
                     type=("plots_status_type", "info"),
                     classes="mb-2 plots-status-alert",
+                    role="status",
+                    aria_live="polite",
                 ):
                     vuetify.VProgressCircular(
                         v_if="plots_loading",
@@ -1088,12 +1275,20 @@ def build_plots_content():
         fullscreen=True,
         hide_overlay=True,
         transition="dialog-bottom-transition",
+        aria_labelledby="maximized-plot-title",
     ):
         with vuetify.VCard(classes="plots-maximized-dialog"):
             with vuetify.VToolbar(dense=True, classes="glass-navbar flex-grow-0"):
-                with vuetify.VBtn(icon=True, click="plots_maximized = false", title="Close"):
+                with vuetify.VBtn(
+                    icon=True,
+                    click="plots_maximized = false",
+                    title="Close",
+                    aria_label="Close maximized plot",
+                ):
                     vuetify.VIcon("mdi-close")
-                vuetify.VToolbarTitle("{{ plots_active_chart_title }}")
+                vuetify.VToolbarTitle(
+                    "{{ plots_active_chart_title }}", id="maximized-plot-title"
+                )
                 vuetify.VSpacer()
                 with vuetify.VBtn(
                     text=True,
@@ -1105,18 +1300,31 @@ def build_plots_content():
                     html.Span("Save PNG")
             with vuetify.VContainer(fluid=True, classes="plots-maximized-body pa-4"):
                 with vuetify.VRow(classes="fill-height"):
-                    with vuetify.VCol(cols="12", md="3", lg="2", classes="plots-maximized-sidebar"):
-                        html.Div("Other plots", classes="text-overline text--secondary mb-2")
+                    with vuetify.VCol(
+                        cols="12", md="3", lg="2", classes="plots-maximized-sidebar"
+                    ):
+                        html.Div(
+                            "Other plots", classes="text-overline text--secondary mb-2"
+                        )
                         for chart_key, (title, _) in _CHARTS.items():
                             vuetify.VBtn(
                                 title,
                                 block=True,
                                 outlined=(f"plots_active_chart !== '{chart_key}'",),
-                                color=(f"plots_active_chart === '{chart_key}' ? 'primary' : 'grey darken-1'",),
-                                click=lambda key=chart_key: ctrl.plots_select_chart(key, False),
+                                color=(
+                                    f"plots_active_chart === '{chart_key}' ? 'primary' : 'grey darken-1'",
+                                ),
+                                click=lambda key=chart_key: ctrl.plots_select_chart(
+                                    key, False
+                                ),
                                 classes="mb-2 justify-start",
                             )
-                    with vuetify.VCol(cols="12", md="9", lg="10", classes="d-flex align-center justify-center"):
+                    with vuetify.VCol(
+                        cols="12",
+                        md="9",
+                        lg="10",
+                        classes="d-flex align-center justify-center",
+                    ):
                         vuetify.VImg(
                             src=("plots_maximized_src",),
                             contain=True,
