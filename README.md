@@ -153,6 +153,9 @@ Placeholder: [tabs/meshing_tab.py](./tabs/meshing_tab.py)
 - Archives FOAMTrame console output separately from case-owned solver logs. A
   case-provided `Allrun` remains responsible for `log.foamRun`, so launching or
   observing a run never truncates an existing residual log.
+- On Allclean, stages the current FOAMTrame archive outside the bind-mounted case
+  and writes `<case>/logs/run_<id>.log` only after the cleanup container exits.
+  This prevents Windows from blocking the case script when it removes `logs`.
 - Recognizes OpenFOAM's “already run” output. If every `Allrun` stage is skipped,
   records the run as **Skipped**, uses a warning status instead of success, and
   shows a dismissible warning notification with reviewed cleanup guidance. Partial
@@ -503,9 +506,11 @@ Use the platform launcher after installation:
 ./start.sh
 ```
 
-The launchers call [run.py](./run.py), forward termination signals, use the
-installed interpreter, and keep the working directory deterministic. The
-installer prints the selected URL; with no port option it is
+The launchers execute the synchronized `.venv` directly, call [run.py](./run.py),
+forward termination signals, and keep the working directory deterministic. The
+verified Python and `uv` bootstrap path remains available when `.venv` is absent;
+routine launches do not repeat dependency resolution. The installer prints the
+selected URL; with no port option it is
 [http://localhost:8087](http://localhost:8087).
 
 Trame's standard server arguments remain supported:
@@ -738,7 +743,7 @@ CORS policy. The companion API remains loopback-bound by default.
 ├── manage.py                 # Doctor and database administration commands
 ├── install.py                # Shared cross-platform installer implementation
 ├── install.ps1 / install.sh  # Windows and Linux installer entry points
-├── start.ps1 / start.sh      # Locked uv-environment launchers
+├── start.ps1 / start.sh      # Direct .venv launchers with bootstrap fallback
 ├── app_state.json.example    # Portable state schema example
 ├── flask_server.py           # Optional companion HTTP API
 ├── run.py                    # Process wrapper and signal forwarding
@@ -746,6 +751,7 @@ CORS policy. The companion API remains loopback-bound by default.
 ├── uv_bootstrap.py           # Verified system/bundled uv selection and extraction
 ├── pyproject.toml            # Project metadata and direct dependencies
 ├── uv.lock                   # Reproducible dependency lockfile
+├── benchmarks/               # Startup and cache microbenchmarks
 ├── vendor/uv/                # Offline uv archives, checksums, and upstream licenses
 ├── vendor/python/            # Offline CPython archives, checksums, and licenses
 ├── tests/
@@ -794,6 +800,13 @@ keys include modification time (and file size where relevant), so a changed
 case or asset naturally produces a cache miss.
 Large live-result caches remain specialized and append-aware: residual logs and
 time series reuse stable parsed history while reading only newly appended data.
+
+Server startup keeps Matplotlib and bundled-font registration off the readiness
+critical path. The Plots tab begins with lightweight SVG placeholders and loads
+the plotting stack on its first real render; background case-data discovery still
+starts eagerly. Use `benchmarks/benchmark_startup.py` and
+`FOAMTRAME_STARTUP_TIMING=1` to distinguish interpreter, import, layout, and
+server-ready costs.
 
 Cache capacities are deliberately bounded. High-cardinality field and file
 lookups retain up to 4,096 entries, directory scans up to 1,024, and rendered
@@ -850,6 +863,8 @@ before committing. `ty` targets every supported platform and checks application
 code, tests, and benchmarks while excluding scratch diagnostics. A narrow `ty`
 override covers cachebox decorator-generated methods, and optional PyVista and
 native accelerator imports remain valid when those components are not installed.
+CodeAudit is installed only on Python 3.11+, so its exact optional API module is
+also allowed to remain unresolved during Python 3.10 type checking.
 
 On Python 3.11 or newer, run the CodeAudit SAST gate as well. Reviewed false
 positives use inline `# nosec` comments with a reason; new medium, high, or
@@ -915,7 +930,10 @@ paragraphs, emphasis, links, ordered and unordered lists, blockquotes, tables,
 fenced code, and left-to-right Mermaid flowcharts. Unsupported or malformed
 Mermaid syntax is displayed safely as code instead of being executed. Raw HTML is
 not trusted in the application view. Repository-hosted Markdown can still use
-presentation HTML for badges and the centered logo.
+presentation HTML for badges and the centered logo. Validated relative file and
+directory links open their GitHub blob/tree targets, while validated relative
+images use the repository's raw-content URL. Missing paths, traversal outside the
+repository, and directories used as images are rejected.
 
 When a topic grows large enough to obscure the main workflow, add a concise
 summary here and move deep reference material into `docs/<topic>.md`. Link the new
@@ -995,6 +1013,14 @@ The backup stores the case name and root path, not the case directory. Copy the 
 - Confirm the extension appears in [Supported datasets](#supported-datasets).
 - For case auto-loading, verify the file is inside the active case directory.
 - Use a server-local `--data` path for very large datasets.
+
+### Allclean reports permission denied for a run archive
+
+Restart FOAMTrame so the current Run/Log implementation is loaded, then retry the
+confirmed Allclean action. Allclean output is staged outside the case until the
+container exits, preventing an open host-side `logs/run_<id>.log` from blocking
+the case script on Windows. Do not manually broaden cleanup beyond the reviewed
+case action.
 
 ### The selected server port is already in use
 
