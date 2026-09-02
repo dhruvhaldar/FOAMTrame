@@ -2044,6 +2044,7 @@ with SinglePageWithDrawerLayout(server) as layout:
     # more horizontal room. Keep the standard drawer on compact viewports so
     # the main content is not unnecessarily crowded.
     layout.drawer.width = (
+        "active_tab === 7 && $vuetify.breakpoint.xsOnly ? 0 : "
         "active_tab === 3 && !$vuetify.breakpoint.smAndDown ? 430 : "
         "active_tab === 1 && !$vuetify.breakpoint.smAndDown ? 360 : 300",
     )

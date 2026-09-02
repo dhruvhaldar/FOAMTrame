@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import copy
+import io
 import json
 import logging
+import shutil
+import stat
+import tempfile
 import threading
+import zipfile
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -17,6 +22,12 @@ LEGACY_APP_STATE_FILE = settings.data_dir / "app_state.json"
 LEGACY_CONFIG_FILE = settings.data_dir / "case_config.json"
 LEGACY_RUN_HISTORY_FILE = settings.data_dir / "run_history.json"
 APP_STATE_VERSION = SCHEMA_VERSION
+DEEP_BACKUP_FORMAT = "foamtrame-deep-copy"
+DEEP_BACKUP_VERSION = 1
+DEEP_BACKUP_MANIFEST = "foamtrame-backup.json"
+DEEP_BACKUP_STATE = "app_state.json"
+MAX_DEEP_BACKUP_FILES = 100_000
+MAX_DEEP_BACKUP_UNCOMPRESSED_BYTES = 4 * 1024 * 1024 * 1024
 
 _state_lock = threading.RLock()
 
@@ -268,4 +279,173 @@ def restore_app_state_json(payload: str | bytes) -> dict[str, Any]:
 
     if not save_app_state(restored):
         raise OSError("The restored app state could not be saved.")
+    return copy.deepcopy(restored)
+
+
+def export_deep_copy(case_root: str | Path | None = None) -> bytes:
+    """Return a ZIP containing app state and every case in the case workspace."""
+    state = load_app_state()
+    source_root = Path(case_root or state["case_config"]["CASE_ROOT"]).resolve()
+    if not source_root.is_dir():
+        raise FileNotFoundError(f"Case workspace does not exist: {source_root}")
+    manifest = {
+        "format": DEEP_BACKUP_FORMAT,
+        "format_version": DEEP_BACKUP_VERSION,
+        "state_file": DEEP_BACKUP_STATE,
+        "cases_directory": "cases",
+    }
+
+    output = io.BytesIO()
+    with zipfile.ZipFile(
+        output, mode="w", compression=zipfile.ZIP_DEFLATED, compresslevel=6
+    ) as archive:
+        archive.writestr(DEEP_BACKUP_MANIFEST, json.dumps(manifest, indent=2) + "\n")
+        archive.writestr(DEEP_BACKUP_STATE, json.dumps(state, indent=2) + "\n")
+        for case_path in sorted(source_root.iterdir(), key=lambda path: path.name):
+            if not case_path.is_dir() or case_path.is_symlink():
+                continue
+            archive.writestr(f"cases/{case_path.name}/", b"")
+            for path in sorted(case_path.rglob("*")):
+                if path.is_symlink():
+                    logger.warning("Skipping symlink from deep copy: %s", path)
+                    continue
+                relative = path.relative_to(source_root).as_posix()
+                archive_name = f"cases/{relative}"
+                if path.is_dir():
+                    archive.writestr(f"{archive_name}/", b"")
+                elif path.is_file():
+                    archive.write(path, archive_name)
+    return output.getvalue()
+
+
+def _validated_deep_copy_members(
+    archive: zipfile.ZipFile,
+) -> tuple[dict[str, Any], list[zipfile.ZipInfo], set[str]]:
+    infos = archive.infolist()
+    if len(infos) > MAX_DEEP_BACKUP_FILES:
+        raise ValueError("The deep-copy archive contains too many files.")
+    if sum(info.file_size for info in infos) > MAX_DEEP_BACKUP_UNCOMPRESSED_BYTES:
+        raise ValueError("The expanded deep-copy archive exceeds the 4 GB limit.")
+    names = archive.namelist()
+    if names.count(DEEP_BACKUP_MANIFEST) != 1:
+        raise ValueError("This ZIP is not a FOAMTrame deep-copy backup.")
+    if names.count(DEEP_BACKUP_STATE) != 1:
+        raise ValueError("The deep-copy archive must contain one app_state.json.")
+
+    try:
+        manifest = json.loads(archive.read(DEEP_BACKUP_MANIFEST))
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise ValueError("The deep-copy manifest is not valid JSON.") from exc
+    if not isinstance(manifest, dict) or (
+        manifest.get("format") != DEEP_BACKUP_FORMAT
+        or manifest.get("format_version") != DEEP_BACKUP_VERSION
+        or manifest.get("state_file") != DEEP_BACKUP_STATE
+    ):
+        raise ValueError("The deep-copy manifest format is not supported.")
+
+    members: list[zipfile.ZipInfo] = []
+    case_names: set[str] = set()
+    seen: set[str] = set()
+    for info in infos:
+        name = info.filename
+        if name in {DEEP_BACKUP_MANIFEST, DEEP_BACKUP_STATE}:
+            continue
+        path = PurePosixPath(name)
+        if (
+            path.is_absolute()
+            or ".." in path.parts
+            or "\\" in name
+            or len(path.parts) < 2
+            or path.parts[0] != "cases"
+            or not path.parts[1]
+        ):
+            raise ValueError(f"Unsafe deep-copy archive path: {name}")
+        if stat.S_ISLNK(info.external_attr >> 16):
+            raise ValueError(f"Deep-copy archives cannot contain symlinks: {name}")
+        if len(path.parts) == 2 and not info.is_dir():
+            raise ValueError(f"A case archive root must be a directory: {name}")
+        canonical_name = path.as_posix().rstrip("/").casefold()
+        if canonical_name in seen:
+            raise ValueError(f"Duplicate deep-copy archive path: {name}")
+        seen.add(canonical_name)
+        case_names.add(path.parts[1])
+        members.append(info)
+    return manifest, members, case_names
+
+
+def validate_deep_copy(payload: bytes) -> int:
+    """Validate a deep-copy ZIP and return its number of case directories."""
+    try:
+        archive = zipfile.ZipFile(io.BytesIO(payload))
+    except zipfile.BadZipFile as exc:
+        raise ValueError("The selected file is not a valid ZIP archive.") from exc
+    with archive:
+        _, _, case_names = _validated_deep_copy_members(archive)
+        try:
+            _normalise_app_state(json.loads(archive.read(DEEP_BACKUP_STATE)))
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise ValueError("The deep-copy app state is not valid JSON.") from exc
+    return len(case_names)
+
+
+def restore_deep_copy(payload: bytes, destination_root: str | Path) -> dict[str, Any]:
+    """Restore cases from a deep-copy ZIP without overwriting local cases."""
+    destination = Path(destination_root).resolve()
+    try:
+        archive = zipfile.ZipFile(io.BytesIO(payload))
+    except zipfile.BadZipFile as exc:
+        raise ValueError("The selected file is not a valid ZIP archive.") from exc
+
+    with archive:
+        _, members, case_names = _validated_deep_copy_members(archive)
+        try:
+            restored = _normalise_app_state(json.loads(archive.read(DEEP_BACKUP_STATE)))
+        except KeyError as exc:
+            raise ValueError(
+                "The deep-copy archive is missing app_state.json."
+            ) from exc
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise ValueError("The deep-copy app state is not valid JSON.") from exc
+
+        collisions = sorted(
+            name for name in case_names if (destination / name).exists()
+        )
+        if collisions:
+            names = ", ".join(collisions[:5])
+            suffix = "…" if len(collisions) > 5 else ""
+            raise FileExistsError(
+                f"Restore would overwrite existing case(s): {names}{suffix}. "
+                "Choose an empty case workspace in Advanced Settings first."
+            )
+
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        moved: list[Path] = []
+        with tempfile.TemporaryDirectory(
+            prefix=".foamtrame-restore-", dir=destination.parent
+        ) as temporary:
+            staging_root = Path(temporary)
+            for info in members:
+                relative = PurePosixPath(info.filename).relative_to("cases")
+                target = staging_root.joinpath(*relative.parts)
+                if info.is_dir():
+                    target.mkdir(parents=True, exist_ok=True)
+                    continue
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with archive.open(info) as source, target.open("wb") as output:
+                    shutil.copyfileobj(source, output)
+
+            destination.mkdir(parents=True, exist_ok=True)
+            try:
+                for case_name in sorted(case_names):
+                    target = destination / case_name
+                    shutil.move(str(staging_root / case_name), str(target))
+                    moved.append(target)
+                restored["case_config"]["CASE_ROOT"] = str(destination)
+                if not save_app_state(restored):
+                    raise OSError("The restored app state could not be saved.")
+            except Exception:
+                for target in reversed(moved):
+                    if target.is_dir():
+                        shutil.rmtree(target)
+                raise
     return copy.deepcopy(restored)
