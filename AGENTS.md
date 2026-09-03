@@ -166,8 +166,11 @@ can be invoked by all three surfaces.
 - `app_state.json.example` must track the current portable backup schema.
 - Legacy JSON migration must remain recoverable and must not delete the source
   files.
-- Backup/restore does not include case directories, results, Docker images, or
-  uploaded datasets.
+- Shallow-copy JSON backup/restore does not include case directories, results,
+  Docker images, or uploaded datasets. Deep-copy ZIP backup/restore additionally
+  carries every case under the configured case workspace, but still excludes
+  Docker images and session-only uploads. Deep restore must validate archive paths
+  and must not overwrite an existing same-named case.
 
 Preserve transactional writes and normalize untrusted restored data before saving
 it. Database and machine-local state files stay ignored by Git.

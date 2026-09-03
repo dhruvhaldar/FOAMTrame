@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import io
 import tempfile
 import threading
 import unittest
+import zipfile
 from io import StringIO
 from pathlib import Path
 
@@ -183,6 +185,87 @@ class AppStateMigrationIntegrationTest(unittest.TestCase):
             },
             restored["geometry_preferences"],
         )
+
+    def test_deep_copy_restores_case_workspace_and_remaps_root(self):
+        source_root = self.root / "source-cases"
+        case_path = source_root / "cavity"
+        (case_path / "system").mkdir(parents=True)
+        (case_path / "constant" / "triSurface").mkdir(parents=True)
+        (case_path / "system" / "controlDict").write_text(
+            "application foamRun;\n", encoding="utf-8"
+        )
+        (case_path / "constant" / "triSurface" / "part.stl").write_bytes(
+            b"solid part\nendsolid part\n"
+        )
+        state = sample_state()
+        state["case_config"]["CASE_ROOT"] = str(source_root)
+        app_state.database.save_app_state(state)
+
+        archive = app_state.export_deep_copy()
+        destination = self.root / "restored-cases"
+        restored = app_state.restore_deep_copy(archive, destination)
+
+        self.assertEqual(
+            str(destination.resolve()), restored["case_config"]["CASE_ROOT"]
+        )
+        self.assertEqual(
+            "application foamRun;\n",
+            (destination / "cavity" / "system" / "controlDict").read_text(
+                encoding="utf-8"
+            ),
+        )
+        self.assertEqual(
+            b"solid part\nendsolid part\n",
+            (
+                destination / "cavity" / "constant" / "triSurface" / "part.stl"
+            ).read_bytes(),
+        )
+        self.assertEqual(
+            str(destination.resolve()), app_state.load_case_config()["CASE_ROOT"]
+        )
+
+    def test_deep_copy_refuses_to_overwrite_an_existing_case(self):
+        source_root = self.root / "source-cases"
+        (source_root / "cavity" / "system").mkdir(parents=True)
+        state = sample_state()
+        state["case_config"]["CASE_ROOT"] = str(source_root)
+        app_state.database.save_app_state(state)
+        archive = app_state.export_deep_copy()
+
+        destination = self.root / "restored-cases"
+        existing = destination / "cavity"
+        existing.mkdir(parents=True)
+        marker = existing / "keep.txt"
+        marker.write_text("unchanged", encoding="utf-8")
+
+        with self.assertRaisesRegex(FileExistsError, "would overwrite"):
+            app_state.restore_deep_copy(archive, destination)
+
+        self.assertEqual("unchanged", marker.read_text(encoding="utf-8"))
+        self.assertEqual(str(source_root), app_state.load_case_config()["CASE_ROOT"])
+
+    def test_deep_copy_rejects_archive_path_traversal(self):
+        state = sample_state()
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, "w") as archive:
+            archive.writestr(
+                app_state.DEEP_BACKUP_MANIFEST,
+                json.dumps(
+                    {
+                        "format": app_state.DEEP_BACKUP_FORMAT,
+                        "format_version": app_state.DEEP_BACKUP_VERSION,
+                        "state_file": app_state.DEEP_BACKUP_STATE,
+                        "cases_directory": "cases",
+                    }
+                ),
+            )
+            archive.writestr(app_state.DEEP_BACKUP_STATE, json.dumps(state))
+            archive.writestr("cases/../escape.txt", "unsafe")
+
+        with self.assertRaisesRegex(ValueError, "Unsafe deep-copy archive path"):
+            app_state.restore_deep_copy(output.getvalue(), self.root / "destination")
+
+        self.assertFalse((self.root / "escape.txt").exists())
 
 
 class LauncherLoggingIntegrationTest(unittest.TestCase):

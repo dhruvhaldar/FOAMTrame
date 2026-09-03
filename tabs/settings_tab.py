@@ -8,14 +8,18 @@ from typing import Any
 from trame.widgets import client, html, vuetify
 
 from app_state import (
+    export_deep_copy,
     export_app_state_json,
     load_security_preferences,
+    restore_deep_copy,
     restore_app_state_json,
     update_security_preferences,
+    validate_deep_copy,
 )
 from security import hash_api_key, normalise_security_preferences
 
 MAX_APP_STATE_UPLOAD_BYTES = 2 * 1024 * 1024
+MAX_DEEP_COPY_UPLOAD_BYTES = 512 * 1024 * 1024
 
 
 def _uploaded_bytes(file_value: Any) -> tuple[str, bytes]:
@@ -56,6 +60,7 @@ def _uploaded_bytes(file_value: Any) -> tuple[str, bytes]:
 
 def setup_settings_tab(server):
     state, ctrl = server.state, server.controller
+    pending_restore: dict[str, str | bytes] = {}
 
     state.setdefault("app_state_backup_json", export_app_state_json())
     state.setdefault("app_state_restore_upload", None)
@@ -140,30 +145,43 @@ def setup_settings_tab(server):
             return
         try:
             name, content = _uploaded_bytes(app_state_restore_upload)
-            if not name.lower().endswith(".json"):
-                raise ValueError("Choose a .json app-state backup.")
-            if len(content) > MAX_APP_STATE_UPLOAD_BYTES:
-                raise ValueError("The app-state backup exceeds the 2 MB limit.")
+            lower_name = name.lower()
+            if lower_name.endswith(".json"):
+                if len(content) > MAX_APP_STATE_UPLOAD_BYTES:
+                    raise ValueError("The shallow-copy backup exceeds the 2 MB limit.")
+                text = content.decode("utf-8-sig")
+                parsed = json.loads(text)
+                if not isinstance(parsed, dict):
+                    raise ValueError("The backup must contain a JSON object.")
+                if "case_config" not in parsed or "run_history" not in parsed:
+                    raise ValueError("This file is not a FOAMTrame app-state backup.")
+                pending_restore.update({"kind": "shallow", "payload": text})
+                restore_kind = "Shallow copy"
+            elif lower_name.endswith(".zip"):
+                if len(content) > MAX_DEEP_COPY_UPLOAD_BYTES:
+                    raise ValueError("The deep-copy backup exceeds the 512 MB limit.")
+                case_count = validate_deep_copy(content)
+                pending_restore.update({"kind": "deep", "payload": content})
+                restore_kind = f"Deep copy with {case_count} case(s)"
+            else:
+                raise ValueError("Choose a FOAMTrame .json or .zip backup.")
 
-            text = content.decode("utf-8-sig")
-            parsed = json.loads(text)
-            if not isinstance(parsed, dict):
-                raise ValueError("The backup must contain a JSON object.")
-            if "case_config" not in parsed or "run_history" not in parsed:
-                raise ValueError("This file is not a FOAMTrame app-state backup.")
-
-            state.app_state_restore_pending = text
+            state.app_state_restore_pending = str(pending_restore["kind"])
             state.app_state_restore_name = name
-            state.app_state_settings_status = f"{name} is valid and ready to restore."
+            state.app_state_settings_status = (
+                f"{restore_kind} {name} is ready for validated restore."
+            )
             state.app_state_settings_status_color = "info"
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             state.app_state_restore_pending = ""
             state.app_state_restore_name = ""
+            pending_restore.clear()
             state.app_state_settings_status = f"Invalid JSON backup: {exc}"
             state.app_state_settings_status_color = "error"
         except Exception as exc:
             state.app_state_restore_pending = ""
             state.app_state_restore_name = ""
+            pending_restore.clear()
             state.app_state_settings_status = str(exc)
             state.app_state_settings_status_color = "error"
         state.flush()
@@ -172,7 +190,19 @@ def setup_settings_tab(server):
         if not state.app_state_restore_pending:
             return
         try:
-            restored = restore_app_state_json(state.app_state_restore_pending)
+            restore_kind = pending_restore.get("kind")
+            payload = pending_restore.get("payload")
+            if restore_kind == "deep" and isinstance(payload, bytes):
+                restored = restore_deep_copy(payload, state.case_root)
+                success_message = (
+                    "Deep copy restored successfully. Cases were copied into the "
+                    "current case workspace."
+                )
+            elif restore_kind == "shallow" and isinstance(payload, str):
+                restored = restore_app_state_json(payload)
+                success_message = "Shallow copy restored successfully."
+            else:
+                raise ValueError("Choose the backup again before restoring.")
             config = restored["case_config"]
             geometry_preferences = restored["geometry_preferences"]
             if hasattr(ctrl, "apply_restored_geometry_preferences"):
@@ -197,7 +227,8 @@ def setup_settings_tab(server):
             state.app_state_restore_pending = ""
             state.app_state_restore_name = ""
             state.app_state_restore_upload = None
-            state.app_state_settings_status = "App state restored successfully."
+            pending_restore.clear()
+            state.app_state_settings_status = success_message
             state.app_state_settings_status_color = "success"
             state.flush()
             if hasattr(ctrl, "scan_cases"):
@@ -293,17 +324,34 @@ def build_settings_content():
     assert server is not None
     state, ctrl = server.state, server.controller
 
-    download_exec = client.JSEval(
+    text_download_exec = client.JSEval(
         exec="utils.download($event.name, $event.content, $event.mime_type)"
     )
+    binary_download_exec = client.JSEval(
+        exec="""
+            const binary = atob($event.content);
+            const bytes = new Uint8Array(binary.length);
+            for (let index = 0; index < binary.length; index += 1) {
+              bytes[index] = binary.charCodeAt(index);
+            }
+            const url = URL.createObjectURL(
+              new Blob([bytes], { type: $event.mime_type })
+            );
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = $event.name;
+            link.click();
+            URL.revokeObjectURL(url);
+        """
+    )
 
-    def backup_app_state():
+    def backup_shallow_copy():
         try:
             backup_json = export_app_state_json()
             state.app_state_backup_json = backup_json
             state.dirty("app_state_backup_json")
             state.flush()
-            download_exec.exec(
+            text_download_exec.exec(
                 {
                     "name": "foamtrame-app-state.json",
                     "content": backup_json,
@@ -311,7 +359,7 @@ def build_settings_content():
                 }
             )
             state.app_state_settings_status = (
-                "Backup download started. Check your browser downloads."
+                "Shallow-copy download started. Check your browser downloads."
             )
             state.app_state_settings_status_color = "success"
         except Exception as exc:
@@ -319,7 +367,29 @@ def build_settings_content():
             state.app_state_settings_status_color = "error"
         state.flush()
 
-    ctrl.backup_app_state = backup_app_state
+    ctrl.backup_shallow_copy = backup_shallow_copy
+    ctrl.backup_app_state = backup_shallow_copy
+
+    def backup_deep_copy():
+        try:
+            archive = export_deep_copy(state.case_root)
+            binary_download_exec.exec(
+                {
+                    "name": "foamtrame-deep-copy.zip",
+                    "content": base64.b64encode(archive).decode("ascii"),
+                    "mime_type": "application/zip",
+                }
+            )
+            state.app_state_settings_status = (
+                "Deep-copy download started. Keep the ZIP intact for restore."
+            )
+            state.app_state_settings_status_color = "success"
+        except Exception as exc:
+            state.app_state_settings_status = f"Deep copy failed: {exc}"
+            state.app_state_settings_status_color = "error"
+        state.flush()
+
+    ctrl.backup_deep_copy = backup_deep_copy
 
     with vuetify.VContainer(
         fluid=True,
@@ -336,37 +406,52 @@ def build_settings_content():
                         )
                         html.H2("App State", classes="settings-title")
                     html.P(
-                        "Back up and restore your case configuration and Run/Log history as one versioned JSON file.",
+                        "Choose a lightweight shallow copy of app state or a deep copy that also carries your case workspace.",
                         classes="settings-description mb-6",
                     )
 
                     with vuetify.VCard(classes="settings-action-card pa-5 mb-5"):
                         with html.Div(classes="settings-action-layout"):
                             with html.Div(classes="settings-action-copy"):
-                                html.H3(
-                                    "Backup App State", classes="settings-action-title"
-                                )
+                                html.H3("Shallow Copy", classes="settings-action-title")
                                 html.P(
-                                    "Download the current configuration and up to 100 recent run-history entries.",
+                                    "Download a small JSON file with configuration, preferences, security settings, and up to 100 run-history entries. Case files and results stay on this machine.",
                                     classes="settings-action-description",
                                 )
                             with vuetify.VBtn(
-                                click=ctrl.backup_app_state,
+                                click=ctrl.backup_shallow_copy,
                                 classes="theme-btn-primary settings-action-button",
                             ):
                                 vuetify.VIcon("mdi-download-outline", classes="mr-2")
-                                html.Span("Backup JSON")
+                                html.Span("Shallow Copy")
+
+                    with vuetify.VCard(classes="settings-action-card pa-5 mb-5"):
+                        with html.Div(classes="settings-action-layout"):
+                            with html.Div(classes="settings-action-copy"):
+                                html.H3("Deep Copy", classes="settings-action-title")
+                                html.P(
+                                    "Download a ZIP with the same app state plus every case currently under the configured case workspace, including geometry and simulation results. Docker images and session-only uploads are not included.",
+                                    classes="settings-action-description",
+                                )
+                            with vuetify.VBtn(
+                                click=ctrl.backup_deep_copy,
+                                classes="theme-btn-primary settings-action-button",
+                            ):
+                                vuetify.VIcon(
+                                    "mdi-archive-arrow-down-outline", classes="mr-2"
+                                )
+                                html.Span("Deep Copy")
 
                     with vuetify.VCard(classes="settings-action-card pa-5"):
                         html.H3("Restore App State", classes="settings-action-title")
                         html.P(
-                            "Choose a FOAMTrame JSON backup. The file is validated before Restore is enabled.",
+                            "Choose a shallow-copy JSON or deep-copy ZIP. Deep restore copies cases into your current case workspace and stops rather than overwriting a case with the same name.",
                             classes="settings-action-description mb-4",
                         )
                         vuetify.VFileInput(
                             v_model=("app_state_restore_upload",),
-                            label="Choose app-state backup",
-                            accept="application/json,.json",
+                            label="Choose shallow or deep backup",
+                            accept="application/json,application/zip,.json,.zip",
                             prepend_icon="mdi-file-code-outline",
                             outlined=True,
                             show_size=True,
