@@ -91,6 +91,33 @@ def test_generated_dictionaries_contain_reviewed_controls(tmp_path):
     assert "insidePoint         (" in snappy_dict
 
 
+@pytest.mark.parametrize(
+    "version,keyword,absent",
+    [
+        ("12", "insidePoint", "locationInMesh"),
+        ("13", "insidePoint", "locationInMesh"),
+        ("v2312", "locationInMesh", "insidePoint"),
+        ("v2412", "locationInMesh", "insidePoint"),
+        ("2412", "locationInMesh", "insidePoint"),
+    ],
+)
+def test_region_point_matches_configured_openfoam_family(
+    tmp_path, version, keyword, absent
+):
+    case = build_case(tmp_path)
+    config = suggest_meshing_configuration(
+        case, "triSurface/part.stl", openfoam_version=version
+    )
+    assert validate_meshing_configuration(config).openfoam_version == version
+    preview = build_snappy_hex_mesh_dict(config)
+    assert f"{keyword:<19} (" in preview
+    assert absent not in preview
+    write_meshing_dictionaries(case, config)
+    assert (case / "system" / "snappyHexMeshDict").read_text(
+        encoding="utf-8"
+    ) == preview
+
+
 def test_dictionary_writes_are_atomic_and_preserve_backups(tmp_path):
     case = build_case(tmp_path)
     old_block = case / "system" / "blockMeshDict"

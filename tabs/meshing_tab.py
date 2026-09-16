@@ -191,6 +191,7 @@ def setup_meshing_tab(server):
             refinement_min=int(state.mesh_refinement_min),
             refinement_max=int(state.mesh_refinement_max),
             surface_layers=int(state.mesh_surface_layers),
+            openfoam_version=str(state.openfoam_version or "12"),
         )
 
     def render_surface_preview(case_path: Path, config: MeshingConfiguration) -> None:
@@ -299,6 +300,10 @@ def setup_meshing_tab(server):
             if config is None or case_path is None or case_path != current_case_path():
                 raise ValueError(
                     "The active case changed. Review the configuration again."
+                )
+            if config.openfoam_version != str(state.openfoam_version or "12").strip():
+                raise ValueError(
+                    "The OpenFOAM version changed. Review the configuration again."
                 )
             if any(
                 item.get("case_name") == case_path.name
@@ -875,7 +880,7 @@ def build_meshing_drawer():
                     classes="text-caption font-weight-bold mb-2",
                 )
                 html.P(
-                    "The padded corner used as insidePoint must lie in "
+                    "The padded corner used as the region point must lie in "
                     "the intended fluid region. "
                     "Review patch conditions after meshing.",
                     classes="text-caption mb-3",

@@ -31,6 +31,7 @@ class MeshingConfiguration:
     refinement_max: int
     surface_layers: int
     feature_angle: int = 30
+    openfoam_version: str = "12"
 
     def to_state(self) -> dict[str, Any]:
         return asdict(self)
@@ -184,6 +185,7 @@ def suggest_meshing_configuration(
     refinement_min: int = 2,
     refinement_max: int = 3,
     surface_layers: int = 3,
+    openfoam_version: str = "12",
 ) -> MeshingConfiguration:
     geometry_bounds = surface_bounds(case_path, selection)
     spans = tuple(
@@ -220,6 +222,7 @@ def suggest_meshing_configuration(
             refinement_min=refinement_min,
             refinement_max=refinement_max,
             surface_layers=surface_layers,
+            openfoam_version=openfoam_version,
         )
     )
 
@@ -264,6 +267,7 @@ def validate_meshing_configuration(
         refinement_max=refinement_max,
         surface_layers=surface_layers,
         feature_angle=feature_angle,
+        openfoam_version=str(configuration.openfoam_version).strip(),
     )
 
 
@@ -356,6 +360,11 @@ def build_snappy_hex_mesh_dict(configuration: MeshingConfiguration) -> str:
         )
     )
     location_text = " ".join(_number(value) for value in location)
+    region_point_keyword = (
+        "locationInMesh"
+        if re.match(r"^v?\d{4}(?:$|[.-])", config.openfoam_version, re.IGNORECASE)
+        else "insidePoint"
+    )
     layer_entry = (
         f"""
         \"{region}.*\"
@@ -404,7 +413,7 @@ castellatedMeshControls
     }}
     resolveFeatureAngle {config.feature_angle};
     refinementRegions   {{}}
-    insidePoint         ({location_text});
+    {region_point_keyword:<19} ({location_text});
     allowFreeStandingZoneFaces true;
 }}
 
