@@ -258,6 +258,8 @@ class CaseActionService:
         "surfaceFeatureExtract",
         "blockMesh",
         "snappyHexMesh",
+        "snappyHexMeshOverwrite",
+        "checkMesh",
         "topoSet",
         "setFields",
         "solver",
@@ -319,6 +321,11 @@ class CaseActionService:
             ),
             "blockMesh": (path / "system" / "blockMeshDict").is_file(),
             "snappyHexMesh": (path / "system" / "snappyHexMeshDict").is_file(),
+            "snappyHexMeshOverwrite": (path / "system" / "snappyHexMeshDict").is_file(),
+            "checkMesh": all(
+                (path / "constant" / "polyMesh" / name).is_file()
+                for name in ("points", "faces", "owner", "neighbour", "boundary")
+            ),
             "topoSet": (path / "system" / "topoSetDict").is_file(),
             "setFields": (path / "system" / "setFieldsDict").is_file(),
             "decomposePar": (path / "system" / "decomposeParDict").is_file(),
@@ -326,7 +333,9 @@ class CaseActionService:
             "foamToVTK": has_result_times,
         }
         executable_names = {
-            action_id for action_id, required in requirements.items() if required
+            ("snappyHexMesh" if action_id == "snappyHexMeshOverwrite" else action_id)
+            for action_id, required in requirements.items()
+            if required
         }
         allrun_exists = (path / "Allrun").is_file()
         allclean_exists = (path / "Allclean").is_file()
@@ -420,6 +429,8 @@ class CaseActionService:
             "surfaceFeatureExtract": "No surfaceFeaturesDict or surfaceFeatureExtractDict",
             "blockMesh": "Missing system/blockMeshDict",
             "snappyHexMesh": "Missing system/snappyHexMeshDict",
+            "snappyHexMeshOverwrite": "Missing system/snappyHexMeshDict",
+            "checkMesh": "No complete mesh in constant/polyMesh",
             "topoSet": "Missing system/topoSetDict",
             "setFields": "Missing system/setFieldsDict",
             "decomposePar": "Missing system/decomposeParDict",
@@ -430,6 +441,8 @@ class CaseActionService:
             "surfaceFeatureExtract": "preprocess",
             "blockMesh": "mesh",
             "snappyHexMesh": "mesh",
+            "snappyHexMeshOverwrite": "mesh",
+            "checkMesh": "mesh",
             "topoSet": "preprocess",
             "setFields": "preprocess",
             "decomposePar": "parallel",
@@ -439,10 +452,17 @@ class CaseActionService:
         for action_id in requirements:
             actions[action_id] = executable_action(
                 action_id,
-                action_id,
+                (
+                    "snappyHexMesh (-overwrite)"
+                    if action_id == "snappyHexMeshOverwrite"
+                    else action_id
+                ),
                 requirements[action_id],
                 missing_reasons[action_id],
                 categories[action_id],
+                command=(
+                    "snappyHexMesh" if action_id == "snappyHexMeshOverwrite" else None
+                ),
             )
 
         if not (path / "system" / "controlDict").is_file():
@@ -527,7 +547,13 @@ class CaseActionService:
             raise ValueError("No valid active case selected")
         if docker_client is None:
             raise RuntimeError("Docker daemon is unavailable")
-        commands = [action.command for action in actions if action.command]
+        commands = [
+            "snappyHexMesh -overwrite"
+            if action.id == "snappyHexMeshOverwrite"
+            else action.command
+            for action in actions
+            if action.command
+        ]
         if not commands:
             raise ValueError("The action plan contains no executable commands")
 
@@ -543,6 +569,7 @@ shift 2
 for command in "$@"; do
     printf '\n[FOAMTrame] >>> %s\n' "$command"
     case "$command" in
+        'snappyHexMesh -overwrite') snappyHexMesh -overwrite || exit $? ;;
         ./*) bash "$command" || exit $? ;;
         *) "$command" || exit $? ;;
     esac

@@ -49,6 +49,8 @@ def build_case(root: Path, *, allrun: bool = False, allclean: bool = False) -> P
     case = root / "cavity"
     (case / "0").mkdir(parents=True)
     (case / "constant" / "polyMesh").mkdir(parents=True)
+    for name in ("points", "faces", "owner", "neighbour", "boundary"):
+        (case / "constant" / "polyMesh" / name).write_text("", encoding="utf-8")
     (case / "system").mkdir()
     (case / "system" / "controlDict").write_text(
         """
@@ -93,6 +95,7 @@ def test_case_capabilities_detect_solver_scripts_and_prerequisites(tmp_path):
             "bash",
             "foamRun",
             "blockMesh",
+            "checkMesh",
             "setFields",
             "decomposePar",
             "reconstructPar",
@@ -106,6 +109,7 @@ def test_case_capabilities_detect_solver_scripts_and_prerequisites(tmp_path):
     assert result.actions["solver"].label == "foamRun — incompressibleFluid"
     assert result.actions["solver"].command == "foamRun"
     assert result.actions["blockMesh"].available is True
+    assert result.actions["checkMesh"].available is True
     assert result.actions["snappyHexMesh"].available is False
     assert result.actions["snappyHexMesh"].reason == "Missing system/snappyHexMeshDict"
     assert result.actions["reconstructPar"].available is True
@@ -228,6 +232,26 @@ def test_shared_runner_launches_only_resolved_fixed_id_actions(tmp_path):
             docker_image="openfoam:test",
             openfoam_version="12",
         )
+
+
+def test_meshing_workflow_uses_fixed_snappy_overwrite_action(tmp_path):
+    service = CaseActionService()
+    case = build_case(tmp_path)
+    (case / "system" / "snappyHexMeshDict").write_text("FoamFile {}", encoding="utf-8")
+    inspection = inspect(service, case, {"blockMesh", "snappyHexMesh"})
+    client = RecordingDockerClient()
+
+    service.start_run(
+        inspection,
+        ["blockMesh", "snappyHexMeshOverwrite"],
+        docker_client=client,
+        docker_image="openfoam:test",
+        openfoam_version="12",
+    )
+
+    args, _kwargs = client.containers.calls[0]
+    assert args[1][-2:] == ["blockMesh", "snappyHexMesh -overwrite"]
+    assert inspection.actions["snappyHexMeshOverwrite"].available
 
 
 def test_cachebox_case_metadata_caches_and_invalidates(tmp_path):

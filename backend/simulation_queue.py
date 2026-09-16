@@ -32,6 +32,8 @@ class SimulationJob:
         return {
             "id": self.id,
             "case_name": self.case_name,
+            "case_path": str(self.case_path.resolve()),
+            "action_ids": list(self.action_ids),
             "command": self.command_label,
             "status": status,
             "queued_at": self.queued_at,

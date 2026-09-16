@@ -123,10 +123,51 @@ Implementation: [tabs/geometry_tab.py](./tabs/geometry_tab.py) and
 
 ### Meshing
 
-- The Meshing navigation surface is currently reserved for future meshing tools.
-- OpenFOAM meshing commands such as `blockMesh` are available from **Run/Log**.
+- Guides mesh generation from a closed STL or OBJ surface in the active case's
+  `constant/geometry` or `constant/triSurface`. A padded domain preview and base
+  cell estimate respond to domain padding and fineness; surface refinement and
+  boundary-layer count are separately adjustable. Imported triSurface files are
+  copied to `constant/geometry` on save, with a collision rejected rather than
+  replacing a case-authored geometry file.
+- Reviews the exact generated `system/blockMeshDict` and
+  `system/snappyHexMeshDict` before saving. Existing dictionaries are backed up
+  under timestamped `system/.foamtrame-backups/` before atomic replacement. These
+  case files are included in deep-copy backups, not SQLite or portable JSON.
+- A confirmed **Generate mesh** submits fixed `blockMesh` and
+  `snappyHexMesh -overwrite` actions through the FIFO worker. It will not silently
+  replace an existing `constant/polyMesh`; review cleanup before regenerating.
+  A case-provided `Allrun` remains the preferred full workflow.
+- Replaces the domain preview with a loading screen while the selected case's
+  meshing job is queued or running. Completion refreshes the mesh automatically;
+  failed, cancelled, and skipped jobs show their outcome with a link to Run/Log.
+- Detects complete meshes under `constant/polyMesh` and reports point, face,
+  internal-face, cell, and boundary-patch information.
+- Renders the active case directly with VTK's OpenFOAM reader, including visible
+  cell edges and an adjacent patch inventory.
+  Mesh inspection skips solution fields and initial-condition macros. VTK
+  diagnostics go to application logs instead of opening a separate native window.
+- Runs `checkMesh` as a fixed, capability-gated action through the same FIFO worker
+  and Docker runtime used by Run/Log. The action is unavailable when the case has
+  no generated mesh or the configured image does not provide `checkMesh`.
+- Retains each check in the normal run archive and restores the newest quality
+  report when the case is selected again. The workspace summarizes pass/fail state,
+  non-orthogonality, skewness, and aspect ratio when reported by OpenFOAM.
+- **Detailed report** opens a compact summary of mesh size, cell composition,
+  quality metrics, and explicit check outcomes, with the full supporting log text.
+  Warnings remain visible even when the overall check passes.
+- Boundary patch checkboxes control visibility; **Show all** and **Hide all**
+  provide quick selection. All patches start visible when a case is selected.
+  Each patch has a transparency slider (0% opaque to 100% transparent); changing
+  visibility or transparency preserves the camera and does not reload the mesh.
+- Console Log Output includes a copy icon for copying its plain text without
+  changing the scroll position or automatic following behavior.
+- Keeps incomplete or unreadable meshes inspectable as an explicit empty/error
+  state instead of blocking the application shell.
 
-Placeholder: [tabs/meshing_tab.py](./tabs/meshing_tab.py)
+Implementation: [tabs/meshing_tab.py](./tabs/meshing_tab.py),
+[backend/meshing/configuration.py](./backend/meshing/configuration.py),
+[backend/meshing/inspection.py](./backend/meshing/inspection.py), and the fixed
+action boundary in [backend/case/capabilities.py](./backend/case/capabilities.py).
 
 ### Run and logs
 
@@ -211,9 +252,13 @@ Implementation: [tabs/visualizer_tab.py](./tabs/visualizer_tab.py) and
 
 ### Settings
 
-- Downloads case configuration, plot preferences, security preferences, and run
-  history as one versioned JSON backup.
-- Validates uploaded backups before enabling restore.
+- Provides a shallow-copy JSON containing configuration, preferences, security
+  settings, and run history without case files.
+- Provides a deep-copy ZIP containing that app state plus every case in the
+  configured case workspace, including geometry and simulation results.
+- Validates uploaded JSON and ZIP backups before enabling restore. Deep restore
+  rejects unsafe archive paths and existing same-named cases rather than
+  overwriting local data.
 - Applies restored configuration and history transactionally to SQLite and the live Trame state.
 - Provides disabled-by-default, opt-in network binding, CORS, response-header,
   request-size, WebSocket-size, and companion-API-key controls. The ordinary
@@ -592,7 +637,9 @@ Tutorial discovery and import use the configured Docker image. The tutorial is c
 3. Set the desired process count if parallel execution is required.
 4. Select a workflow or detected command from the drawer. Use **Available actions**
    to review the complete capability list and unavailable reasons.
-5. Follow output in **Console Log Output**.
+5. Follow output in **Console Log Output**. New output scrolls to the bottom by
+   default. Scrolling up or choosing **Scroll to top** pauses following;
+   **Scroll to bottom** or manually returning to the bottom resumes it.
 6. If `Allrun` is reported as **Skipped**, review **Allclean** or **Safe Clean
    Generated Outputs** before rerunning. Cleanup is always explicit and confirmed.
 
@@ -610,7 +657,9 @@ foamtrame.db
 
 The database and its WAL sidecar files are excluded by [.gitignore](./.gitignore) because they may contain machine-specific paths and local run history. SQLite stores configuration and simulation runs in relational tables; case folders, OpenFOAM result files, and large logs remain in the case workspace and are referenced by path rather than copied into database blobs.
 
-JSON is now an interchange format only. A portable backup schema example remains available at [app_state.json.example](./app_state.json.example):
+JSON is now an interchange format only. It is also the app-state payload embedded
+in a deep-copy ZIP. A portable shallow-copy schema example remains available at
+[app_state.json.example](./app_state.json.example):
 
 ```json
 {
@@ -666,25 +715,44 @@ The initial schema contains:
 
 ## Backup and restore
 
-### Backup
+FOAMTrame offers two portable copy depths:
+
+| Copy | File | Includes | Best for |
+| --- | --- | --- | --- |
+| **Shallow copy** | `foamtrame-app-state.json` | Case-root and active-case configuration, Docker/OpenFOAM settings, plot, geometry and security preferences, and up to 100 run-history entries | Saving preferences, auditing state, or moving configuration when case data is managed separately |
+| **Deep copy** | `foamtrame-deep-copy.zip` | Everything in a shallow copy plus every case directory under the configured case workspace, including imported geometry, dictionaries, logs, and simulation results | Moving or preserving the complete local case workspace |
+
+Neither copy includes Docker images or session-only uploaded datasets. API-key
+hashes in security preferences are transferable, but the original plain-text key
+cannot be recovered.
+
+### Create a copy
 
 1. Open the gear-shaped **Settings** tab.
-2. Select **Backup JSON**.
-3. Store `foamtrame-app-state.json` somewhere safe.
+2. Select **Shallow Copy** for the lightweight JSON or **Deep Copy** for the ZIP
+   containing cases and results.
+3. Store the downloaded file somewhere safe. Deep copies can be large because
+   result time directories and case logs are included.
 
 ### Restore
 
 1. Open **Settings**.
-2. Choose a previously downloaded `.json` backup.
-3. Wait for validation to succeed.
-4. Select **Restore App State**.
+2. Before restoring a deep copy on another machine, set **Case Workspace** in
+   **Advanced Settings** to the local destination you want to use.
+3. Choose a shallow-copy `.json` or deep-copy `.zip` backup.
+4. Wait for validation to succeed.
+5. Select **Restore App State**.
 
-Restore replaces the persisted case configuration, plot, geometry, and security
-preferences, and run history. It does **not** copy case directories, imported case
-geometry, simulation results, uploaded VTK datasets, or Docker images. If a backup references a case root that
-does not exist on the new machine, update **Advanced Settings** after restoring.
-Security preferences containing an API-key hash are transferable, but the original
-plain-text key cannot be recovered from a backup.
+A shallow restore replaces persisted app configuration, plot, geometry, and
+security preferences, and run history. It only restores path references; it does
+not copy case directories, geometry, results, or logs.
+
+A deep restore copies archived cases into the currently configured case workspace,
+then restores app state and rewrites `CASE_ROOT` to that local destination. It
+never silently merges or overwrites a same-named case: choose an empty workspace
+or move the existing case first. Archive entries are checked for path traversal,
+symlinks, duplicate paths, file-count limits, and expanded-size limits before case
+files are published.
 
 ## Supported datasets
 
@@ -1006,7 +1074,10 @@ commands that passed.
 
 ### A restored active case disappears
 
-The backup stores the case name and root path, not the case directory. Copy the case data to the restored `CASE_ROOT`, or update the root path and refresh.
+If you restored a shallow copy, it stores the case name and root path but not the
+case directory. Copy the case data to the restored `CASE_ROOT`, or update the root
+path and refresh. For a deep copy, confirm that you selected the intended local
+Case Workspace before restoring and that no same-named case blocked extraction.
 
 ### A dataset does not load
 

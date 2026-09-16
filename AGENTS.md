@@ -166,8 +166,11 @@ can be invoked by all three surfaces.
 - `app_state.json.example` must track the current portable backup schema.
 - Legacy JSON migration must remain recoverable and must not delete the source
   files.
-- Backup/restore does not include case directories, results, Docker images, or
-  uploaded datasets.
+- Shallow-copy JSON backup/restore does not include case directories, results,
+  Docker images, or uploaded datasets. Deep-copy ZIP backup/restore additionally
+  carries every case under the configured case workspace, but still excludes
+  Docker images and session-only uploads. Deep restore must validate archive paths
+  and must not overwrite an existing same-named case.
 
 Preserve transactional writes and normalize untrusted restored data before saving
 it. Database and machine-local state files stay ignored by Git.
@@ -260,6 +263,27 @@ unless a component truly owns it.
 
 Run/Log is capability-based, not a hard-coded list of commands that are assumed to
 exist.
+
+The Meshing workspace inspects an existing `constant/polyMesh` directly and runs
+`checkMesh` through this same capability and FIFO execution boundary. Its quality
+summary is restored from the newest FOAMTrame run archive for that case; do not add
+a second arbitrary-command runner or overwrite case-owned mesh logs.
+Its guided workflow accepts closed STL/OBJ surfaces in `constant/geometry` and
+`constant/triSurface`, copying an imported triSurface into the native geometry
+directory only when no same-named file exists. It
+previews an estimated block domain and writes reviewed `blockMeshDict` and
+`snappyHexMeshDict` atomically with backups of existing dictionaries under
+`system/.foamtrame-backups/`. Generation uses fixed `blockMesh` and
+`snappyHexMesh -overwrite` actions in the FIFO queue; it never silently replaces
+an existing mesh. The generated dictionaries are case files rather than SQLite
+configuration, so deep-copy backup carries them and portable JSON does not.
+The viewer shows queued/running meshing progress from the FIFO queue, matched by
+canonical case path and action IDs. Never render partially written mesh files
+while a meshing job is active. Refresh after completion and show failed/cancelled
+outcomes without leaving a stuck spinner.
+Console Log Output follows appended output by default. Scroll to top and manual
+upward scrolling pause following; Scroll to bottom and manually reaching the
+bottom resume it. These controls must scroll only the log, not the page.
 
 - `backend/case/capabilities.py` scans the active case and Docker image.
 - Rescan whenever the active case or relevant Docker configuration changes.
@@ -359,7 +383,19 @@ changing plot layout.
 
 ## Post-processing
 
+- Meshing exposes a log-derived detailed checkMesh dialog. Preserve warnings even
+  on an overall pass, and never infer a passed check from an unlabelled metric.
+- Mesh boundary visibility defaults to all patches on case selection. Filtering
+  must exclude internalMesh so hidden boundary surfaces do not remain visible.
+  Each patch has independent transparency, defaulting to opaque. Appearance
+  changes reuse loaded patch actors and preserve the camera.
+- Console copy exports plain text and must not change automatic scroll following.
+
 - VTK processing/rendering stays server-side.
+- Install the shared non-GUI VTK diagnostic sink before constructing readers or
+  renderers; errors belong in application logs, never a native output window.
+  Meshing reads geometry only and skips time-zero field metadata and solution
+  arrays so OpenFOAM macros do not get interpreted by VTK's field reader.
 - Supported reader behavior and accepted extensions are documented in `README.md`.
 - Reset Camera remains in the Post sidebar.
 - Preserve responsive viewer controls and do not move large dataset payloads into

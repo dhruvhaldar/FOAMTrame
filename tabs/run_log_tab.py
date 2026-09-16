@@ -13,7 +13,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import IO
-from trame.widgets import html, vuetify
+from trame.widgets import client, html, vuetify
 
 from app_state import load_run_history, update_run_history
 from backend.case.capabilities import CaseInspection, case_action_service
@@ -194,6 +194,7 @@ def setup_run_log_tab(server):
 
     state.setdefault("run_log_text", "Ready for output...")
     state.setdefault("run_log_html", _format_console_log_html(state.run_log_text))
+    state.setdefault("console_copy_status", "")
     state.setdefault("run_status", "Idle")
     state.setdefault("run_status_color", "success")
     state.setdefault("run_notification_visible", False)
@@ -458,6 +459,7 @@ def setup_run_log_tab(server):
             return
         queue.enqueue(job)
         publish_state("run_history")
+        return run_id
 
     def execute_job(job: SimulationJob):
         from tabs.setup_tab import get_docker_client
@@ -660,6 +662,20 @@ def setup_run_log_tab(server):
             )
             check_parallel_config()
             trigger_capability_scan()
+            if (
+                any(
+                    action_id
+                    in {
+                        "blockMesh",
+                        "snappyHexMesh",
+                        "snappyHexMeshOverwrite",
+                        "checkMesh",
+                    }
+                    for action_id in job.action_ids
+                )
+                and ctrl.refresh_mesh_inspection.exists()
+            ):
+                ctrl.refresh_mesh_inspection()
 
     def publish_queue(snapshot: QueueSnapshot) -> None:
         items = []
@@ -731,6 +747,11 @@ def setup_run_log_tab(server):
             return
         run_actions([action_id])
 
+    def request_case_actions(action_ids, display_command="Meshing workflow"):
+        return run_actions(
+            list(action_ids or []), str(display_command or "Meshing workflow")
+        )
+
     def confirm_case_action():
         action_id = state.pending_action_id
         state.action_confirm_dialog = False
@@ -767,6 +788,7 @@ def setup_run_log_tab(server):
         run_actions(action_ids, "Guided Run")
 
     ctrl.request_case_action = request_case_action
+    ctrl.request_case_actions = request_case_actions
     ctrl.confirm_case_action = confirm_case_action
     ctrl.request_guided_run = request_guided_run
     ctrl.confirm_guided_run = confirm_guided_run
@@ -1002,6 +1024,7 @@ def build_run_log_drawer():
             capability_button("surfaceFeatureExtract", classes="theme-btn-outlined")
             capability_button("blockMesh", classes="theme-btn-outlined")
             capability_button("snappyHexMesh", classes="theme-btn-outlined")
+            capability_button("checkMesh", classes="theme-btn-outlined")
             capability_button("topoSet", classes="theme-btn-outlined")
             capability_button("setFields", classes="theme-btn-outlined")
             capability_button(
@@ -1253,25 +1276,62 @@ def build_run_log_content():
                 # Console Output Log Box Card
                 with vuetify.VCard(classes="pa-4 mb-4 glass-card"):
                     with vuetify.VCardTitle(
-                        classes="subtitle-1 font-weight-bold d-flex align-center justify-space-between py-1"
+                        classes="subtitle-1 font-weight-bold d-flex align-center justify-space-between py-1 console-header"
                     ):
                         with html.Div(classes="d-flex align-center"):
                             vuetify.VIcon(
                                 "mdi-console", classes="mr-2", color="primary"
                             )
                             html.Span("Console Log Output")
-                        vuetify.VBtn(
-                            "Clear",
-                            click=ctrl.clear_log,
-                            small=True,
-                            outlined=True,
-                            color="error",
-                            classes="ma-0",
-                        )
+                        with html.Div(classes="console-scroll-actions"):
+                            with vuetify.VBtn(
+                                icon=True,
+                                small=True,
+                                raw_attrs=['aria-label="Copy console log"'],
+                                title="Copy console log",
+                                disabled=("!run_log_text",),
+                                click="const clipboard = $event.currentTarget.ownerDocument.defaultView.navigator.clipboard; if (clipboard) { clipboard.writeText(run_log_text).then(() => { console_copy_status = 'Log copied'; }).catch(() => { console_copy_status = 'Copy failed. Select the log text and copy manually.'; }); } else { console_copy_status = 'Clipboard unavailable. Select the log text and copy manually.'; }",
+                            ):
+                                vuetify.VIcon("mdi-content-copy")
+                            html.Span(
+                                "{{ console_copy_status }}",
+                                role="status",
+                                aria_live="polite",
+                                classes="text-caption",
+                            )
+                            vuetify.VBtn(
+                                "Scroll to top",
+                                click="const log = $refs.runConsole; if (log) { log.dataset.follow = 'false'; log.scrollTop = 0; }",
+                                small=True,
+                                outlined=True,
+                                color="cyan darken-3",
+                                title="Scroll to top and pause following new output",
+                                aria_controls="run-console-output",
+                            )
+                            vuetify.VBtn(
+                                "Scroll to bottom",
+                                click="const log = $refs.runConsole; if (log) { log.dataset.follow = 'true'; log.scrollTop = log.scrollHeight; }",
+                                small=True,
+                                outlined=True,
+                                color="cyan darken-3",
+                                title="Scroll to bottom and resume following new output",
+                                aria_controls="run-console-output",
+                            )
+                            vuetify.VBtn(
+                                "Clear",
+                                click=ctrl.clear_log,
+                                small=True,
+                                outlined=True,
+                                color="error",
+                                classes="ma-0",
+                            )
 
                     with vuetify.VCardText():
                         html.Pre(
+                            id="run-console-output",
+                            ref="runConsole",
                             v_html=("run_log_html", ""),
+                            v_on_scroll="const log = $event.target; log.dataset.follow = String(log.scrollHeight - log.clientHeight - log.scrollTop <= 4);",
                             role="log",
                             aria_label="Simulation console output",
                             aria_live="polite",
@@ -1280,8 +1340,13 @@ def build_run_log_content():
                             style=(
                                 "background: #0f172a; color: #38bdf8; font-family: monospace; "
                                 "padding: 16px; border-radius: 12px; height: 360px; overflow-y: auto; "
-                                "white-space: pre-wrap; word-break: break-all; font-size: 0.85rem;"
+                                "white-space: pre-wrap; word-break: break-all; font-size: 0.85rem; overflow-anchor: none;"
                             ),
+                        )
+                        client.ClientStateChange(
+                            value=("run_log_html",),
+                            trigger_on_create=True,
+                            change="$nextTick(() => { const log = $refs.runConsole; if (log && log.dataset.follow !== 'false') { log.scrollTop = log.scrollHeight; } });",
                         )
 
                 # Run History Table Card
