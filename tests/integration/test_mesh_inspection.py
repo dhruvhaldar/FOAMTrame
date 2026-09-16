@@ -174,3 +174,35 @@ def test_last_mesh_time_cannot_inherit_an_earlier_pass():
     assert report.cells == 20
     assert report.failed_checks == 1
     assert report.sections[-1]["rows"][0]["status"] == "Failed"
+
+
+def test_summary_condenses_counts_and_preserves_supporting_log():
+    from backend.meshing.inspection import summarize_quality_report
+
+    output = """Mesh stats
+cells: 1000
+points: 2000
+Overall number of cells of each type:
+hexahedra: 800
+prisms: 200
+tetrahedra: 0
+Checking topology...
+Boundary definition OK.
+Point usage OK.
+Checking geometry...
+Max skewness = 3.200388771 OK.
+*Severe non-orthogonality detected
+Mesh OK.
+"""
+    report = parse_check_mesh_output(output)
+    summary = {
+        item["title"]: item["summary"] for item in summarize_quality_report(report)
+    }
+    assert summary["Mesh size"] == "1,000 cells · 2,000 points"
+    assert summary["Cell composition"] == "800 hexahedra (80.0%) · 200 prisms (20.0%)"
+    assert summary["Quality metrics"] == "Max skewness: 3.2"
+    assert summary["Topology"] == "2 passed explicitly reported."
+    assert summary["Geometry"] == "1 passed · 1 warning explicitly reported."
+    assert report.log_text == output
+    assert report.warnings == ("*Severe non-orthogonality detected",)
+    assert summarize_quality_report(parse_check_mesh_output("")) == []

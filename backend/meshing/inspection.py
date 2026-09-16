@@ -250,6 +250,68 @@ def _report_sections(output: str) -> tuple[ReportSection, ...]:
     return tuple(sections)
 
 
+def summarize_quality_report(report: MeshQualityReport) -> list[dict[str, str]]:
+    """Condense the report without inferring verdicts for numeric measurements."""
+    summaries: list[dict[str, str]] = []
+    counts = []
+    for key, label in (
+        ("cells", "cells"),
+        ("points", "points"),
+        ("faces", "faces"),
+        ("patches", "boundary patches"),
+    ):
+        match = _CHECK_VALUE_PATTERNS[key].search(report.log_text)
+        if match:
+            counts.append(f"{int(match.group(1).replace(',', '')):,} {label}")
+    if counts:
+        summaries.append({"title": "Mesh size", "summary": " · ".join(counts)})
+    cell_types = []
+    for match in re.finditer(
+        r"(?m)^\s*(hexahedra|prisms|wedges|pyramids|tet wedges|tetrahedra|polyhedra):\s*([\d,]+)",
+        report.log_text,
+    ):
+        count = int(match.group(2).replace(",", ""))
+        if count:
+            share = f" ({count / report.cells:.1%})" if report.cells else ""
+            cell_types.append(f"{count:,} {match.group(1)}{share}")
+    if cell_types:
+        summaries.append(
+            {"title": "Cell composition", "summary": " · ".join(cell_types)}
+        )
+    metrics = []
+    for label, value, unit in (
+        ("Max non-orthogonality", report.max_non_orthogonality, "°"),
+        ("Average non-orthogonality", report.average_non_orthogonality, "°"),
+        ("Max skewness", report.max_skewness, ""),
+        ("Max aspect ratio", report.max_aspect_ratio, ""),
+    ):
+        if value is not None:
+            metrics.append(f"{label}: {value:.4g}{unit}")
+    if metrics:
+        summaries.append({"title": "Quality metrics", "summary": " · ".join(metrics)})
+    for section in report.sections:
+        if not section["title"].startswith("Checking "):
+            continue
+        counts_by_status = {
+            status: sum(row["status"] == status for row in section["rows"])
+            for status in ("Passed", "Warning", "Failed")
+        }
+        details = [
+            f"{count} {status.lower()}"
+            for status, count in counts_by_status.items()
+            if count
+        ]
+        summaries.append(
+            {
+                "title": section["title"].removeprefix("Checking ").capitalize(),
+                "summary": " · ".join(details) + " explicitly reported."
+                if details
+                else "No explicit check verdicts recorded.",
+            }
+        )
+    return summaries
+
+
 def load_latest_quality_report(case_path: str | Path | None) -> MeshQualityReport:
     if not case_path:
         return parse_check_mesh_output("")

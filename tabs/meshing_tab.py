@@ -18,7 +18,11 @@ from backend.meshing.configuration import (
     validate_meshing_configuration,
     write_meshing_dictionaries,
 )
-from backend.meshing.inspection import inspect_case_mesh, load_latest_quality_report
+from backend.meshing.inspection import (
+    inspect_case_mesh,
+    load_latest_quality_report,
+    summarize_quality_report,
+)
 from backend.meshing.progress import meshing_progress
 from backend.meshing.reader import read_mesh_patches
 
@@ -398,7 +402,8 @@ def setup_meshing_tab(server):
         mesh_inspection = inspect_case_mesh(case_path)
         inspection = mesh_inspection.to_state()
         patch_names = [patch.name for patch in mesh_inspection.patches]
-        quality = load_latest_quality_report(case_path).to_state()
+        quality_report = load_latest_quality_report(case_path)
+        quality = quality_report.to_state()
         state.mesh_available = inspection["available"]
         state.mesh_status = inspection["status"]
         state.mesh_points = inspection["points"]
@@ -428,7 +433,7 @@ def setup_meshing_tab(server):
         state.mesh_quality_max_skewness = quality["max_skewness"]
         state.mesh_quality_max_aspect_ratio = quality["max_aspect_ratio"]
         state.mesh_quality_source = quality["source"]
-        state.mesh_report_sections = quality["sections"]
+        state.mesh_report_sections = summarize_quality_report(quality_report)
         state.mesh_report_warnings = quality["warnings"]
         state.mesh_report_log = quality["log_text"]
         state.mesh_check_requested = False
@@ -799,7 +804,7 @@ def build_meshing_drawer():
                     classes="pa-4", style="max-height:70vh;overflow-y:auto"
                 ):
                     html.P(
-                        "Values and verdicts are read from the latest checkMesh log. Reported means no explicit pass/fail verdict was supplied."
+                        "Summary of the latest checkMesh results. Full precision and individual checks are available in the supporting log."
                     )
                     with vuetify.VAlert(
                         v_if="mesh_report_warnings.length",
@@ -823,25 +828,11 @@ def build_meshing_drawer():
                             "{{ section.title }}",
                             classes="text-subtitle-1 font-weight-bold mb-2",
                         )
-                        with html.Div(
-                            v_for="(row, rowIndex) in section.rows",
-                            key=("rowIndex",),
-                            classes="d-flex align-start py-2",
-                            style="gap:12px;border-bottom:1px solid #cce0e5",
-                        ):
-                            html.Span(
-                                "{{ row.text }}",
-                                style="flex:1;min-width:0;overflow-wrap:anywhere",
-                            )
-                            vuetify.VChip(
-                                "{{ row.status }}",
-                                small=True,
-                                outlined=True,
-                                style="flex-shrink:0;width:82px;justify-content:center",
-                                color=(
-                                    "row.status === 'Failed' ? 'error' : row.status === 'Warning' ? 'orange darken-3' : row.status === 'Passed' ? 'teal darken-3' : 'blue-grey'",
-                                ),
-                            )
+                        html.P(
+                            "{{ section.summary }}",
+                            classes="mb-0",
+                            style="overflow-wrap:anywhere",
+                        )
                     with html.Details():
                         html.Summary("Supporting log text", classes="font-weight-bold")
                         html.Pre(

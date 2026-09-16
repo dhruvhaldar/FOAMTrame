@@ -152,8 +152,8 @@ Implementation: [tabs/geometry_tab.py](./tabs/geometry_tab.py) and
 - Retains each check in the normal run archive and restores the newest quality
   report when the case is selected again. The workspace summarizes pass/fail state,
   non-orthogonality, skewness, and aspect ratio when reported by OpenFOAM.
-- **Detailed report** opens a scrollable log-derived report of mesh statistics,
-  cell types, topology, patch topology, and geometry checks, with supporting text.
+- **Detailed report** opens a compact summary of mesh size, cell composition,
+  quality metrics, and explicit check outcomes, with the full supporting log text.
   Warnings remain visible even when the overall check passes.
 - Boundary patch checkboxes control visibility; **Show all** and **Hide all**
   provide quick selection. All patches start visible when a case is selected.
