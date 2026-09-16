@@ -296,7 +296,7 @@ def export_deep_copy(case_root: str | Path | None = None) -> bytes:
     }
 
     output = io.BytesIO()
-    with zipfile.ZipFile(
+    with zipfile.ZipFile(  # nosec: write-only backup; no archive extraction
         output, mode="w", compression=zipfile.ZIP_DEFLATED, compresslevel=6
     ) as archive:
         archive.writestr(DEEP_BACKUP_MANIFEST, json.dumps(manifest, indent=2) + "\n")
@@ -319,7 +319,7 @@ def export_deep_copy(case_root: str | Path | None = None) -> bytes:
 
 
 def _validated_deep_copy_members(
-    archive: zipfile.ZipFile,
+    archive: zipfile.ZipFile,  # nosec: type annotation, not archive extraction
 ) -> tuple[dict[str, Any], list[zipfile.ZipInfo], set[str]]:
     infos = archive.infolist()
     if len(infos) > MAX_DEEP_BACKUP_FILES:
@@ -355,6 +355,7 @@ def _validated_deep_copy_members(
             path.is_absolute()
             or ".." in path.parts
             or "\\" in name
+            or any(":" in part for part in path.parts)
             or len(path.parts) < 2
             or path.parts[0] != "cases"
             or not path.parts[1]
@@ -376,7 +377,8 @@ def _validated_deep_copy_members(
 def validate_deep_copy(payload: bytes) -> int:
     """Validate a deep-copy ZIP and return its number of case directories."""
     try:
-        archive = zipfile.ZipFile(io.BytesIO(payload))
+        # Members are bounded and path-validated before reading any payload.
+        archive = zipfile.ZipFile(io.BytesIO(payload))  # nosec: validated below; no extractall
     except zipfile.BadZipFile as exc:
         raise ValueError("The selected file is not a valid ZIP archive.") from exc
     with archive:
@@ -392,7 +394,8 @@ def restore_deep_copy(payload: bytes, destination_root: str | Path) -> dict[str,
     """Restore cases from a deep-copy ZIP without overwriting local cases."""
     destination = Path(destination_root).resolve()
     try:
-        archive = zipfile.ZipFile(io.BytesIO(payload))
+        # Extraction is manual into private staging after member validation.
+        archive = zipfile.ZipFile(io.BytesIO(payload))  # nosec: validated below; no extractall
     except zipfile.BadZipFile as exc:
         raise ValueError("The selected file is not a valid ZIP archive.") from exc
 
@@ -427,6 +430,8 @@ def restore_deep_copy(payload: bytes, destination_root: str | Path) -> dict[str,
             for info in members:
                 relative = PurePosixPath(info.filename).relative_to("cases")
                 target = staging_root.joinpath(*relative.parts)
+                if not target.resolve().is_relative_to(staging_root.resolve()):
+                    raise ValueError(f"Unsafe deep-copy archive path: {info.filename}")
                 if info.is_dir():
                     target.mkdir(parents=True, exist_ok=True)
                     continue
@@ -445,7 +450,8 @@ def restore_deep_copy(payload: bytes, destination_root: str | Path) -> dict[str,
                     raise OSError("The restored app state could not be saved.")
             except Exception:
                 for target in reversed(moved):
-                    if target.is_dir():
-                        shutil.rmtree(target)
+                    # Only undo this restore's newly moved, immediate case roots.
+                    if target.resolve().parent == destination and target.is_dir():
+                        shutil.rmtree(target)  # nosec: tracked new case; canonical parent checked
                 raise
     return copy.deepcopy(restored)

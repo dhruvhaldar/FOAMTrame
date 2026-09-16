@@ -37,7 +37,8 @@ interactor.SetRenderWindow(render_window)
 interactor_style = vtk.vtkInteractorStyleTrackballCamera()
 interactor.SetInteractorStyle(interactor_style)
 interactor.GetInteractorStyle().SetCurrentRenderer(renderer)
-interactor.Initialize()
+# A remote view initializes graphics when it is first rendered. Initializing
+# here makes even HTTP-only startup require a working OpenGL context in CI.
 mesh_actor = vtk.vtkAssembly()
 patch_actors: dict[str, vtk.vtkActor] = {}
 mesh_actor.SetVisibility(False)

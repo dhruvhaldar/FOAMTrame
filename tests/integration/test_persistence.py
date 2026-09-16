@@ -269,6 +269,41 @@ class AppStateMigrationIntegrationTest(unittest.TestCase):
 
 
 class LauncherLoggingIntegrationTest(unittest.TestCase):
+    def test_deep_copy_rejects_windows_drive_and_stream_paths(self):
+        for name in (
+            "cases/C:/escape.txt",
+            "cases/demo/C:/escape.txt",
+            "cases/demo/file:stream",
+        ):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temp_dir:
+                output = io.BytesIO()
+                with zipfile.ZipFile(output, "w") as archive:
+                    archive.writestr(
+                        app_state.DEEP_BACKUP_MANIFEST,
+                        json.dumps(
+                            {
+                                "format": app_state.DEEP_BACKUP_FORMAT,
+                                "format_version": app_state.DEEP_BACKUP_VERSION,
+                                "state_file": app_state.DEEP_BACKUP_STATE,
+                            }
+                        ),
+                    )
+                    archive.writestr(
+                        app_state.DEEP_BACKUP_STATE, json.dumps(sample_state())
+                    )
+                    archive.writestr(name, "unsafe")
+                for operation in (
+                    lambda: app_state.validate_deep_copy(output.getvalue()),
+                    lambda: app_state.restore_deep_copy(
+                        output.getvalue(), Path(temp_dir) / "restore"
+                    ),
+                ):
+                    with self.assertRaisesRegex(
+                        ValueError, "Unsafe deep-copy archive path"
+                    ):
+                        operation()
+                self.assertEqual(list(Path(temp_dir).iterdir()), [])
+
     def test_child_output_is_copied_to_console_and_run_log(self):
         source = StringIO("first line\nsecond line\n")
         console = StringIO()
