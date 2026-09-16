@@ -223,10 +223,9 @@ def _run_trame_visualizer_process(
             port = s.getsockname()[1]
         port_queue.put({"port": port})
 
-        # Suppress VTK output window
-        vtk_output = vtk.vtkFileOutputWindow()
-        vtk_output.SetFileName(os.devnull)
-        vtk.vtkOutputWindow.GetInstance().SetInstance(vtk_output)
+        from backend.vtk_runtime import configure_vtk_logging
+
+        configure_vtk_logging()
 
         from trame.app import get_server
         from trame.ui.vuetify import SinglePageWithDrawerLayout

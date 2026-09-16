@@ -17,6 +17,9 @@ from security import (
 )
 
 configure_logging()
+from backend.vtk_runtime import configure_vtk_logging
+
+configure_vtk_logging()
 logger = logging.getLogger("FOAMTrame")
 _STARTUP_TIMING_ENABLED = os.environ.get("FOAMTRAME_STARTUP_TIMING", "").strip() in {
     "1",
@@ -1222,6 +1225,174 @@ with SinglePageWithDrawerLayout(server) as layout:
             -webkit-backdrop-filter: blur(20px) saturate(135%);
             box-shadow: 0 18px 42px rgba(15, 23, 42, 0.12);
         }
+        .v-application .meshing-viewer {
+            position: relative;
+            height: calc(100vh - 48px);
+            min-height: 0;
+            overflow: hidden;
+            background: linear-gradient(
+                180deg,
+                hsla(192, 100%, 86%, 1) 0%,
+                hsla(292, 37%, 88%, 1) 100%
+            );
+        }
+        .v-application .meshing-empty-state {
+            position: absolute;
+            z-index: 3;
+            top: 50%;
+            left: 50%;
+            width: min(440px, calc(100% - 32px));
+            padding: 28px;
+            color: #334155;
+            text-align: center;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            border: 1px solid rgba(255, 255, 255, 0.74);
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.58);
+            backdrop-filter: blur(20px) saturate(135%);
+            -webkit-backdrop-filter: blur(20px) saturate(135%);
+            box-shadow: 0 18px 42px rgba(15, 23, 42, 0.12);
+        }
+        .v-application .meshing-job-screen {
+            position: absolute;
+            inset: 0;
+            z-index: 5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            overflow-y: auto;
+            background: linear-gradient(180deg, #b8efff 0%, #ead9e8 100%);
+        }
+        .v-application .meshing-job-card {
+            width: min(440px, 100%);
+            padding: 28px;
+            text-align: center;
+            color: #334155;
+            border: 1px solid rgba(255, 255, 255, 0.74);
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.7);
+            box-shadow: 0 18px 42px rgba(15, 23, 42, 0.12);
+        }
+        .v-application .console-header {
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .v-application .console-scroll-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .v-application .mesh-stat-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 6px 12px;
+            align-items: baseline;
+            font-size: 0.82rem;
+        }
+        .v-application .mesh-stat-label {
+            color: #64748b;
+        }
+        .v-application .mesh-generator-card .v-slider {
+            margin-left: 4px;
+            margin-right: 4px;
+        }
+        .v-application .mesh-control-pair {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            min-width: 0;
+        }
+        .v-application .mesh-control-summary {
+            overflow-wrap: anywhere;
+        }
+        .v-application .mesh-generator-actions {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 8px;
+        }
+        .v-application .mesh-generator-actions .v-btn {
+            margin: 0;
+            min-height: 36px;
+            width: 100%;
+        }
+        .v-application .mesh-generator-actions .mesh-generate-btn:not(.v-btn--disabled) .v-btn__content {
+            color: #fff !important;
+        }
+        .v-application .mesh-generator-actions .mesh-generate-btn.v-btn--disabled {
+            color: #64748b !important;
+            background: rgba(226, 232, 240, 0.72) !important;
+        }
+        .v-application .mesh-review-dialog {
+            background: rgba(246, 253, 255, 0.97) !important;
+            max-height: calc(100vh - 60px);
+            overflow-y: auto;
+        }
+        .v-application .mesh-dictionary-preview {
+            padding: 12px;
+            max-height: 210px;
+            overflow: auto;
+            white-space: pre;
+            font-size: 0.72rem;
+            background: rgba(224, 244, 250, 0.85);
+            border: 1px solid rgba(12, 110, 135, 0.18);
+            border-radius: 8px;
+        }
+        .v-application .mesh-preview-hint {
+            position: absolute;
+            left: 16px;
+            bottom: 16px;
+            z-index: 2;
+            padding: 10px 14px;
+            border: 1px solid rgba(255, 255, 255, 0.78);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.76);
+            color: #16465a;
+            font-size: 0.78rem;
+        }
+        .v-application .mesh-inspector-overlay {
+            position: absolute;
+            z-index: 2;
+            top: 16px;
+            right: 16px;
+            width: min(310px, calc(100% - 32px));
+            max-height: calc(100% - 32px);
+            padding: 16px;
+            overflow-y: auto;
+            color: #0f172a;
+            border: 1px solid rgba(255, 255, 255, 0.82);
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.78);
+            box-shadow: 0 14px 34px rgba(15, 23, 42, 0.12);
+            backdrop-filter: blur(18px) saturate(135%);
+            -webkit-backdrop-filter: blur(18px) saturate(135%);
+        }
+        .v-application .mesh-patch-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .v-application .mesh-patch-row {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            padding-bottom: 7px;
+            border-bottom: 1px solid rgba(12, 110, 135, 0.12);
+        }
+        .v-application .mesh-patch-name {
+            overflow-wrap: anywhere;
+        }
+        @media (max-width: 700px) {
+            .v-application .mesh-inspector-overlay {
+                top: auto;
+                bottom: 12px;
+                left: 12px;
+                right: 12px;
+                width: auto;
+                max-height: 38%;
+            }
+        }
         .v-application .glass-navbar {
             background: rgba(255, 255, 255, 0.35) !important;
             backdrop-filter: blur(20px) !important;
@@ -2046,6 +2217,7 @@ with SinglePageWithDrawerLayout(server) as layout:
     layout.drawer.width = (
         "active_tab === 7 && $vuetify.breakpoint.xsOnly ? 0 : "
         "active_tab === 3 && !$vuetify.breakpoint.smAndDown ? 430 : "
+        "active_tab === 2 && !$vuetify.breakpoint.smAndDown ? 340 : "
         "active_tab === 1 && !$vuetify.breakpoint.smAndDown ? 360 : 300",
     )
     with layout.drawer:
