@@ -66,6 +66,47 @@ def test_simulation_queue_runs_jobs_one_at_a_time_in_fifo_order():
     assert max_concurrent == 1
 
 
+def test_case_edit_lock_rejects_active_and_pending_cases():
+    started, release = threading.Event(), threading.Event()
+
+    def execute(job):
+        started.set()
+        release.wait(timeout=5)
+
+    queue = SequentialSimulationQueue(execute)
+    queue.enqueue(make_job(1))
+    assert started.wait(timeout=2)
+    queue.enqueue(make_job(2))
+    try:
+        for case in ("case-1", "case-2"):
+            with pytest.raises(ValueError, match="queued or running"):
+                queue.with_idle_case(Path(case), lambda: None)
+        assert queue.with_idle_case(Path("case-3"), lambda: "saved") == "saved"
+    finally:
+        release.set()
+    assert queue.wait_until_idle(timeout=2)
+    assert queue.with_idle_case(Path("case-1"), lambda: "saved") == "saved"
+
+
+def test_case_edit_reservation_blocks_submission_without_blocking_other_cases():
+    queue = SequentialSimulationQueue(lambda job: None)
+
+    def edit():
+        assert queue.snapshot().active is None
+        with pytest.raises(ValueError, match="being edited"):
+            queue.enqueue(make_job(1))
+        with pytest.raises(ValueError, match="edit in progress"):
+            queue.with_idle_case(Path("case-1"), lambda: None)
+        queue.enqueue(make_job(2))
+        assert queue.wait_until_idle(timeout=2)
+        raise OSError("edit failed")
+
+    with pytest.raises(OSError):
+        queue.with_idle_case(Path("case-1"), edit)
+    queue.enqueue(make_job(1))
+    assert queue.wait_until_idle(timeout=2)
+
+
 def test_simulation_queue_can_cancel_waiting_jobs_without_stopping_active_job():
     first_started = threading.Event()
     release_first = threading.Event()

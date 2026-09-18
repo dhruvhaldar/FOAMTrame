@@ -944,7 +944,7 @@ def build_meshing_content():
                 html.P("{{ mesh_job_message }}", classes="text-body-2 mb-4")
                 vuetify.VBtn(
                     "Open Run/Log",
-                    click="active_tab = 3",
+                    click="active_tab = 4",
                     outlined=True,
                     color="cyan darken-3",
                 )

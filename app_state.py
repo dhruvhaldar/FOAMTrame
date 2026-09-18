@@ -302,6 +302,10 @@ def export_deep_copy(case_root: str | Path | None = None) -> bytes:
         archive.writestr(DEEP_BACKUP_MANIFEST, json.dumps(manifest, indent=2) + "\n")
         archive.writestr(DEEP_BACKUP_STATE, json.dumps(state, indent=2) + "\n")
         for case_path in sorted(source_root.iterdir(), key=lambda path: path.name):
+            if case_path.name == ".foamtrame-trash" or case_path.name.startswith(
+                ".foamtrame-copy-"
+            ):
+                continue
             if not case_path.is_dir() or case_path.is_symlink():
                 continue
             archive.writestr(f"cases/{case_path.name}/", b"")

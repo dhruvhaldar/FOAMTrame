@@ -99,7 +99,19 @@ a reachable Docker daemon and configured image.
 
 Implementation: [tabs/setup_tab.py](./tabs/setup_tab.py)
 
+Setup's active-case card offers **Copy case**, **Rename case**, and **Delete case**.
+Copy includes the mesh, results and logs and selects the new case. Rename changes
+the folder and active selection; historical run labels retain their original name.
+Names cannot overwrite an existing destination. Queued/running cases and cases
+containing symbolic links or junctions cannot be managed through these controls.
+Delete requires confirmation of the displayed path and moves the whole case to
+`<case workspace>/.foamtrame-trash/<unique-id>-<case-name>`. To restore, move that
+folder back into the workspace under an unused case name, then Refresh List.
+Trash and incomplete copy staging folders are excluded from the case list and
+deep-copy backups. No automatic trash purge is performed.
+
 ### Geometry
+
 
 - Opens on **Case** when an active case exists and renders every supported native
   surface under `constant/geometry` when present, otherwise under
@@ -168,6 +180,41 @@ Implementation: [tabs/meshing_tab.py](./tabs/meshing_tab.py),
 [backend/meshing/configuration.py](./backend/meshing/configuration.py),
 [backend/meshing/inspection.py](./backend/meshing/inspection.py), and the fixed
 action boundary in [backend/case/capabilities.py](./backend/case/capabilities.py).
+
+### Physics and boundary conditions
+
+Continue from **Create New Case → Geometry → Meshing → Physics → Run/Log**.
+The **Physics & boundaries** button on Setup opens the editor for the active case.
+Generate or import a complete mesh first; named mesh patches drive the assignments.
+
+- Configure single-region, constant-viscosity incompressible flow: steady or
+  transient, laminar or k–ω SST, kinematic viscosity, initial velocity and
+  kinematic pressure, turbulence values, and time/output controls. All values use
+  SI units; pressure is **p/ρ in m²/s²**, not Pa.
+- Select a patch by name to highlight it in the viewer. Assign a velocity inlet,
+  pressure outlet, stationary/moving wall, slip, symmetry, or empty condition
+  compatible with its mesh type. Every patch needs an assignment.
+- **Assign boundary** updates the draft. **Review & save** shows exact dictionary
+  diffs before writing. Existing files are backed up under
+  `system/.foamtrame-backups/physics-*`; failed writes roll back completed changes.
+  Case or mesh changes after review require a fresh review. Queued/running cases
+  cannot be edited through this workspace.
+- Foundation 12/13 uses `foamRun` with `incompressibleFluid`, `physicalProperties`
+  and `momentumTransport`. OpenCFD vXXXX uses `simpleFoam`/`pimpleFoam`,
+  `transportProperties` and `turbulenceProperties`.
+- Saved settings reload from the case dictionaries. Drafts are session-only;
+  deep-copy backups carry the case files, while portable JSON backups do not.
+  Unmanaged dictionary entries, result directories and case scripts are retained.
+  Saving configures future runs to start at time zero; execution remains an
+  explicit action in Run/Log.
+- This initial editor does not support compressible, thermal, multiphase,
+  multi-region, cyclic/wedge, or non-uniform-field authoring. Dictionaries with
+  includes/macros require manual editing and are not rewritten. Imported solver
+  families outside this scope are rejected. Fixed time steps and wall functions
+  require checking Courant number, convergence and y+ during/after solving.
+
+Implementation: [tabs/physics_tab.py](./tabs/physics_tab.py) and
+[backend/physics.py](./backend/physics.py).
 
 ### Run and logs
 
@@ -286,12 +333,13 @@ Implementation: [tabs/documentation_tab.py](./tabs/documentation_tab.py)
 1. Open **Setup** and wait for both health checks.
 2. Select an existing case, create a blank case, or import an OpenFOAM tutorial.
 3. Inspect available case geometry in **Geometry**.
-4. Run meshing, solver, conversion, or case scripts from **Run/Log**.
-5. Monitor solver data under **Plots**.
-6. Inspect VTK results under **Post**.
-7. Consult the in-app **Documentation** page for setup, operating, and development
+4. Generate or inspect a mesh in **Meshing**.
+5. Configure supported new cases in **Physics**, then review and save boundaries.
+6. Run validated solver, conversion, or case scripts from **Run/Log**.
+7. Monitor solver data under **Plots** and inspect VTK results under **Post**.
+8. Consult the in-app **Documentation** page for setup, operating, and development
    guidance sourced from this README.
-8. Download periodic state backups from the gear-shaped **Settings** tab.
+9. Download periodic state backups from the gear-shaped **Settings** tab.
 
 ## Architecture
 

@@ -244,6 +244,19 @@ class AppStateMigrationIntegrationTest(unittest.TestCase):
         self.assertEqual("unchanged", marker.read_text(encoding="utf-8"))
         self.assertEqual(str(source_root), app_state.load_case_config()["CASE_ROOT"])
 
+    def test_deep_copy_excludes_local_trash_and_incomplete_copies(self):
+        source = self.root / "cases"
+        for name in ("demo", ".foamtrame-trash", ".foamtrame-copy-partial"):
+            (source / name).mkdir(parents=True)
+            (source / name / "marker").write_text("data", encoding="utf-8")
+        state = sample_state()
+        state["case_config"]["CASE_ROOT"] = str(source)
+        app_state.database.save_app_state(state)
+        with zipfile.ZipFile(io.BytesIO(app_state.export_deep_copy())) as archive:
+            names = archive.namelist()
+        self.assertIn("cases/demo/marker", names)
+        self.assertFalse(any(".foamtrame-" in name for name in names))
+
     def test_deep_copy_rejects_archive_path_traversal(self):
         state = sample_state()
         output = io.BytesIO()

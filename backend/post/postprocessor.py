@@ -1142,11 +1142,9 @@ def _run_trame_visualizer_process(
 
         with layout.content:
             with vuetify.VContainer(fluid=True, classes="fill-height pa-0"):
-                view = vtk_widgets.VtkRemoteLocalView(
+                view = vtk_widgets.VtkRemoteView(
                     render_window,
-                    namespace="view",
                     ref="view",
-                    mode=("viewMode", "local"),
                     classes="fill-height w-100",
                 )
                 ctrl.view_update = view.update

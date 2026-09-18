@@ -125,11 +125,12 @@ The top-level tabs are:
 1. Setup
 2. Geometry
 3. Meshing
-4. Run/Log
-5. Plots
-6. Post
-7. Documentation (book icon, rendered from `README.md`)
-8. Settings (gear icon)
+4. Physics
+5. Run/Log
+6. Plots
+7. Post
+8. Documentation (book icon, rendered from `README.md`)
+9. Settings (gear icon)
 
 `app.py` composes the tabs and owns the shared layout/CSS. Tab-specific state,
 controllers, drawer content, and main content live under `tabs/`. Backend services
@@ -239,6 +240,14 @@ unless a component truly owns it.
 
 ## Geometry behavior
 
+- Geometry and Post use VtkRemoteView, like Meshing and Physics. Do not reintroduce
+  hybrid/local views: their browser array requests can outlive the serialization
+  cache, causing wslink get_cached_data_array KeyErrors.
+- Setup copy/rename/delete operations use backend/case/operations.py and the FIFO
+  idle-case reservation. Reject redirects, symlinks, collisions and queued/running
+  cases. Copy publishes only after completion. Delete is confirmed and recoverable
+  via `.foamtrame-trash`; exclude trash/staging from listings and deep backups.
+
 - Case Geometry is the default when an active case exists and renders supported
   native surfaces from `constant/geometry` when present, otherwise from
   `constant/triSurface`. Its Active geometry selector includes the default case
@@ -258,6 +267,24 @@ unless a component truly owns it.
 - Geometry preferences participate in SQLite persistence and portable backup/
   restore. Geometry files stay in case directories and custom uploads remain
   session-only; neither belongs in SQLite or JSON backups.
+
+## Physics authoring
+
+- Physics continues the Create New Case workflow after Geometry and Meshing,
+  using the active case and its named mesh patches. Setup links to this workspace.
+- Initial scope is constant-viscosity single-region incompressible flow, steady
+  or transient, laminar or kOmegaSST. Foundation 12/13 and OpenCFD vXXXX dictionary
+  families differ; keep both covered by tests. Pressure is kinematic, not Pa.
+- Require all patches to have compatible roles. Highlight named patch selections
+  without changing mesh topology. Includes/macros and unsupported solver families
+  must not be silently reinterpreted.
+- Preview exact file changes before saving, preserve unmanaged dictionary entries,
+  back up originals and roll back partial writes. Revalidate mesh/files at save.
+  Hold the FIFO idle-case lock around case writes so submissions cannot race edits.
+- Physics drafts are session-only; saved values come from case dictionaries.
+  No new operational JSON or SQLite copies of case dictionaries. Deep backups
+  include authored files; portable backups do not. Never auto-run the solver.
+- Keep backend authoring regressions in tests/integration/test_physics.py.
 
 ## Run/Log behavior
 
