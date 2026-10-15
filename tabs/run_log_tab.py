@@ -457,7 +457,17 @@ def setup_run_log_tab(server):
             state.run_status_color = "error"
             publish_state("run_log_text", "run_status", "run_status_color")
             return
-        queue.enqueue(job)
+        try:
+            queue.enqueue(job)
+        except ValueError as exc:
+            finish_history_entry(run_id, "Failed", 0.0)
+            state.run_log_text = f"[FOAMTrame] [Error] {exc}\n"
+            state.run_status = "Action unavailable"
+            state.run_status_color = "error"
+            publish_state(
+                "run_log_text", "run_status", "run_status_color", "run_history"
+            )
+            return None
         publish_state("run_history")
         return run_id
 
@@ -688,6 +698,7 @@ def setup_run_log_tab(server):
         publish_state("simulation_queue", "queued_run_count", "is_running")
 
     _simulation_queue[0] = SequentialSimulationQueue(execute_job, publish_queue)
+    ctrl.with_idle_case = _simulation_queue[0].with_idle_case
 
     def run_safe_clean(inspection: CaseInspection | None = None):
         inspection = inspection or _inspection[0]
@@ -714,7 +725,13 @@ def setup_run_log_tab(server):
         )
         queue = _simulation_queue[0]
         assert queue is not None
-        queue.enqueue(job)
+        try:
+            queue.enqueue(job)
+        except ValueError as exc:
+            finish_history_entry(run_id, "Failed", 0.0)
+            state.run_log_text = f"[FOAMTrame] [Error] {exc}\n"
+            publish_state("run_log_text", "run_history")
+            return
         publish_state("run_history")
 
     def request_case_action(action_id: str):
@@ -893,7 +910,7 @@ def build_run_log_drawer():
         )
 
     with html.Div(
-        v_show="active_tab === 3",
+        v_show="active_tab === 4",
         classes="pa-4 run-log-drawer",
         role="region",
         aria_label="Run and Log controls",
@@ -1178,7 +1195,7 @@ def build_run_log_content():
     with vuetify.VContainer(
         fluid=True,
         classes="fill-height pa-6 overflow-y-auto",
-        v_if="active_tab === 3",
+        v_if="active_tab === 4",
         style="max-height: calc(100vh - 48px);",
     ):
         with vuetify.VRow(justify="center"):

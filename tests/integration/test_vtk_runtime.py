@@ -1,10 +1,29 @@
 import logging
+import ast
 from pathlib import Path
 
 import vtk
 
 from backend.meshing.reader import read_mesh_surface
 from backend.vtk_runtime import configure_vtk_logging
+
+
+def test_all_viewers_use_server_rendering_without_client_array_cache():
+    root = Path(__file__).resolve().parents[2]
+    sources = [*root.glob("tabs/*_tab.py"), root / "backend/post/postprocessor.py"]
+    views = []
+    for source in sources:
+        tree = ast.parse(source.read_text(encoding="utf-8"))
+        views.extend(
+            node.func.attr
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr
+            in {"VtkLocalView", "VtkRemoteLocalView", "VtkRemoteView"}
+        )
+    assert len(views) >= 5
+    assert set(views) == {"VtkRemoteView"}
 
 
 def test_vtk_diagnostics_use_logging_without_a_native_window(caplog):

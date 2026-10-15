@@ -64,6 +64,11 @@ from tabs.plots_tab import (
     build_plots_drawer,
     setup_plots_tab,
 )
+from tabs.physics_tab import (
+    build_physics_content,
+    build_physics_drawer,
+    setup_physics_tab,
+)
 from tabs.run_log_tab import (
     build_run_log_content,
     build_run_log_drawer,
@@ -111,6 +116,7 @@ setup_setup_tab(server)
 setup_geometry_tab(server)
 setup_meshing_tab(server)
 setup_run_log_tab(server)
+setup_physics_tab(server)
 setup_plots_tab(server)
 load_dataset = setup_visualizer_tab(server)
 setup_settings_tab(server)
@@ -2187,6 +2193,7 @@ with SinglePageWithDrawerLayout(server) as layout:
             vuetify.VTab("Setup")
             vuetify.VTab("Geometry")
             vuetify.VTab("Meshing")
+            vuetify.VTab("Physics")
             vuetify.VTab("Run/Log")
             vuetify.VTab("Plots")
             vuetify.VTab("Post")
@@ -2215,8 +2222,8 @@ with SinglePageWithDrawerLayout(server) as layout:
     # more horizontal room. Keep the standard drawer on compact viewports so
     # the main content is not unnecessarily crowded.
     layout.drawer.width = (
-        "active_tab === 7 && $vuetify.breakpoint.xsOnly ? 0 : "
-        "active_tab === 3 && !$vuetify.breakpoint.smAndDown ? 430 : "
+        "active_tab === 8 && $vuetify.breakpoint.xsOnly ? 0 : "
+        "active_tab === 4 && !$vuetify.breakpoint.smAndDown ? 430 : "
         "active_tab === 2 && !$vuetify.breakpoint.smAndDown ? 340 : "
         "active_tab === 1 && !$vuetify.breakpoint.smAndDown ? 360 : 300",
     )
@@ -2224,6 +2231,7 @@ with SinglePageWithDrawerLayout(server) as layout:
         build_setup_drawer()
         build_geometry_drawer()
         build_meshing_drawer()
+        build_physics_drawer()
         build_run_log_drawer()
         build_plots_drawer()
         build_visualizer_drawer(ctrl)
@@ -2261,6 +2269,7 @@ with SinglePageWithDrawerLayout(server) as layout:
             build_setup_content()
             build_geometry_content()
             build_meshing_content()
+            build_physics_content()
             build_run_log_content()
             build_plots_content()
             build_visualizer_content(ctrl)

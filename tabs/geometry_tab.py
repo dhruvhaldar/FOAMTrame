@@ -890,8 +890,9 @@ def build_geometry_content():
             vuetify.VIcon("mdi-cube-off-outline", size=58, color="blue-grey lighten-2")
             html.H2("No geometry rendered", classes="text-h6 mt-3 mb-1")
             html.P("{{ geometry_dataset_info }}", classes="text-body-2 mb-0")
-        view = vtk_widgets.VtkRemoteLocalView(
+        view = vtk_widgets.VtkRemoteView(
             render_window,
+            ref="geometry_view",
             interactive_ratio=1,
             classes="fill-height w-100",
         )

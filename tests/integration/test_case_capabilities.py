@@ -1,4 +1,5 @@
 from dataclasses import replace
+import os
 from pathlib import Path
 
 import pytest
@@ -274,7 +275,17 @@ def test_cachebox_case_metadata_caches_and_invalidates(tmp_path):
     assert _safe_clean_targets_for_signature.cache_info().hits == 1
 
     result_dir = case / "1"
+    original_signature = case.stat()
     result_dir.mkdir()
+    # Exercise signature invalidation without relying on Windows immediately
+    # publishing a distinct directory timestamp for back-to-back operations.
+    os.utime(
+        case,
+        ns=(
+            original_signature.st_atime_ns,
+            original_signature.st_mtime_ns + 2_000_000_000,
+        ),
+    )
     assert _safe_clean_targets(case) == (result_dir,)
 
 

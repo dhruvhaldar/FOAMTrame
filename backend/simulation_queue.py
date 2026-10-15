@@ -6,11 +6,12 @@ import time
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from typing import Callable, TypeVar
 
 from backend.case.capabilities import CaseInspection
 
 logger = logging.getLogger("FOAMTrame")
+_Result = TypeVar("_Result")
 
 
 @dataclass(frozen=True)
@@ -60,14 +61,39 @@ class SequentialSimulationQueue:
         self._pending: deque[SimulationJob] = deque()
         self._active: SimulationJob | None = None
         self._worker: threading.Thread | None = None
+        self._editing: set[Path] = set()
 
     def snapshot(self) -> QueueSnapshot:
         with self._lock:
             return QueueSnapshot(self._active, tuple(self._pending))
 
+    def with_idle_case(
+        self, case_path: Path, operation: Callable[[], _Result]
+    ) -> _Result:
+        """Serialize case edits against both active and pending submissions."""
+        case_path = case_path.resolve()
+        with self._lock:
+            jobs = ([self._active] if self._active else []) + list(self._pending)
+            if case_path in self._editing or any(
+                job.case_path.resolve() == case_path for job in jobs
+            ):
+                raise ValueError(
+                    "This case has a queued or running job, or an edit in progress. Wait for it to finish."
+                )
+            self._editing.add(case_path)
+        try:
+            return operation()
+        finally:
+            with self._lock:
+                self._editing.remove(case_path)
+
     def enqueue(self, job: SimulationJob) -> None:
         worker_to_start = None
         with self._lock:
+            if job.case_path.resolve() in self._editing:
+                raise ValueError(
+                    "This case is being edited. Wait for the operation to finish."
+                )
             if (self._active is not None and self._active.id == job.id) or any(
                 item.id == job.id for item in self._pending
             ):

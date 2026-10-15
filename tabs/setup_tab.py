@@ -14,6 +14,7 @@ from pathlib import Path
 from trame.widgets import html, vuetify
 
 from app_state import load_case_config, update_case_config
+from backend.case.operations import case_destination, case_source, manage_case
 
 logger = logging.getLogger("FOAMTrame")
 
@@ -122,6 +123,13 @@ def setup_setup_tab(server):
     state.setdefault("trame_status_color", "success")
     state.setdefault("active_case", config.get("ACTIVE_CASE", ""))
     state.setdefault("cases_list", [])
+    state.setdefault("case_manage_dialog", False)
+    state.setdefault("case_manage_action", "copy")
+    state.setdefault("case_manage_name", "")
+    state.setdefault("case_manage_source", "")
+    state.setdefault("case_manage_busy", False)
+    state.setdefault("case_manage_message", "")
+    selected_operation = [None]
 
     state.setdefault("new_case_name", "")
     state.setdefault("tutorials_list", [])
@@ -202,7 +210,9 @@ def setup_setup_tab(server):
 
         try:
             cases = [
-                entry.name for entry in os.scandir(str(root_path)) if entry.is_dir()
+                entry.name
+                for entry in os.scandir(str(root_path))
+                if entry.is_dir() and not entry.name.startswith(".")
             ]
             state.cases_list = sorted(cases)
             if state.active_case not in state.cases_list:
@@ -217,6 +227,80 @@ def setup_setup_tab(server):
             publish_setup_state(*case_state_keys)
 
     ctrl.scan_cases = scan_cases
+
+    def open_case_operation(action):
+        if state.case_manage_busy:
+            return
+        try:
+            root = Path(state.case_root).resolve(strict=True)
+            name = str(state.active_case)
+            source = case_source(root, name)
+            if action not in {"copy", "rename", "delete"}:
+                raise ValueError("Unknown case operation.")
+            selected_operation[0] = (root, name, action)
+            state.case_manage_action = action
+            state.case_manage_source = str(source)
+            state.case_manage_name = name + "-copy" if action == "copy" else name
+            state.case_manage_message = ""
+            state.case_manage_dialog = True
+        except (ValueError, OSError) as exc:
+            state.case_manage_message = str(exc)
+
+    def confirm_case_operation():
+        selection = selected_operation[0]
+        if selection is None or state.case_manage_busy:
+            return
+        root, name, action = selection
+        destination_name = str(state.case_manage_name).strip()
+        try:
+            if root != Path(state.case_root).resolve() or name != state.active_case:
+                raise ValueError("Case selection changed. Open the case action again.")
+            source = case_source(root, name)
+            if action != "delete":
+                case_destination(root, destination_name)
+        except (ValueError, OSError) as exc:
+            state.case_manage_message = str(exc)
+            return
+        state.case_manage_busy = True
+        state.case_manage_dialog = False
+        state.case_manage_message = f"{action.capitalize()} in progress for {name}…"
+        selected_operation[0] = None
+
+        def worker():
+            try:
+                result = ctrl.with_idle_case(
+                    source, lambda: manage_case(root, name, action, destination_name)
+                )
+                message = f"Case {action} completed: {result}"
+                if action == "delete":
+                    message = f"Case moved to local trash: {result}. Restore by moving this folder back into the case workspace."
+                succeeded = True
+            except (ValueError, OSError) as exc:
+                message, succeeded = str(exc), False
+
+            def finish():
+                state.case_manage_busy = False
+                state.case_manage_message = message
+                if succeeded and Path(state.case_root).resolve() == root:
+                    if state.active_case == name:
+                        state.active_case = "" if action == "delete" else result.name
+                        save_config({"ACTIVE_CASE": state.active_case})
+                    scan_cases()
+                publish_setup_state(
+                    "case_manage_busy",
+                    "case_manage_message",
+                    "case_manage_dialog",
+                    *case_state_keys,
+                )
+
+            loop = server_event_loop[0]
+            if loop is not None:
+                loop.call_soon_threadsafe(finish)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    ctrl.open_case_operation = open_case_operation
+    ctrl.confirm_case_operation = confirm_case_operation
 
     def run_docker_checks():
         state.docker_checking = True
@@ -433,8 +517,8 @@ def setup_setup_tab(server):
         if not name:
             return
 
-        path = Path(state.case_root) / name
         try:
+            path = case_destination(Path(state.case_root), name)
             (path / "0").mkdir(parents=True, exist_ok=True)
             (path / "constant" / "triSurface").mkdir(parents=True, exist_ok=True)
             (path / "system").mkdir(parents=True, exist_ok=True)
@@ -453,6 +537,7 @@ def setup_setup_tab(server):
             state.flush()
         except Exception as e:
             logger.error(f"Error creating case: {e}")
+            state.case_manage_message = str(e)
 
     ctrl.create_blank_case = create_blank_case
 
@@ -637,7 +722,7 @@ def build_setup_content():
                             html.H2("Active Case", classes="setup-card-heading")
                         with vuetify.VCardText():
                             html.P(
-                                "Select the case you want to work on. This selection applies to Geometry, Meshing, and Run tabs.",
+                                "Create or select a case, add geometry, generate a mesh, then configure Physics before running.",
                                 classes="text-caption setup-section-copy",
                                 v_if="cases_list && cases_list.length > 0",
                             )
@@ -678,6 +763,98 @@ def build_setup_content():
                                         click=ctrl.scan_cases,
                                         block=True,
                                         classes="theme-btn-primary",
+                                    )
+
+                        vuetify.VBtn(
+                            "Physics & boundaries",
+                            click="active_tab = 3",
+                            disabled=("!active_case",),
+                            outlined=True,
+                            classes="mt-3",
+                        )
+                        with html.Div(classes="d-flex flex-wrap mt-3", style="gap:8px"):
+                            for action, label in (
+                                ("copy", "Copy case"),
+                                ("rename", "Rename case"),
+                                ("delete", "Delete case"),
+                            ):
+                                vuetify.VBtn(
+                                    label,
+                                    outlined=True,
+                                    small=True,
+                                    color="error"
+                                    if action == "delete"
+                                    else "cyan darken-3",
+                                    disabled=("!active_case || case_manage_busy",),
+                                    click=(ctrl.open_case_operation, f"['{action}']"),
+                                )
+                        html.P(
+                            "{{ case_manage_message }}",
+                            classes="text-body-2 mt-3 mb-0",
+                            style="overflow-wrap:anywhere",
+                            raw_attrs=['role="status"', 'aria-live="polite"'],
+                        )
+                        vuetify.VProgressLinear(
+                            v_if="case_manage_busy",
+                            indeterminate=True,
+                            color="cyan darken-3",
+                            classes="mt-2",
+                        )
+                        with vuetify.VDialog(
+                            v_model=("case_manage_dialog", False),
+                            max_width=650,
+                            raw_attrs=['aria-labelledby="case-manage-title"'],
+                        ):
+                            with vuetify.VCard(classes="glass-card capability-dialog"):
+                                with vuetify.VCardTitle():
+                                    html.H2(
+                                        "{{ case_manage_action === 'delete' ? 'Delete case — move to local trash' : (case_manage_action === 'copy' ? 'Copy case' : 'Rename case') }}",
+                                        id="case-manage-title",
+                                        classes="text-h6",
+                                        style="word-break:normal",
+                                    )
+                                with vuetify.VCardText():
+                                    html.P(
+                                        "{{ case_manage_source }}",
+                                        style="overflow-wrap:anywhere",
+                                        classes="font-weight-bold",
+                                    )
+                                    html.P(
+                                        "The entire case, including mesh, results and logs, will move into .foamtrame-trash inside your case workspace. It can be restored manually.",
+                                        v_if="case_manage_action === 'delete'",
+                                    )
+                                    html.P(
+                                        "Copy includes all case files, mesh, results and logs. The new case becomes active. Existing destinations are never overwritten.",
+                                        v_if="case_manage_action === 'copy'",
+                                    )
+                                    html.P(
+                                        "Rename changes the case folder and active selection. Historical run records retain their original case labels.",
+                                        v_if="case_manage_action === 'rename'",
+                                    )
+                                    vuetify.VTextField(
+                                        v_if="case_manage_action !== 'delete'",
+                                        v_model=("case_manage_name",),
+                                        label="New case name",
+                                        outlined=True,
+                                        dense=True,
+                                    )
+                                    html.P(
+                                        "{{ case_manage_message }}",
+                                        classes="error--text",
+                                        raw_attrs=['role="status"'],
+                                    )
+                                with vuetify.VCardActions():
+                                    vuetify.VSpacer()
+                                    vuetify.VBtn(
+                                        "Cancel",
+                                        text=True,
+                                        click="case_manage_dialog = false",
+                                    )
+                                    vuetify.VBtn(
+                                        "{{ case_manage_action === 'delete' ? 'Move to trash' : 'Confirm' }}",
+                                        color="cyan darken-3",
+                                        dark=True,
+                                        click=ctrl.confirm_case_operation,
                                     )
 
                     # Case Management Tabs Card

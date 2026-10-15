@@ -487,7 +487,7 @@ def setup_documentation_tab(server):
 
 def build_documentation_drawer(ctrl):
     with html.Div(
-        v_show="active_tab === 6",
+        v_show="active_tab === 7",
         classes="pa-3 documentation-drawer",
         role="region",
         aria_label="Documentation navigation",
@@ -548,7 +548,7 @@ def build_documentation_content():
     with vuetify.VContainer(
         fluid=True,
         classes="pa-4 pa-sm-6 documentation-page",
-        v_if="active_tab === 6",
+        v_if="active_tab === 7",
     ):
         with vuetify.VCard(classes="glass-card documentation-card pa-5 pa-sm-8"):
             html.Div(

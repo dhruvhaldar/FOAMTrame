@@ -920,7 +920,7 @@ def setup_plots_tab(server):
         _wake_event.set()
 
     def set_plots_visible(active_tab):
-        _plots_visible[0] = int(active_tab) == 4
+        _plots_visible[0] = int(active_tab) == 5
         if _plots_visible[0]:
             request_refresh()
 
@@ -1077,7 +1077,7 @@ def setup_plots_tab(server):
 
 
 def build_plots_drawer():
-    with html.Div(v_show="active_tab === 4", classes="pa-4"):
+    with html.Div(v_show="active_tab === 5", classes="pa-4"):
         html.Div("Automatic Updates", classes="text-overline text--secondary mb-1")
         with vuetify.VCard(classes="glass-card pa-3 mb-4", outlined=True):
             with html.Div(classes="d-flex align-center mb-1"):
@@ -1240,7 +1240,7 @@ def build_plots_content():
     with vuetify.VContainer(
         fluid=True,
         classes="fill-height pa-4 overflow-y-auto",
-        v_if="active_tab === 4",
+        v_if="active_tab === 5",
         style="max-height: calc(100vh - 48px);",
     ):
         with vuetify.VRow(dense=True):

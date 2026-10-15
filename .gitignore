@@ -36,3 +36,6 @@ foamtrame.db-shm
 foamtrame.db-wal
 .coverage
 .pytest_cache/
+.pytest-ci/
+test-results/
+dist/

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import signal
 import socket
 import subprocess
 import sys
@@ -32,6 +33,24 @@ def free_port() -> int:
 @unittest.skipUnless(HAS_RUNTIME, "Full Trame/VTK runtime is not installed")
 class ApplicationSmokeTest(unittest.TestCase):
     def test_server_starts_and_serves_html(self):
+        self._assert_server_starts([sys.executable, str(PROJECT_ROOT / "app.py")])
+
+    def test_platform_launcher_starts_and_serves_html(self):
+        command = (
+            [
+                "powershell",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(PROJECT_ROOT / "start.ps1"),
+            ]
+            if os.name == "nt"
+            else ["bash", str(PROJECT_ROOT / "start.sh")]
+        )
+        self._assert_server_starts(command)
+
+    def _assert_server_starts(self, command: list[str]):
         port = free_port()
         with tempfile.TemporaryDirectory() as temp_dir:
             output_path = Path(temp_dir) / "server-output.log"
@@ -47,8 +66,7 @@ class ApplicationSmokeTest(unittest.TestCase):
             with output_path.open("w+", encoding="utf-8") as output:
                 process = subprocess.Popen(
                     [
-                        sys.executable,
-                        str(PROJECT_ROOT / "app.py"),
+                        *command,
                         "--server",
                         "--host",
                         "127.0.0.1",
@@ -60,6 +78,7 @@ class ApplicationSmokeTest(unittest.TestCase):
                     stdout=output,
                     stderr=subprocess.STDOUT,
                     text=True,
+                    start_new_session=os.name != "nt",
                 )
                 try:
                     deadline = time.monotonic() + 120
@@ -89,7 +108,14 @@ class ApplicationSmokeTest(unittest.TestCase):
                     self.assertIn("<html", response_body.lower())
                 finally:
                     if process.poll() is None:
-                        process.terminate()
+                        if os.name == "nt":
+                            subprocess.run(
+                                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                                check=False,
+                                capture_output=True,
+                            )
+                        else:
+                            os.killpg(process.pid, signal.SIGTERM)
                         try:
                             process.wait(timeout=15)
                         except subprocess.TimeoutExpired:

@@ -13,6 +13,8 @@
 
 <p align="center">
   <a href="https://www.python.org/downloads/"><img alt="Python 3.10+" src="https://img.shields.io/badge/Python-3.10%2B-0c6e87?logo=python&logoColor=white"></a>
+  <a href="#installation"><img alt="Windows x86_64 supported" src="https://img.shields.io/badge/Windows-x86__64-0078D4"></a>
+  <a href="#installation"><img alt="Linux x86_64 supported" src="https://img.shields.io/badge/Linux-x86__64-FCC624?logo=linux&logoColor=black"></a>
   <a href="https://github.com/dhruvhaldar/FOAMTrame/actions/workflows/ci.yml"><img alt="CodeAudit status" src="https://img.shields.io/github/actions/workflow/status/dhruvhaldar/FOAMTrame/ci.yml?branch=main&label=CodeAudit&logo=githubactions&logoColor=white"></a>
   <a href="https://github.com/dhruvhaldar/FOAMTrame/actions/workflows/ci.yml"><img alt="Ruff status" src="https://img.shields.io/github/actions/workflow/status/dhruvhaldar/FOAMTrame/ci.yml?branch=main&label=Ruff&logo=ruff&logoColor=white"></a>
   <a href="https://docs.astral.sh/uv/"><img alt="uv locked" src="https://img.shields.io/badge/uv-locked-DE5FE9?logo=uv&logoColor=white"></a>
@@ -99,7 +101,19 @@ a reachable Docker daemon and configured image.
 
 Implementation: [tabs/setup_tab.py](./tabs/setup_tab.py)
 
+Setup's active-case card offers **Copy case**, **Rename case**, and **Delete case**.
+Copy includes the mesh, results and logs and selects the new case. Rename changes
+the folder and active selection; historical run labels retain their original name.
+Names cannot overwrite an existing destination. Queued/running cases and cases
+containing symbolic links or junctions cannot be managed through these controls.
+Delete requires confirmation of the displayed path and moves the whole case to
+`<case workspace>/.foamtrame-trash/<unique-id>-<case-name>`. To restore, move that
+folder back into the workspace under an unused case name, then Refresh List.
+Trash and incomplete copy staging folders are excluded from the case list and
+deep-copy backups. No automatic trash purge is performed.
+
 ### Geometry
+
 
 - Opens on **Case** when an active case exists and renders every supported native
   surface under `constant/geometry` when present, otherwise under
@@ -168,6 +182,41 @@ Implementation: [tabs/meshing_tab.py](./tabs/meshing_tab.py),
 [backend/meshing/configuration.py](./backend/meshing/configuration.py),
 [backend/meshing/inspection.py](./backend/meshing/inspection.py), and the fixed
 action boundary in [backend/case/capabilities.py](./backend/case/capabilities.py).
+
+### Physics and boundary conditions
+
+Continue from **Create New Case → Geometry → Meshing → Physics → Run/Log**.
+The **Physics & boundaries** button on Setup opens the editor for the active case.
+Generate or import a complete mesh first; named mesh patches drive the assignments.
+
+- Configure single-region, constant-viscosity incompressible flow: steady or
+  transient, laminar or k–ω SST, kinematic viscosity, initial velocity and
+  kinematic pressure, turbulence values, and time/output controls. All values use
+  SI units; pressure is **p/ρ in m²/s²**, not Pa.
+- Select a patch by name to highlight it in the viewer. Assign a velocity inlet,
+  pressure outlet, stationary/moving wall, slip, symmetry, or empty condition
+  compatible with its mesh type. Every patch needs an assignment.
+- **Assign boundary** updates the draft. **Review & save** shows exact dictionary
+  diffs before writing. Existing files are backed up under
+  `system/.foamtrame-backups/physics-*`; failed writes roll back completed changes.
+  Case or mesh changes after review require a fresh review. Queued/running cases
+  cannot be edited through this workspace.
+- Foundation 12/13 uses `foamRun` with `incompressibleFluid`, `physicalProperties`
+  and `momentumTransport`. OpenCFD vXXXX uses `simpleFoam`/`pimpleFoam`,
+  `transportProperties` and `turbulenceProperties`.
+- Saved settings reload from the case dictionaries. Drafts are session-only;
+  deep-copy backups carry the case files, while portable JSON backups do not.
+  Unmanaged dictionary entries, result directories and case scripts are retained.
+  Saving configures future runs to start at time zero; execution remains an
+  explicit action in Run/Log.
+- This initial editor does not support compressible, thermal, multiphase,
+  multi-region, cyclic/wedge, or non-uniform-field authoring. Dictionaries with
+  includes/macros require manual editing and are not rewritten. Imported solver
+  families outside this scope are rejected. Fixed time steps and wall functions
+  require checking Courant number, convergence and y+ during/after solving.
+
+Implementation: [tabs/physics_tab.py](./tabs/physics_tab.py) and
+[backend/physics.py](./backend/physics.py).
 
 ### Run and logs
 
@@ -286,12 +335,13 @@ Implementation: [tabs/documentation_tab.py](./tabs/documentation_tab.py)
 1. Open **Setup** and wait for both health checks.
 2. Select an existing case, create a blank case, or import an OpenFOAM tutorial.
 3. Inspect available case geometry in **Geometry**.
-4. Run meshing, solver, conversion, or case scripts from **Run/Log**.
-5. Monitor solver data under **Plots**.
-6. Inspect VTK results under **Post**.
-7. Consult the in-app **Documentation** page for setup, operating, and development
+4. Generate or inspect a mesh in **Meshing**.
+5. Configure supported new cases in **Physics**, then review and save boundaries.
+6. Run validated solver, conversion, or case scripts from **Run/Log**.
+7. Monitor solver data under **Plots** and inspect VTK results under **Post**.
+8. Consult the in-app **Documentation** page for setup, operating, and development
    guidance sourced from this README.
-8. Download periodic state backups from the gear-shaped **Settings** tab.
+9. Download periodic state backups from the gear-shaped **Settings** tab.
 
 ## Architecture
 
@@ -971,6 +1021,54 @@ uv run --locked pytest -m smoke
 ```
 
 The smoke test starts the complete application on an ephemeral loopback port, waits for an HTTP 200 HTML response, and always terminates the child process. It skips only when Trame/VTK are absent from the selected interpreter. The [CI workflow](./.github/workflows/ci.yml) installs the full runtime and runs all tests on both Windows and Linux.
+
+### Cross-platform CI and delivery
+
+GitHub Actions runs on pushes, pull requests, and manual dispatch. The Windows and
+Linux matrix covers Python 3.10 and 3.12 with locked dependencies, compilation,
+Ruff lint/format, type checking, the full regression suite, and HTTP startup smoke
+tests. Linux/Python 3.12 additionally runs the CodeAudit security gate. JUnit
+reports and application logs are retained for 14 days, including failed runs.
+
+After every matrix job passes, delivery jobs build Windows x86_64 and Linux
+x86_64 ZIP archives and SHA-256 sidecars. Each archive is extracted outside the
+checkout, installed through its platform wrapper on Python 3.12, compiled, and
+smoke-tested through both the Python entry point and the platform launcher before
+upload. Verified packages are retained as workflow artifacts for 30 days.
+
+These are installable source distributions, not standalone executables. Both
+contain the committed project, static assets, lockfile, and bundled bootstrap
+runtimes. Extract the archive, open its `FOAMTrame` directory, then run
+`install.ps1` / `start.ps1` on Windows or `bash install.sh` / `bash start.sh` on
+Linux. Initial dependency installation requires package access or a populated uv
+cache. OpenFOAM operations still require Docker and an appropriate image.
+macOS and ARM are not covered by this pipeline.
+
+Pushing a `v*` tag runs the same checks and prepares a **draft GitHub release**
+with the verified archives and checksums. Review and publish that draft manually.
+Only the release job receives repository write permission; pull-request jobs
+cannot publish releases. Re-running a tag whose release already exists fails
+rather than replacing its assets. Branch protection should require the four
+test matrix checks and both package checks before merging.
+
+To build an archive locally:
+
+```bash
+uv run --locked python scripts/build_distribution.py --platform linux-x86_64
+# or: --platform windows-x86_64
+```
+
+The builder archives Git `HEAD`: commit intended changes first. Untracked local
+databases, case results, environments, and uncommitted edits are excluded.
+Files deliberately tracked in Git are included, so never commit local secrets or
+case data. Check the downloaded ZIP against its adjacent `.sha256` file before use.
+
+Distribution regressions exercise real temporary Git repositories, ZIP extraction,
+asset preservation, checksums, platform validation, Git failures, and exclusion of
+local state. Existing integration suites cover persistence, security, case
+operations/capabilities, FIFO execution, meshing, physics, geometry, plotting,
+documentation, bootstrap/installers, and startup. Docker-dependent behavior uses
+service-boundary tests; this CI does not claim to execute real OpenFOAM solvers.
 
 For UI changes, check at least one desktop and one constrained viewport. Confirm that navigation remains reachable, cards do not overflow, and controls retain visible focus states.
 
