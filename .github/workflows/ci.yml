@@ -27,10 +27,10 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
@@ -66,7 +66,7 @@ jobs:
         run: uv run --locked pytest -q --basetemp .pytest-ci --junitxml=test-results/pytest.xml
       - name: Retain test reports and failure logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: diagnostics-${{ matrix.os }}-py${{ matrix.python-version }}
           path: |
@@ -88,10 +88,10 @@ jobs:
           - os: windows-latest
             platform: windows-x86_64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
@@ -128,7 +128,7 @@ jobs:
           uv run --locked pytest tests/smoke -q --basetemp .pytest-ci --junitxml=test-results/package.xml
       - name: Retain package diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: package-diagnostics-${{ matrix.platform }}
           path: |
@@ -136,7 +136,7 @@ jobs:
             ${{ runner.temp }}/distribution/FOAMTrame/logs/
           retention-days: 14
       - name: Upload verified distribution
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: distribution-${{ matrix.platform }}
           path: dist/*
@@ -153,7 +153,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: distribution-*
           merge-multiple: true
