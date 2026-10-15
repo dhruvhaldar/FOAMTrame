@@ -13,6 +13,8 @@
 
 <p align="center">
   <a href="https://www.python.org/downloads/"><img alt="Python 3.10+" src="https://img.shields.io/badge/Python-3.10%2B-0c6e87?logo=python&logoColor=white"></a>
+  <a href="#installation"><img alt="Windows x86_64 supported" src="https://img.shields.io/badge/Windows-x86__64-0078D4"></a>
+  <a href="#installation"><img alt="Linux x86_64 supported" src="https://img.shields.io/badge/Linux-x86__64-FCC624?logo=linux&logoColor=black"></a>
   <a href="https://github.com/dhruvhaldar/FOAMTrame/actions/workflows/ci.yml"><img alt="CodeAudit status" src="https://img.shields.io/github/actions/workflow/status/dhruvhaldar/FOAMTrame/ci.yml?branch=main&label=CodeAudit&logo=githubactions&logoColor=white"></a>
   <a href="https://github.com/dhruvhaldar/FOAMTrame/actions/workflows/ci.yml"><img alt="Ruff status" src="https://img.shields.io/github/actions/workflow/status/dhruvhaldar/FOAMTrame/ci.yml?branch=main&label=Ruff&logo=ruff&logoColor=white"></a>
   <a href="https://docs.astral.sh/uv/"><img alt="uv locked" src="https://img.shields.io/badge/uv-locked-DE5FE9?logo=uv&logoColor=white"></a>
