@@ -1020,6 +1020,54 @@ uv run --locked pytest -m smoke
 
 The smoke test starts the complete application on an ephemeral loopback port, waits for an HTTP 200 HTML response, and always terminates the child process. It skips only when Trame/VTK are absent from the selected interpreter. The [CI workflow](./.github/workflows/ci.yml) installs the full runtime and runs all tests on both Windows and Linux.
 
+### Cross-platform CI and delivery
+
+GitHub Actions runs on pushes, pull requests, and manual dispatch. The Windows and
+Linux matrix covers Python 3.10 and 3.12 with locked dependencies, compilation,
+Ruff lint/format, type checking, the full regression suite, and HTTP startup smoke
+tests. Linux/Python 3.12 additionally runs the CodeAudit security gate. JUnit
+reports and application logs are retained for 14 days, including failed runs.
+
+After every matrix job passes, delivery jobs build Windows x86_64 and Linux
+x86_64 ZIP archives and SHA-256 sidecars. Each archive is extracted outside the
+checkout, installed through its platform wrapper on Python 3.12, compiled, and
+smoke-tested through both the Python entry point and the platform launcher before
+upload. Verified packages are retained as workflow artifacts for 30 days.
+
+These are installable source distributions, not standalone executables. Both
+contain the committed project, static assets, lockfile, and bundled bootstrap
+runtimes. Extract the archive, open its `FOAMTrame` directory, then run
+`install.ps1` / `start.ps1` on Windows or `bash install.sh` / `bash start.sh` on
+Linux. Initial dependency installation requires package access or a populated uv
+cache. OpenFOAM operations still require Docker and an appropriate image.
+macOS and ARM are not covered by this pipeline.
+
+Pushing a `v*` tag runs the same checks and prepares a **draft GitHub release**
+with the verified archives and checksums. Review and publish that draft manually.
+Only the release job receives repository write permission; pull-request jobs
+cannot publish releases. Re-running a tag whose release already exists fails
+rather than replacing its assets. Branch protection should require the four
+test matrix checks and both package checks before merging.
+
+To build an archive locally:
+
+```bash
+uv run --locked python scripts/build_distribution.py --platform linux-x86_64
+# or: --platform windows-x86_64
+```
+
+The builder archives Git `HEAD`: commit intended changes first. Untracked local
+databases, case results, environments, and uncommitted edits are excluded.
+Files deliberately tracked in Git are included, so never commit local secrets or
+case data. Check the downloaded ZIP against its adjacent `.sha256` file before use.
+
+Distribution regressions exercise real temporary Git repositories, ZIP extraction,
+asset preservation, checksums, platform validation, Git failures, and exclusion of
+local state. Existing integration suites cover persistence, security, case
+operations/capabilities, FIFO execution, meshing, physics, geometry, plotting,
+documentation, bootstrap/installers, and startup. Docker-dependent behavior uses
+service-boundary tests; this CI does not claim to execute real OpenFOAM solvers.
+
 For UI changes, check at least one desktop and one constrained viewport. Confirm that navigation remains reachable, cards do not overflow, and controls retain visible focus states.
 
 ## Documentation maintenance

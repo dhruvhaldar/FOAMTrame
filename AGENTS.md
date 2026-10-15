@@ -536,6 +536,13 @@ logs/YYYYMMDD/install.log
 
 ## Testing and verification
 
+GitHub Actions validates Windows/Linux on Python 3.10 and 3.12. Delivery jobs
+archive committed HEAD using `scripts/build_distribution.py`, install extracted
+archives through the platform wrappers, and smoke-test both app.py and the
+launcher. Keep distribution regressions in tests/integration/test_distribution.py.
+Successful v* tag builds create draft releases; publication is manual. Packages
+are installable source ZIPs, not frozen executables or offline dependency bundles.
+
 Primary commands from the repository root:
 
 ```powershell

@@ -3,6 +3,15 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+env:
+  PYTHONUTF8: "1"
+  UV_NO_PROGRESS: "1"
 
 permissions:
   contents: read
@@ -19,6 +28,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
@@ -26,6 +37,14 @@ jobs:
         with:
           enable-cache: true
           version: "0.10.12"
+      - name: Isolate application state
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP']) / 'foamtrame-state'
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as env:
+              env.write(f'FOAMTRAME_DATA_DIR={root}\nFOAMTRAME_LOG_DIR={root / "logs"}\n')
       - name: Install runtime and test dependencies
         run: uv sync --locked
       - name: Runtime diagnostics
@@ -44,4 +63,107 @@ jobs:
           PYTHONUTF8: "1"
         run: uv run --locked python scripts/codeaudit_gate.py .
       - name: Run integration and smoke tests
-        run: uv run --locked pytest -q
+        run: uv run --locked pytest -q --basetemp .pytest-ci --junitxml=test-results/pytest.xml
+      - name: Retain test reports and failure logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostics-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: |
+            test-results/
+            ${{ runner.temp }}/foamtrame-state/logs/
+          retention-days: 14
+
+  package:
+    name: Package (${{ matrix.platform }})
+    needs: test
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x86_64
+          - os: windows-latest
+            platform: windows-x86_64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+          version: "0.10.12"
+      - name: Build source distribution and checksum
+        run: python scripts/build_distribution.py --platform ${{ matrix.platform }}
+      - name: Extract distribution outside checkout
+        shell: python
+        run: |
+          import os
+          import shutil
+          from pathlib import Path
+          destination = Path(os.environ['RUNNER_TEMP']) / 'distribution'
+          archive = next(Path('dist').glob('*.zip'))
+          shutil.unpack_archive(str(archive), str(destination))
+          root = destination / 'FOAMTrame'
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as env:
+              env.write(f'PACKAGE_ROOT={root}\n')
+      - name: Install extracted Windows distribution
+        if: runner.os == 'Windows'
+        working-directory: ${{ env.PACKAGE_ROOT }}
+        shell: pwsh
+        run: ./install.ps1 --silent --auto-port --dev --skip-docker-check
+      - name: Install extracted Linux distribution
+        if: runner.os == 'Linux'
+        working-directory: ${{ env.PACKAGE_ROOT }}
+        run: bash ./install.sh --silent --auto-port --dev --skip-docker-check
+      - name: Compile and smoke-test installed distribution
+        working-directory: ${{ env.PACKAGE_ROOT }}
+        run: |
+          uv run --locked python -m compileall -q app.py tabs backend
+          uv run --locked pytest tests/smoke -q --basetemp .pytest-ci --junitxml=test-results/package.xml
+      - name: Retain package diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-diagnostics-${{ matrix.platform }}
+          path: |
+            ${{ runner.temp }}/distribution/FOAMTrame/test-results/
+            ${{ runner.temp }}/distribution/FOAMTrame/logs/
+          retention-days: 14
+      - name: Upload verified distribution
+        uses: actions/upload-artifact@v4
+        with:
+          name: distribution-${{ matrix.platform }}
+          path: dist/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+  release:
+    name: Draft release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: package
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: distribution-*
+          merge-multiple: true
+          path: dist
+      - name: Create draft with verified packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          cd dist
+          sha256sum --check *.sha256
+          gh release create "$RELEASE_TAG" *.zip *.sha256 --verify-tag --draft --generate-notes
